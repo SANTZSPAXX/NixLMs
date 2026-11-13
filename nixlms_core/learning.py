@@ -23,6 +23,8 @@ class DatasetStore:
         key = normalize(question)
         for row in rows:
             if row.get("type", "qa") == "qa" and normalize(row.get("question", "")) == key:
+                if row.get("split", "train") != split:
+                    raise ValueError("A mesma pergunta não pode aparecer em train e test.")
                 row.update({"question": question, "answer": answer, "split": split})
                 save_json(self.path, rows)
                 return len(rows)

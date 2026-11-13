@@ -30,8 +30,18 @@ O adaptador conecta apenas a `http://127.0.0.1:11434`. Sem Ollama, a NixLMs cont
 ## Google Colab
 Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb). O notebook executa o núcleo sem LLM remoto. Para persistência, salve `data/` no Google Drive; o filesystem temporário do Colab pode ser apagado ao encerrar a sessão.
 
+## Dataset, treino e avaliação
+O conjunto inicial em português está em `datasets/starter_ptbr.jsonl`, com partições `train` e `test`. No terminal:
+```text
+/importar datasets/starter_ptbr.jsonl
+/treinar 2
+/avaliar
+```
+As métricas avaliam recuperação de exemplos conhecidos, não qualidade geral de linguagem. Para novos dados, use JSONL com campos `question`, `answer` e `split` (`train` ou `test`). Não inclua dados pessoais ou confidenciais sem base legal e autorização.
+
 ## Comandos
 - `/ensinar pergunta => resposta`: grava conhecimento, atualiza o grafo e adiciona ao dataset.
+- `/importar arquivo.jsonl`: importa dataset JSONL.
 - `/treinar [epocas]`: aprendizagem incremental no dataset.
 - `/avaliar`: métricas top-5 e MRR.
 - `/mapa`: conceitos e associações.

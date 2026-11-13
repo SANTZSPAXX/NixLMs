@@ -5,7 +5,7 @@ import random
 
 class LIFNetwork:
     def __init__(self, input_size=64, hidden_size=48, output_size=32, steps=24,
-                 threshold=1.0, leak=.88, seed=42, learning_rate=.025,
+                 threshold=.08, leak=.88, seed=42, learning_rate=.025,
                  recurrent_scale=.12):
         self.input_size = int(input_size)
         self.hidden_size = int(hidden_size)

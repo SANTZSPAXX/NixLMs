@@ -1,51 +1,47 @@
 # NixLMs
 
-**NixLMs 0.2.0 — Neural Core Hybrid / All** é uma plataforma experimental em Python para Windows e Google Colab.
+**NixLMs 0.3.0 — Cognitive Hybrid Architecture** é uma IA experimental modular em Python, compatível com Windows e Google Colab.
 
-## Componentes
-- Protótipo lexical legado: `nixlms.py`.
-- Neural Core: rede LIF (*Leaky Integrate-and-Fire*), osciladores sintéticos inspirados em EEG, atenção heurística, memória semântica/episódica e feedback Hebbiano.
-- Persistência JSON em `data/`.
-- Execução offline com biblioteca padrão do Python.
+## Arquitetura 0.3
+- **Neural Core:** rede recorrente LIF, sinapses recorrentes, traços de elegibilidade e plasticidade STDP aproximada modulada por recompensa.
+- **EEG-inspired:** osciladores sintéticos Delta, Theta, Alpha, Beta e Gamma.
+- **Mental Map:** grafo persistente de conceitos e associações.
+- **Attention System:** seleção dinâmica de contexto e memória de trabalho limitada.
+- **Learning Engine:** datasets locais, treino incremental e avaliação de recuperação (hit rate top-5 e MRR).
+- **Language Engine:** integração opcional com LLM pequeno executado localmente via Ollama.
+- **Memória:** armazenamento semântico e episódico em JSON.
 
 ## Requisitos
-- Python 3.10 ou superior.
-- Sem dependências externas; CPU suficiente, GPU opcional e desnecessária.
+Python 3.10+. O núcleo usa apenas a biblioteca padrão e funciona em CPU. GPU não é necessária.
 
 ## Windows
-Execute `iniciar_neural.bat` ou `python neural_core.py`. O protótipo antigo continua disponível por `python nixlms.py`.
+Execute `iniciar_neural.bat` ou `python neural_core.py`. O protótipo original segue disponível em `python nixlms.py`.
+
+## LLM local (opcional)
+Para máquinas com 8 GB de RAM e CPU sem GPU dedicada, comece pelo modelo pequeno:
+```powershell
+# Instale Ollama: https://ollama.com/download
+ollama pull qwen2.5:0.5b
+ollama serve
+python neural_core.py
+```
+O adaptador conecta apenas a `http://127.0.0.1:11434`. Sem Ollama, a NixLMs continua funcionando com memória e recuperação local. O modelo pode ser lento em CPU; feche aplicativos pesados. Para trocar o modelo use `NIXLMS_LLM_MODEL`; para desativar `NIXLMS_LLM_ENABLED=0`.
 
 ## Google Colab
-Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb) e execute em ordem. Ou:
-```python
-!git clone https://github.com/SANTZSPAXX/NixLMs.git
-%cd NixLMs
-from nixlms_core import NixLMsNeuralCore
-ia = NixLMsNeuralCore()
-print(ia.respond('Olá, NixLMs'))
-```
+Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb). O notebook executa o núcleo sem LLM remoto. Para persistência, salve `data/` no Google Drive; o filesystem temporário do Colab pode ser apagado ao encerrar a sessão.
 
 ## Comandos
-- `/ensinar pergunta => resposta`: armazena conhecimento e aplica atualização Hebbiana limitada.
-- `/status`: estado e contadores.
-- `/eeg`: bandas sintéticas da última inferência.
-- `/positivo` e `/negativo`: feedback simples à última entrada.
-- `/ajuda` e `/sair`.
-
-## Estrutura
-```text
-NixLMs/
-├── nixlms.py
-├── neural_core.py
-├── nixlms_core/ (config, encoding, eeg, neural, memory, cognition, learner, agent, utils)
-├── tests/
-├── NixLMs_Colab.ipynb
-├── iniciar_neural.bat
-└── data/ (criado automaticamente)
-```
+- `/ensinar pergunta => resposta`: grava conhecimento, atualiza o grafo e adiciona ao dataset.
+- `/treinar [epocas]`: aprendizagem incremental no dataset.
+- `/avaliar`: métricas top-5 e MRR.
+- `/mapa`: conceitos e associações.
+- `/eeg`, `/llm`, `/status`, `/positivo`, `/negativo`, `/ajuda`, `/sair`.
 
 ## Testes
 `python -m unittest discover -s tests -v`
 
-## Limitações científicas e técnicas
-O EEG é **sintético**: não acessa sensores nem fornece diagnóstico. As bandas são sinais experimentais de modulação, não equivalentes diretos de estados mentais. A codificação é lexical por hashing, não embedding semântico pré-treinado. A rede LIF é didática, não é um LLM generativo e não demonstra consciência ou senciência. O feedback Hebbiano é local e limitado, não treinamento supervisionado ponta a ponta. A memória é gravada em `data/`; faça backup antes de experimentos. Sensores e dados pessoais exigem autorização explícita.
+## Estrutura
+`nixlms_core/` contém os módulos `neural`, `eeg`, `mental_map`, `attention`, `memory`, `cognition`, `learning`, `language`, `learner`, `encoding`, `config`, `utils` e `agent`.
+
+## Limitações
+A rede LIF/STDP é uma aproximação didática, não neurobiologia validada. O mapa usa associações lexicais. As métricas avaliam recuperação de exemplos, não qualidade geral de linguagem. O LLM pequeno pode cometer erros. O EEG é sintético e não lê pensamentos, não acessa sensores nem realiza diagnósticos. A arquitetura não demonstra consciência ou senciência.

@@ -16,6 +16,7 @@ class MemorySystem:
         if not isinstance(self.episodes, list):
             self.episodes = []
         self.working = []
+        self._embedding_cache = {}
 
     def remember(self, question, answer, tags=None):
         question, answer = str(question).strip(), str(answer).strip()
@@ -49,13 +50,16 @@ class MemorySystem:
             text = item.get("question", "")
             tokens = set(tokenize(text))
             lexical = len(qtokens & tokens) / max(1, len(qtokens | tokens))
-            vector = item.get("_embedding")
             version = getattr(encoder, "updates", 0)
-            if (not isinstance(vector, list) or len(vector) != len(qvec)
-                    or item.get("_embedding_version") != version):
+            cache_key = normalize(text)
+            cached = self._embedding_cache.get(cache_key)
+            if cached is None or cached[0] != version:
                 vector = encoder.encode(text)
-                item["_embedding"] = vector
-                item["_embedding_version"] = version
+                self._embedding_cache[cache_key] = (version, vector)
+            else:
+                vector = cached[1]
+            if len(self._embedding_cache) > self.max_items * 2:
+                self._embedding_cache.clear()
             semantic = max(0.0, cosine(qvec, vector))
             # No início, embeddings pouco treinados recebem peso menor. A semântica
             # assume gradualmente a recuperação conforme pares contrastivos são aprendidos.

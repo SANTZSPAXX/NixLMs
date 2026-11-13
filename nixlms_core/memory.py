@@ -50,9 +50,12 @@ class MemorySystem:
             tokens = set(tokenize(text))
             lexical = len(qtokens & tokens) / max(1, len(qtokens | tokens))
             vector = item.get("_embedding")
-            if not isinstance(vector, list) or len(vector) != len(qvec):
+            version = getattr(encoder, "updates", 0)
+            if (not isinstance(vector, list) or len(vector) != len(qvec)
+                    or item.get("_embedding_version") != version):
                 vector = encoder.encode(text)
                 item["_embedding"] = vector
+                item["_embedding_version"] = version
             semantic = max(0.0, cosine(qvec, vector))
             score = 0.85 * semantic + 0.15 * lexical
             ranked.append((score, item))

@@ -146,7 +146,7 @@ class NixLMsNeuralCore:
             self.memory.remember(question, answer)
         if reinforce:
             vector = self.encoder.encode(question)
-            _, hidden = self.network.forward(vector)
+            _, hidden = self.network.forward(vector, track_plasticity=True)
             self.learner.reinforce(vector, hidden, reward)
             save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
         self.mental_map.observe(question, weight=1.2)
@@ -158,7 +158,7 @@ class NixLMsNeuralCore:
         if not str(question).strip():
             return
         vector = self.encoder.encode(question)
-        _, hidden = self.network.forward(vector)
+        _, hidden = self.network.forward(vector, track_plasticity=True)
         self.learner.reinforce(vector, hidden, 1.0 if positive else -.5)
         save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
 

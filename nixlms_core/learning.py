@@ -43,13 +43,17 @@ class DatasetStore:
         if label not in (0, 1):
             raise ValueError("label deve ser 0 ou 1.")
         rows = self.load()
-        key = (normalize(text_a), normalize(text_b), label, split)
+        pair_key = tuple(sorted((normalize(text_a), normalize(text_b))))
         for existing in rows:
-            if existing.get("type") == "pair" and (
-                normalize(existing.get("text_a", "")),
-                normalize(existing.get("text_b", "")),
-                int(existing.get("label", 1)), existing.get("split", "train")
-            ) == key:
+            if existing.get("type") != "pair":
+                continue
+            existing_key = tuple(sorted((normalize(existing.get("text_a", "")),
+                                         normalize(existing.get("text_b", "")))))
+            if existing_key == pair_key:
+                if int(existing.get("label", 1)) != label:
+                    raise ValueError("Par contrastivo já cadastrado com rótulo conflitante.")
+                if existing.get("split", "train") != split:
+                    raise ValueError("O mesmo par não pode aparecer em train e test.")
                 existing.update({"text_a": text_a, "text_b": text_b,
                                  "label": label, "split": split})
                 save_json(self.path, rows)

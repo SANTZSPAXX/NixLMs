@@ -1,8 +1,8 @@
-"""Rede recorrente LIF com sinapses recorrentes e plasticidade STDP modulada por recompensa."""
-import math, random
+"""Rede recorrente LIF com elegibilidade sináptica e STDP pareado aproximado."""
+import math,random
 
 class LIFNetwork:
-    def __init__(self, input_size=64, hidden_size=48, output_size=32, steps=24, threshold=1.0, leak=.88, seed=42, learning_rate=.025, recurrent_scale=.12):
+    def __init__(self,input_size=64,hidden_size=48,output_size=32,steps=24,threshold=1.0,leak=.88,seed=42,learning_rate=.025,recurrent_scale=.12):
         self.input_size=input_size; self.hidden_size=hidden_size; self.output_size=output_size
         self.steps=steps; self.threshold=threshold; self.leak=leak; self.learning_rate=learning_rate
         rng=random.Random(seed)
@@ -13,7 +13,7 @@ class LIFNetwork:
         self.eligibility_in=[[0.0]*input_size for _ in range(hidden_size)]
         self.eligibility_rec=[[0.0]*hidden_size for _ in range(hidden_size)]
 
-    def forward(self, vector, modulation=1.0, state=None):
+    def forward(self,vector,modulation=1.0,state=None):
         if len(vector)!=self.input_size: raise ValueError(f"Vetor deve ter {self.input_size} dimensões")
         membrane=list(state or [0.0]*self.hidden_size)
         if len(membrane)!=self.hidden_size: membrane=[0.0]*self.hidden_size
@@ -36,18 +36,22 @@ class LIFNetwork:
         self._accumulate_eligibility(vector,history)
         return output,hidden
 
-    def _accumulate_eligibility(self, vector, history):
-        pre=[0.0]*self.hidden_size; post=[0.0]*self.hidden_size
+    def _accumulate_eligibility(self,vector,history):
+        pre_trace=[0.0]*self.hidden_size; post_trace=[0.0]*self.hidden_size
         for spikes in history:
-            for i,s in enumerate(spikes): pre[i]=.90*pre[i]+s
-            for j,s in enumerate(spikes): post[j]=.90*post[j]+s
-            for j in range(self.hidden_size):
-                for i,x in enumerate(vector):
-                    self.eligibility_in[j][i]=.98*self.eligibility_in[j][i]+post[j]*x*.0005
-                for i in range(self.hidden_size):
-                    if i!=j: self.eligibility_rec[j][i]=.98*self.eligibility_rec[j][i]+post[j]*pre[i]*.0002
+            # STDP pareado: pré-sinapse antes da pós fortalece; ordem inversa enfraquece.
+            for j,post_spike in enumerate(spikes):
+                for i,pre_spike in enumerate(spikes):
+                    if i==j: continue
+                    delta=post_spike*pre_trace[i]-.5*pre_spike*post_trace[j]
+                    self.eligibility_rec[j][i]=.995*self.eligibility_rec[j][i]+delta*.0002
+                if post_spike:
+                    for i,x in enumerate(vector):
+                        self.eligibility_in[j][i]=.995*self.eligibility_in[j][i]+post_spike*x*.0005
+            pre_trace=[.90*t+s for t,s in zip(pre_trace,spikes)]
+            post_trace=[.90*t+s for t,s in zip(post_trace,spikes)]
 
-    def hebbian_update(self, input_vector, hidden, reward=1.0):
+    def hebbian_update(self,input_vector,hidden,reward=1.0):
         rate=self.learning_rate*max(-1.0,min(1.0,float(reward)))
         for j in range(self.hidden_size):
             for i in range(self.input_size):

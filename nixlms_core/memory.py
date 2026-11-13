@@ -57,7 +57,10 @@ class MemorySystem:
                 item["_embedding"] = vector
                 item["_embedding_version"] = version
             semantic = max(0.0, cosine(qvec, vector))
-            score = 0.85 * semantic + 0.15 * lexical
+            # No início, embeddings pouco treinados recebem peso menor. A semântica
+            # assume gradualmente a recuperação conforme pares contrastivos são aprendidos.
+            semantic_weight = .35 + .50 * min(1.0, getattr(encoder, "updates", 0) / 30.0)
+            score = semantic_weight * semantic + (1.0 - semantic_weight) * lexical
             ranked.append((score, item))
         return sorted(ranked, key=lambda pair: pair[0], reverse=True)[:limit]
 

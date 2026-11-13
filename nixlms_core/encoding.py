@@ -85,8 +85,13 @@ class SemanticEncoder:
 
     def encode(self, text):
         features = self._features(text)
-        ids = [self._ensure(feature) for feature in features]
-        vectors = [self.embeddings[i] for i in ids if i is not None]
+        vectors = []
+        for feature in features:
+            index = self.vocab.get(feature)
+            # Tokens desconhecidos recebem um vetor inicial determinístico sem
+            # alterar o vocabulário durante uma consulta de inferência.
+            vectors.append(self.embeddings[index] if index is not None
+                           else self._initial_vector(feature))
         if not vectors:
             return [0.0] * self.dimensions
         pooled = [sum(v[d] for v in vectors) / len(vectors)

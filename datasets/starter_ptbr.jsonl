@@ -1,0 +1,12 @@
+{"question":"o que é inteligência artificial","answer":"Inteligência artificial é um campo da computação que cria sistemas capazes de executar tarefas associadas a percepção, linguagem, previsão e decisão.","split":"train"}
+{"question":"o que é uma rede neural","answer":"Uma rede neural é um modelo computacional composto por unidades conectadas que transformam sinais por meio de parâmetros ajustáveis.","split":"train"}
+{"question":"o que é EEG","answer":"EEG é a eletroencefalografia, técnica que registra diferenças de potencial elétrico no couro cabeludo usando eletrodos.","split":"train"}
+{"question":"o que é memória episódica","answer":"Memória episódica registra eventos e experiências situadas em um contexto temporal.","split":"train"}
+{"question":"o que é memória semântica","answer":"Memória semântica armazena conceitos, fatos e relações gerais, sem depender de um episódio específico.","split":"train"}
+{"question":"o que é atenção computacional","answer":"Atenção computacional prioriza partes de uma entrada ou contexto conforme relevância para a tarefa atual.","split":"train"}
+{"question":"o que é aprendizado hebbiano","answer":"Aprendizado hebbiano ajusta conexões com base na coativação de unidades, frequentemente resumido como neurônios que disparam juntos fortalecem sua conexão.","split":"train"}
+{"question":"o que é um LLM","answer":"Um LLM é um modelo de linguagem de grande porte treinado para prever e gerar sequências de tokens.","split":"train"}
+{"question":"qual é a capital do Brasil","answer":"Brasília é a capital do Brasil.","split":"test"}
+{"question":"qual linguagem é usada nesta implementação","answer":"A implementação da NixLMs Neural Core é escrita em Python.","split":"test"}
+{"question":"o que significa LIF","answer":"LIF significa Leaky Integrate-and-Fire, um modelo simplificado de neurônio que acumula potencial e dispara ao atingir um limiar.","split":"test"}
+{"question":"O que é um mapa mental computacional","answer":"É uma representação em grafo de conceitos e relações que permite explorar associações entre informações.","split":"test"}

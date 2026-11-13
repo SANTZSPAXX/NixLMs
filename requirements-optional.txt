@@ -1,0 +1,5 @@
+# NixLMs 0.3 usa biblioteca padrão para todos os subsistemas cognitivos.
+# O motor de linguagem conversa apenas com Ollama local, via localhost.
+# Instale Ollama: https://ollama.com/download
+# Modelo leve recomendado: ollama pull qwen2.5:0.5b
+# Modelo alternativo, mais exigente: ollama pull qwen2.5:1.5b

@@ -6,7 +6,7 @@
 
 - **Semantic Encoder:** embeddings densos treináveis de tokens e bigramas, com vocabulário persistente e inicialização determinística.
 - **Contrastive Learning:** pares positivos aproximam representações; pares negativos com similaridade acima da margem são afastados.
-- **Semantic Memory:** recuperação combina similaridade vetorial (85%) e sobreposição lexical (15%); não executa a rede LIF para cada memória.
+- **Semantic Memory:** recuperação combina similaridade vetorial e sobreposição lexical; o peso semântico cresce gradualmente conforme o encoder acumula atualizações contrastivas, até 85%; não executa a rede LIF para cada memória.
 - **Memory Upsert:** ensinar ou treinar repetidamente uma mesma pergunta atualiza o registro em vez de duplicá-lo.
 - **LIF:** telemetria de disparos real, traços de elegibilidade corrigidos e plasticidade acumulada apenas durante aprendizagem/feedback explícitos.
 - **Evaluation Engine:** métricas separadas de recuperação QA e classificação de pares contrastivos.

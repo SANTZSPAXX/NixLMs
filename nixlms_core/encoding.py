@@ -173,6 +173,8 @@ class SemanticEncoder:
             self.embeddings = [[float(v) for v in row] for row in embeddings]
             self.learning_rate = float(state.get("learning_rate", self.learning_rate))
             self.margin = float(state.get("margin", self.margin))
+            self.seed = int(state.get("seed", self.seed))
+            self.max_vocab = int(state.get("max_vocab", self.max_vocab))
             self.updates = int(state.get("updates", 0))
             return True
         except (KeyError, TypeError, ValueError, OverflowError):

@@ -11,7 +11,7 @@ class DatasetStore:
 
     def load(self):
         rows = load_json(self.path, [])
-        return rows if isinstance(rows, list) else []
+        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
     def add(self, question, answer, split="train"):
         question, answer = str(question).strip(), str(answer).strip()
@@ -36,7 +36,10 @@ class DatasetStore:
             raise ValueError("text_a e text_b são obrigatórios.")
         if split not in {"train", "test"}:
             raise ValueError("split deve ser train ou test.")
-        label = int(label)
+        numeric_label = float(label)
+        if numeric_label not in (0.0, 1.0):
+            raise ValueError("label deve ser 0 ou 1.")
+        label = int(numeric_label)
         if label not in (0, 1):
             raise ValueError("label deve ser 0 ou 1.")
         rows = self.load()
@@ -64,6 +67,8 @@ class DatasetStore:
                     continue
                 try:
                     row = json.loads(line)
+                    if not isinstance(row, dict):
+                        raise ValueError("cada linha deve conter um objeto JSON")
                     split = row.get("split", "train")
                     if split not in {"train", "test"}:
                         raise ValueError("split inválido")

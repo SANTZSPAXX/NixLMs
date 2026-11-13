@@ -13,8 +13,12 @@ class MemorySystem:
         self.episodes = load_json(self.episodes_path, [])
         if not isinstance(self.knowledge, list):
             self.knowledge = []
+        else:
+            self.knowledge = [item for item in self.knowledge if isinstance(item, dict)]
         if not isinstance(self.episodes, list):
             self.episodes = []
+        else:
+            self.episodes = [item for item in self.episodes if isinstance(item, dict)]
         self.working = []
         self._embedding_cache = {}
 

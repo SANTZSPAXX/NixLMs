@@ -2,7 +2,7 @@
 import json
 import random
 from pathlib import Path
-from .utils import save_json, load_json, normalize
+from .utils import save_json, load_json, normalize, tokenize, cosine
 
 
 class DatasetStore:
@@ -145,40 +145,126 @@ class LearningEngine:
         }
         return dict(self.last_training)
 
-    def evaluate(self):
+    def evaluate(self, threshold=0.25, ks=(1, 3, 5)):
+        """Benchmark reproduzível de recuperação e classificação contrastiva.
+
+        A avaliação usa somente registros marcados como test. Os canais lexical,
+        semântico e híbrido são reportados separadamente para tornar comparações
+        futuras do encoder verificáveis.
+        """
+        threshold = float(threshold)
+        if not -1.0 <= threshold <= 1.0:
+            raise ValueError("threshold deve estar entre -1 e 1.")
+        ks = tuple(sorted({int(k) for k in ks}))
+        if not ks or ks[0] < 1:
+            raise ValueError("ks deve conter inteiros positivos.")
+
         rows = self.dataset.load()
         qa_test = [r for r in rows if r.get("type", "qa") == "qa" and r.get("split") == "test"]
         pair_test = [r for r in rows if r.get("type") == "pair" and r.get("split") == "test"]
-        retrieval = {"samples": 0, "top5_hit_rate": None, "mrr": None}
-        if qa_test:
-            hits, reciprocal = 0, 0.0
-            for row in qa_test:
-                ranked = self.agent.memory.recall(row["question"], self.agent.encoder, limit=5)
+
+        # Avalia os mesmos candidatos com três estratégias, sem alterar memória.
+        candidates = list(self.agent.memory.knowledge)
+        retrieval = {"samples": len(qa_test), "candidate_count": len(candidates), "metrics": {}}
+        channels = ("lexical", "semantic", "hybrid")
+        reciprocal = {name: 0.0 for name in channels}
+        hits = {name: {k: 0 for k in ks} for name in channels}
+        for row in qa_test:
+            query = row["question"]
+            q_tokens = set(tokenize(query))
+            q_vector = self.agent.encoder.encode(query)
+            scored = {name: [] for name in channels}
+            for item in candidates:
+                candidate_text = str(item.get("question", ""))
+                c_tokens = set(tokenize(candidate_text))
+                union = q_tokens | c_tokens
+                lexical = len(q_tokens & c_tokens) / len(union) if union else 0.0
+                semantic = max(-1.0, min(1.0, cosine(
+                    q_vector, self.agent.encoder.encode(candidate_text)
+                )))
+                weight = 0.35 + 0.50 * min(
+                    1.0, getattr(self.agent.encoder, "updates", 0) / 30.0
+                )
+                values = {
+                    "lexical": lexical,
+                    "semantic": semantic,
+                    "hybrid": weight * semantic + (1.0 - weight) * lexical,
+                }
+                for name, score in values.items():
+                    scored[name].append((score, item))
+            for name in channels:
+                ranked = sorted(scored[name], key=lambda pair: pair[0], reverse=True)
                 rank = next((i + 1 for i, (_, item) in enumerate(ranked)
                              if item.get("answer") == row["answer"]), None)
-                if rank:
-                    hits += 1
-                    reciprocal += 1.0 / rank
-            retrieval = {"samples": len(qa_test), "top5_hit_rate": hits / len(qa_test),
-                         "mrr": reciprocal / len(qa_test)}
+                if rank is not None:
+                    reciprocal[name] += 1.0 / rank
+                    for k in ks:
+                        hits[name][k] += int(rank <= k)
 
-        contrastive = {"samples": 0, "accuracy": None,
-                       "mean_positive_similarity": None, "mean_negative_similarity": None}
-        if pair_test:
-            correct, positive, negative = 0, [], []
-            for pair in pair_test:
-                similarity = sum(a * b for a, b in zip(
-                    self.agent.encoder.encode(pair["text_a"]),
-                    self.agent.encoder.encode(pair["text_b"])
-                ))
-                predicted = 1 if similarity >= .25 else 0
-                correct += int(predicted == int(pair.get("label", 1)))
-                (positive if int(pair.get("label", 1)) == 1 else negative).append(similarity)
-            contrastive = {
-                "samples": len(pair_test), "accuracy": correct / len(pair_test),
-                "mean_positive_similarity": sum(positive) / len(positive) if positive else None,
-                "mean_negative_similarity": sum(negative) / len(negative) if negative else None,
-                "decision_threshold": .25
+        if qa_test:
+            retrieval["metrics"] = {
+                name: {
+                    "mrr": reciprocal[name] / len(qa_test),
+                    "recall_at_k": {str(k): hits[name][k] / len(qa_test) for k in ks},
+                } for name in channels
             }
-        return {"retrieval": retrieval, "contrastive": contrastive,
-                "note": "Avaliações separadas; pares de teste não são usados no treinamento."}
+        else:
+            retrieval["metrics"] = {
+                name: {"mrr": None, "recall_at_k": {str(k): None for k in ks}}
+                for name in channels
+            }
+
+        similarities = []
+        tp = fp = tn = fn = 0
+        positive, negative = [], []
+        for pair in pair_test:
+            similarity = cosine(
+                self.agent.encoder.encode(pair["text_a"]),
+                self.agent.encoder.encode(pair["text_b"])
+            )
+            label = int(pair.get("label", 1))
+            predicted = int(similarity >= threshold)
+            similarities.append(similarity)
+            (positive if label == 1 else negative).append(similarity)
+            if predicted and label:
+                tp += 1
+            elif predicted and not label:
+                fp += 1
+            elif not predicted and not label:
+                tn += 1
+            else:
+                fn += 1
+
+        total = len(pair_test)
+        precision = tp / (tp + fp) if tp + fp else 0.0
+        recall_score = tp / (tp + fn) if tp + fn else 0.0
+        specificity = tn / (tn + fp) if tn + fp else 0.0
+        f1 = (2 * precision * recall_score / (precision + recall_score)
+              if precision + recall_score else 0.0)
+        contrastive = {
+            "samples": total,
+            "accuracy": (tp + tn) / total if total else None,
+            "precision": precision if total else None,
+            "recall": recall_score if total else None,
+            "f1": f1 if total else None,
+            "specificity": specificity if total else None,
+            "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+            "mean_positive_similarity": sum(positive) / len(positive) if positive else None,
+            "mean_negative_similarity": sum(negative) / len(negative) if negative else None,
+            "decision_threshold": threshold,
+        }
+        return {
+            "retrieval": retrieval,
+            "contrastive": contrastive,
+            "protocol": {
+                "test_qa_samples": len(qa_test),
+                "test_pair_samples": len(pair_test),
+                "candidate_source": "memory.knowledge",
+                "channels": list(channels),
+                "ks": list(ks),
+                "threshold": threshold,
+                "test_data_used_for_training": False,
+            },
+            "note": "Métricas de recuperação e classificação são separadas; "
+                    "o benchmark não prova compreensão semântica geral.",
+        }

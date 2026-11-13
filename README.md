@@ -12,6 +12,18 @@
 - **Evaluation Engine:** métricas separadas de recuperação QA e classificação de pares contrastivos.
 - **Ollama:** integração opcional com endpoint localhost; endereços remotos são recusados.
 
+## Benchmark semântico (base da 0.5)
+
+O comando `/avaliar` agora compara três estratégias de recuperação sobre os mesmos exemplos QA de teste:
+
+- **Lexical:** Jaccard entre tokens normalizados.
+- **Semantic:** similaridade cosseno entre embeddings.
+- **Hybrid:** combinação ponderada das duas estratégias, usando o mesmo peso progressivo da memória.
+
+Para cada canal são calculados **MRR** e **Recall@1, @3 e @5**. A classificação de pares contrastivos informa accuracy, precision, recall, F1, specificity, matriz de confusão e médias de similaridade positiva/negativa. A avaliação aceita limiar e K's configuráveis pela API Python: `ai.learning.evaluate(threshold=0.25, ks=(1, 3, 5))`.
+
+O conjunto QA de teste é comparado com o conteúdo atualmente presente em `memory.knowledge`; ele não é inserido automaticamente na memória durante a avaliação. Por isso, para medir recuperação de forma válida, cadastre exemplos de treino na memória e mantenha perguntas/respostas de teste realmente separadas. Os pares de teste também não participam do treinamento. O dataset inicial é pequeno e serve apenas como smoke test: resultados estatisticamente úteis exigem um conjunto de teste maior, representativo e sem paráfrases duplicadas entre divisões.
+
 ## Limitações importantes
 
 O Semantic Encoder 0.4 é um modelo compacto treinável de embeddings de palavras e bigramas, não um Transformer contextual pré-treinado. Ele começa com vetores determinísticos inicializados aleatoriamente e aprende similaridades a partir dos pares contrastivos fornecidos. Portanto, **não possui semântica geral garantida sem dados de treinamento suficientes e representativos**. A ordem local é parcialmente representada por bigramas; relações linguísticas complexas e contexto longo ainda não são modelados adequadamente.

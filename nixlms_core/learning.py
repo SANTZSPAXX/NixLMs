@@ -40,9 +40,19 @@ class DatasetStore:
         if label not in (0, 1):
             raise ValueError("label deve ser 0 ou 1.")
         rows = self.load()
-        row = {"type": "pair", "text_a": text_a, "text_b": text_b,
-               "label": label, "split": split}
-        rows.append(row)
+        key = (normalize(text_a), normalize(text_b), label, split)
+        for existing in rows:
+            if existing.get("type") == "pair" and (
+                normalize(existing.get("text_a", "")),
+                normalize(existing.get("text_b", "")),
+                int(existing.get("label", 1)), existing.get("split", "train")
+            ) == key:
+                existing.update({"text_a": text_a, "text_b": text_b,
+                                 "label": label, "split": split})
+                save_json(self.path, rows)
+                return len(rows)
+        rows.append({"type": "pair", "text_a": text_a, "text_b": text_b,
+                     "label": label, "split": split})
         save_json(self.path, rows)
         return len(rows)
 

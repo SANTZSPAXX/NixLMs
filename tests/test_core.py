@@ -72,6 +72,12 @@ class CoreTests(unittest.TestCase):
         after = cosine(encoder.encode(a), encoder.encode(b))
         self.assertLess(after, before)
 
+    def test_encoder_inference_does_not_mutate_vocabulary(self):
+        encoder = SemanticEncoder(dimensions=16)
+        before = len(encoder.vocab)
+        encoder.encode("termo totalmente novo")
+        self.assertEqual(len(encoder.vocab), before)
+
     def test_semantic_encoder_state_roundtrip(self):
         encoder = SemanticEncoder(dimensions=16)
         encoder.fit_pair("bom dia", "olá bom dia", 1)
@@ -92,6 +98,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(len(memory.knowledge), 1)
             self.assertEqual(memory.recall("capital do Brasil", encoder, ForbiddenNetwork())[0][1]["answer"],
                              "Brasília é a capital.")
+            self.assertNotIn("_embedding", memory.knowledge[0])
 
     def test_training_is_idempotent_for_qa_memory(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -103,6 +110,16 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(len(matches), 1)
             self.assertEqual(result["contrastive_pairs"], 1)
             self.assertGreater(ai.encoder.updates, 0)
+
+    def test_contrastive_dataset_deduplicates_and_prevents_split_leakage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            store = ai.learning.dataset
+            store.add_pair("estou feliz", "estou contente", 1, "train")
+            store.add_pair("estou contente", "estou feliz", 1, "train")
+            self.assertEqual(len([r for r in store.load() if r.get("type") == "pair"]), 1)
+            with self.assertRaises(ValueError):
+                store.add_pair("estou feliz", "estou contente", 1, "test")
 
     def test_dataset_metrics_separate_retrieval_and_contrastive(self):
         with tempfile.TemporaryDirectory() as tmp:

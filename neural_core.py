@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Interface de terminal da NixLMs Neural Core 0.3."""
+from pathlib import Path
 from nixlms_core import NixLMsNeuralCore
 
 HELP="""Comandos:
   /ensinar pergunta => resposta   salva conhecimento e dataset
+  /importar arquivo.jsonl         importa dataset JSONL com split train/test
   /status                          estado dos módulos
   /eeg                             bandas sintéticas
   /mapa                            conceitos e associações
@@ -31,6 +33,11 @@ def main():
         if low=="/mapa":
             print({"concepts":len(ai.mental_map.nodes),"associations":ai.mental_map.associate(ai.last_question,12)}); continue
         if low=="/llm": print(ai.language.status(),"available=",ai.language.available()); continue
+        if low.startswith("/importar "):
+            source=Path(msg[len("/importar "):].strip()).expanduser()
+            try: print("Registros importados:",ai.learning.dataset.import_jsonl(source))
+            except (OSError,ValueError) as exc: print("Falha ao importar:",exc)
+            continue
         if low.startswith("/treinar"):
             parts=low.split()
             try: print(ai.learning.train(int(parts[1]) if len(parts)>1 else 1))

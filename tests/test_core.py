@@ -35,6 +35,12 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(clone.load_state_dict(net.state_dict()))
         self.assertEqual(len(clone.w_rec), clone.hidden_size)
 
+    def test_recurrent_matrix_has_zero_diagonal(self):
+        net = LIFNetwork(hidden_size=12)
+        self.assertEqual(len(net.w_rec), 12)
+        self.assertTrue(all(len(row) == 12 for row in net.w_rec))
+        self.assertTrue(all(net.w_rec[i][i] == 0.0 for i in range(12)))
+
     def test_lif_spike_telemetry_and_inference_is_not_plastic(self):
         net = LIFNetwork(threshold=.08)
         vector = [1.0 / (net.input_size ** .5)] * net.input_size

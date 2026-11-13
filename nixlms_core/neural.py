@@ -18,8 +18,8 @@ class LIFNetwork:
         self.w_in = [[rng.uniform(-.12, .12) for _ in range(self.input_size)]
                      for _ in range(self.hidden_size)]
         self.w_rec = [[0.0 if i == j else rng.uniform(-recurrent_scale, recurrent_scale)
-                       for i in range(self.hidden_size)]
-                      for _ in range(self.hidden_size)]
+                       for j in range(self.hidden_size)]
+                      for i in range(self.hidden_size)]
         self.w_out = [[rng.uniform(-.12, .12) for _ in range(self.hidden_size)]
                       for _ in range(self.output_size)]
         self.last_hidden = [0.0] * self.hidden_size

@@ -120,6 +120,9 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(len([r for r in store.load() if r.get("type") == "pair"]), 1)
             with self.assertRaises(ValueError):
                 store.add_pair("estou feliz", "estou contente", 1, "test")
+            store.add("capital brasileira", "Brasília", "train")
+            with self.assertRaises(ValueError):
+                store.add("capital brasileira", "Brasília", "test")
 
     def test_dataset_metrics_separate_retrieval_and_contrastive(self):
         with tempfile.TemporaryDirectory() as tmp:

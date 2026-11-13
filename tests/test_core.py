@@ -139,6 +139,34 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(metrics["retrieval"]["samples"], 1)
             self.assertEqual(metrics["contrastive"]["samples"], 1)
 
+    def test_semantic_benchmark_reports_comparable_retrieval_channels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            ai.learning.dataset.add("capital do Brasil", "Brasília", "test")
+            ai.learning.dataset.add_pair("estou feliz", "estou contente", 1, "test")
+            ai.learning.dataset.add_pair("gato caça rato", "rato caça gato", 0, "test")
+            report = ai.learning.evaluate(ks=(1, 3))
+            self.assertEqual(report["protocol"]["test_qa_samples"], 1)
+            self.assertEqual(report["protocol"]["test_pair_samples"], 2)
+            self.assertEqual(set(report["retrieval"]["metrics"]),
+                             {"lexical", "semantic", "hybrid"})
+            for channel in ("lexical", "semantic", "hybrid"):
+                self.assertIn("mrr", report["retrieval"]["metrics"][channel])
+                self.assertEqual(
+                    set(report["retrieval"]["metrics"][channel]["recall_at_k"]),
+                    {"1", "3"}
+                )
+            self.assertIn("f1", report["contrastive"])
+            self.assertEqual(
+                sum(report["contrastive"]["confusion_matrix"].values()), 2
+            )
+
+    def test_semantic_benchmark_rejects_invalid_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            with self.assertRaises(ValueError):
+                ai.learning.evaluate(threshold=1.5)
+
     def test_cosine_rejects_dimension_mismatch(self):
         with self.assertRaises(ValueError):
             cosine([1.0, 0.0], [1.0])

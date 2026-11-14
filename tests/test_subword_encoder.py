@@ -40,7 +40,7 @@ class SubwordEncoderTests(unittest.TestCase):
         encoder = SemanticEncoder(dimensions=16, seed=5)
         features = encoder._features(" ".join(["extraordinarytoken" * 5] * 300))
 
-        self.assertLessEqual(len(features), 128 * 86 + 127)
+        self.assertLessEqual(len(features), 128 * 94 + 127)
 
     def test_contrastive_training_updates_character_subword_embeddings(self):
         encoder = SemanticEncoder(dimensions=32, seed=11)

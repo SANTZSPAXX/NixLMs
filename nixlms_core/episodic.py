@@ -79,7 +79,8 @@ class EpisodicMemory:
                 return item
         return None
 
-    def recall(self, query, encoder=None, limit=5, *, min_score=0.05):
+    def recall(self, query, encoder=None, limit=5, *, min_score=0.05,
+               exclude_user_inputs=None):
         query = self._text(query, "query", 12000)
         limit = int(limit)
         if not query or limit <= 0:
@@ -90,8 +91,11 @@ class EpisodicMemory:
             encode_query = getattr(encoder, "encode_query", None)
             query_vector = encode_query(query) if callable(encode_query) else encoder.encode(query)
         now = datetime.now(timezone.utc)
+        excluded = {normalize(text) for text in (exclude_user_inputs or [])}
         ranked = []
         for item in self.items:
+            if normalize(item.get("user_input", "")) in excluded:
+                continue
             searchable = " ".join([
                 item.get("user_input", ""), item.get("assistant_output", ""),
                 " ".join(item.get("tags", [])), item.get("outcome", ""),

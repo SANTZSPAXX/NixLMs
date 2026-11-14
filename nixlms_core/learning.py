@@ -316,47 +316,42 @@ class LearningEngine:
         lif_candidates = 0
         lif_used = 0
         lif_scores = []
-        try:
-            for row in qa_test:
-                question = str(row.get("question", "")).strip()
-                expected = str(row.get("answer", "")).strip()
-                answer = self.agent.respond(
-                    question, use_language=bool(include_llm), record=False,
-                    excluded_questions=exact_questions,
-                )
-                trace = dict(self.agent.last_trace)
-                source = str(trace.get("response_source", "unknown"))
-                exact = normalize(answer) == normalize(expected)
-                f1 = self._token_f1(expected, answer)
-                abstained = source in {"fallback", "entity_abstention"}
-                echoed = self._is_question_echo(question, answer)
-                candidate_count = int(trace.get("lif_retrieval_candidates", 0) or 0)
-                lif_score = trace.get("lif_retrieval_score")
-                source_counts[source] = source_counts.get(source, 0) + 1
-                total_f1 += f1
-                exact_matches += int(exact)
-                abstentions += int(abstained)
-                echoes += int(echoed)
-                lif_candidates += int(candidate_count > 0)
-                lif_used += int(source in {"lif_associative_readout", "lif_conditioned_llm"})
-                if lif_score is not None:
-                    lif_scores.append(float(lif_score))
-                cases.append({
-                    "question": question,
-                    "expected_answer": expected,
-                    "answer": answer,
-                    "response_source": source,
-                    "exact_match": exact,
-                    "token_f1": f1,
-                    "abstained": abstained,
-                    "question_echo": echoed,
-                    "lif_candidate_count": candidate_count,
-                    "lif_retrieval_score": lif_score,
-                })
-        finally:
-            self.agent.memory.knowledge = original_knowledge
-            self.agent.episodic.items = original_episodes
-
+        for row in qa_test:
+            question = str(row.get("question", "")).strip()
+            expected = str(row.get("answer", "")).strip()
+            answer = self.agent.respond(
+                question, use_language=bool(include_llm), record=False,
+                excluded_questions=exact_questions,
+            )
+            trace = dict(self.agent.last_trace)
+            source = str(trace.get("response_source", "unknown"))
+            exact = normalize(answer) == normalize(expected)
+            f1 = self._token_f1(expected, answer)
+            abstained = source in {"fallback", "entity_abstention"}
+            echoed = self._is_question_echo(question, answer)
+            candidate_count = int(trace.get("lif_retrieval_candidates", 0) or 0)
+            lif_score = trace.get("lif_retrieval_score")
+            source_counts[source] = source_counts.get(source, 0) + 1
+            total_f1 += f1
+            exact_matches += int(exact)
+            abstentions += int(abstained)
+            echoes += int(echoed)
+            lif_candidates += int(candidate_count > 0)
+            lif_used += int(source in {"lif_associative_readout", "lif_conditioned_llm"})
+            if lif_score is not None:
+                lif_scores.append(float(lif_score))
+            cases.append({
+                "question": question,
+                "expected_answer": expected,
+                "answer": answer,
+                "response_source": source,
+                "exact_match": exact,
+                "token_f1": f1,
+                "abstained": abstained,
+                "question_echo": echoed,
+                "lif_candidate_count": candidate_count,
+                "lif_retrieval_score": lif_score,
+            })
         count = len(qa_test)
         metrics = {
             "exact_match": exact_matches / count if count else None,

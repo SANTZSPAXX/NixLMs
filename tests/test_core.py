@@ -40,6 +40,16 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(ai.last_trace["response_source"], "runtime_datetime")
             self.assertEqual(ai.last_trace["confidence"], 1.0)
 
+    def test_episodic_recall_uses_the_configured_retrieval_encoder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            encoder = object()
+            with mock.patch.object(ai, "_recall", return_value=[]), \
+                 mock.patch.object(ai, "_active_retrieval_encoder", return_value=encoder), \
+                 mock.patch.object(ai.episodic, "recall", return_value=[]) as recall:
+                ai.respond("Pergunta para validar encoder episódico", use_language=False)
+            self.assertIs(recall.call_args.args[1], encoder)
+
     def test_temporal_time_query_is_deterministic(self):
         from datetime import datetime
         with tempfile.TemporaryDirectory() as tmp:

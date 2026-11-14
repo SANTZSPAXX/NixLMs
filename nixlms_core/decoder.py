@@ -40,7 +40,6 @@ class NeuralTextDecoder:
         self.b_output = [0.0] * len(self.SPECIAL_TOKENS)
         self.trained_steps = 0
         self.trained_tokens = 0
-        self._rng = random.Random(self.seed)
         self._initialize_parameters()
 
     @classmethod
@@ -103,7 +102,7 @@ class NeuralTextDecoder:
     def fit_vocabulary(self, texts):
         added = 0
         for text in texts:
-            for token in self.tokenize(text)[:self.max_sequence_length]:
+            for token in self.tokenize(text)[:self.max_sequence_length - 1]:
                 if token in self.vocab or len(self.vocab) >= self.max_vocab:
                     continue
                 index = len(self.vocab)

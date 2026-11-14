@@ -306,16 +306,6 @@ class LearningEngine:
     def evaluate_cognition(self, qa_test, include_llm=False):
         """Avalia respostas completas no split test sem persistir interações ou vazar consultas exatas."""
         exact_questions = {normalize(row.get("question", "")) for row in qa_test}
-        original_knowledge = self.agent.memory.knowledge
-        original_episodes = self.agent.episodic.items
-        self.agent.memory.knowledge = [
-            item for item in original_knowledge
-            if normalize(item.get("question", "")) not in exact_questions
-        ]
-        self.agent.episodic.items = [
-            item for item in original_episodes
-            if normalize(item.get("user_input", "")) not in exact_questions
-        ]
 
         cases = []
         source_counts = {}
@@ -331,7 +321,8 @@ class LearningEngine:
                 question = str(row.get("question", "")).strip()
                 expected = str(row.get("answer", "")).strip()
                 answer = self.agent.respond(
-                    question, use_language=bool(include_llm), record=False
+                    question, use_language=bool(include_llm), record=False,
+                    excluded_questions=exact_questions,
                 )
                 trace = dict(self.agent.last_trace)
                 source = str(trace.get("response_source", "unknown"))

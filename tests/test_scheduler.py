@@ -31,6 +31,7 @@ class TaskSchedulerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "scheduler.sqlite3"
             first = TaskScheduler(path)
+            first.register_handler("persisted", lambda payload: payload["x"])
             job_id = first.schedule_once("persisted", {"x": 1}, delay_seconds=30)
             second = TaskScheduler(path)
             second.register_handler("persisted", lambda payload: payload["x"])

@@ -202,7 +202,11 @@ class LIFNetwork:
                                    clip_norm=1.0):
         squared_norm = (
             sum(value * value for row in grad_in for value in row)
-            + sum(value * value for row in grad_rec for value in row)
+            + sum(
+                grad_rec[j][k] * grad_rec[j][k]
+                for j in range(self.hidden_size)
+                for k in range(self.hidden_size) if j != k
+            )
         )
         gradient_norm = math.sqrt(squared_norm)
         if not math.isfinite(gradient_norm):

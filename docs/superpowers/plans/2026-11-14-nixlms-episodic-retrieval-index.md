@@ -203,6 +203,8 @@ Antes de afirmar “loopback-only”, o fluxo gerenciado deve forçar/validar o 
 
 Observação secundária: no Linux, a instalação do Ollama pode executar `apt-get update` e instalar `zstd` como pré-requisito. Essa alteração de pacote de sistema deve ficar explícita no resumo de consentimento ou receber confirmação própria. Nenhuma dessas observações foi publicada como comentário nem aplicada à PR #23.
 
+Outra lacuna documental: a PR seleciona `qwen2.5:0.5b`, mas a documentação alterada não aponta claramente a origem upstream nem a licença do modelo. O cartão oficial [Qwen/Qwen2.5-0.5B](https://huggingface.co/Qwen/Qwen2.5-0.5B) declara Apache-2.0; a documentação deve registrar o modelo upstream, o tag exato usado pelo Ollama e a licença/avisos correspondentes, sem presumir que o tag quantizado seja idêntico aos pesos originais.
+
 ## 8. Próxima ação
 
 O ciclo da tarde deve começar confirmando novamente o HEAD de `main`, branches e PRs; criar uma branch exclusiva de implementação a partir do SHA atual; executar testes primeiro; implementar somente o cache/batching episódico; revisar diff e compatibilidade; aguardar CI real; abrir PR draft. Não fazer merge, release, deploy, alteração de configurações ou modificação de PR existente.

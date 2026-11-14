@@ -40,6 +40,7 @@ class NixLMsNeuralCore:
         )
         self.data_dir = Path(data_dir or Path(__file__).resolve().parents[1] / "data")
         self.lif_calibration_path = self.data_dir / "lif_calibration.json"
+        self.decoder_path = self.data_dir / "neural_decoder.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
@@ -97,6 +98,11 @@ class NixLMsNeuralCore:
                            row.get("text_a", ""), row.get("text_b", "")])
         self.encoder.fit_vocabulary(corpus)
         self._save_encoder()
+        self.decoder.fit_vocabulary([
+            row.get("answer", "") for row in self.learning.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split", "train") == "train"
+        ])
+        self._save_decoder()
         self._load_lif_calibration()
 
         self.last_trace = {}
@@ -104,6 +110,22 @@ class NixLMsNeuralCore:
 
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
+
+    def _save_decoder(self):
+        save_json(self.decoder_path, self.decoder.state_dict())
+
+    def _lif_forward(self, text, signal=None):
+        if signal is None:
+            signal = self.eeg.synthesize(profile={
+                "delta": .12, "theta": .24, "alpha": .32, "beta": .25, "gamma": .07
+            })
+        energies = self.eeg.band_energy(signal)
+        eeg_state = self.eeg.cognitive_state(energies)
+        vector = self.encoder.encode(text)
+        output, hidden = self.network.forward(
+            vector, modulation=.8 + eeg_state["focus"] * .4
+        )
+        return output, hidden, eeg_state, energies
 
     def _compress_neural_target(self, vector):
         """Projeta o embedding semântico para a dimensão da leitura de saída LIF."""

@@ -103,7 +103,7 @@ def _confirm_action(prompt):
     try:
         answer = input(prompt + " [s/N]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
-        print("\\nOperação cancelada.")
+        print("\nOperação cancelada.")
         return False
     return answer in {"s", "sim", "y", "yes"}
 

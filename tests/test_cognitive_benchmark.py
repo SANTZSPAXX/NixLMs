@@ -52,7 +52,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
 
             ai.learning.evaluate()
 
-            self.assertEqual(len(ai.episodic.episodes), before)
+            self.assertEqual(len(ai.episodic.items), before)
 
     def test_empty_cognitive_test_set_is_reported_without_fake_scores(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -219,6 +219,8 @@ class LearningEngine:
             return {"trained": 0, "epochs": 0,
                     "message": "Dataset vazio. Adicione exemplos ou pares contrastivos."}
 
+        if hasattr(self.agent, "invalidate_lif_calibration"):
+            self.agent.invalidate_lif_calibration()
         for row in qa_rows:
             self.agent.learn(row["question"], row["answer"],
                              remember=True, reinforce=False, add_to_dataset=False)
@@ -258,8 +260,6 @@ class LearningEngine:
                     learning_rate=self.agent.config.lif_output_learning_rate
                 ))
 
-        if hasattr(self.agent, "invalidate_lif_calibration"):
-            self.agent.invalidate_lif_calibration()
         self.agent._save_encoder()
         save_json(self.agent.data_dir / "neural_weights.json",
                   self.agent.network.state_dict())
@@ -309,6 +309,8 @@ class LearningEngine:
                                  min_correct_candidates=2,
                                  min_incorrect_candidates=2):
         """Calibra somente o limiar de aceitação LIF usando QA do split validation."""
+        if hasattr(self.agent, "_load_lif_calibration"):
+            self.agent._load_lif_calibration()
         self._require_clean_splits()
         min_validation_samples = int(min_validation_samples)
         min_correct_candidates = int(min_correct_candidates)

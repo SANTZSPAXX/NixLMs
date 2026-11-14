@@ -27,7 +27,8 @@ HELP = """Comandos:
   /agenda executar                    executa tarefas vencidas agora
   Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
-  /avaliar                             métricas de recuperação e semântica
+  /avaliar                             benchmark offline de recuperação, semântica e respostas
+  /avaliar-llm                         benchmark integrado usando o Ollama local (opcional)
   /llm                                 diagnóstico do Ollama local
   /llm usar NOME                       seleciona modelo já instalado
   /positivo | /negativo                feedback da última pergunta
@@ -176,9 +177,9 @@ def main():
             except ValueError as exc:
                 print("Falha no treinamento:", exc)
             continue
-        if low == "/avaliar":
+        if low in {"/avaliar", "/avaliar-llm"}:
             try:
-                print(ai.learning.evaluate())
+                print(ai.learning.evaluate(include_llm=low == "/avaliar-llm"))
             except ValueError as exc:
                 print("Falha na avaliação:", exc)
             continue

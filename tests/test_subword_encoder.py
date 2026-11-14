@@ -50,7 +50,7 @@ class SubwordEncoderTests(unittest.TestCase):
         index = encoder.vocab[feature]
         before = list(encoder.embeddings[index])
 
-        result = encoder.fit_pair("programação", "programacoes", label=0)
+        result = encoder.fit_pair("programação", "programacoes", label=1)
 
         self.assertTrue(result["updated"])
         self.assertNotEqual(encoder.embeddings[index], before)

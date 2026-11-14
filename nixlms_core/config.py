@@ -13,6 +13,9 @@ class CoreConfig:
     max_memory_items: int = 2000
     confidence_threshold: float = 0.12
     lif_output_learning_rate: float = 0.025
+    lif_recurrent_learning_rate: float = 0.001
+    lif_surrogate_width: float = 0.5
+    lif_contrastive_margin: float = 0.25
     lif_retrieval_threshold: float = 0.45
     decoder_hidden_size: int = 24
     decoder_embedding_size: int = 24

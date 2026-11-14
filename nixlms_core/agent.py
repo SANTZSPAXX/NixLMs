@@ -233,6 +233,7 @@ class NixLMsNeuralCore:
         try:
             threshold = float(state["threshold"])
             readout_updates = int(state["readout_updates"])
+            recurrent_updates = int(state.get("recurrent_updates", 0))
             encoder_updates = int(state["encoder_updates"])
             vocab_size = int(state["encoder_vocab_size"])
         except (KeyError, TypeError, ValueError):
@@ -241,9 +242,16 @@ class NixLMsNeuralCore:
             return False
         if readout_updates != self.network.output_updates:
             return False
+        if recurrent_updates != self.network.recurrent_updates:
+            return False
         if encoder_updates != self.encoder.updates or vocab_size != len(self.encoder.vocab):
             return False
         if state.get("validation_fingerprint") != self.learning.validation_fingerprint():
+            return False
+        saved_lif_fingerprint = state.get("lif_model_fingerprint")
+        if saved_lif_fingerprint is not None and (
+            saved_lif_fingerprint != self.learning.lif_model_fingerprint()
+        ):
             return False
         if state.get("candidate_memory_fingerprint") != self.learning.lif_candidate_fingerprint():
             return False
@@ -262,6 +270,7 @@ class NixLMsNeuralCore:
             decoder_steps = int(state["decoder_trained_steps"])
             decoder_vocab_size = int(state["decoder_vocab_size"])
             lif_updates = int(state["lif_readout_updates"])
+            lif_recurrent_updates = int(state.get("lif_recurrent_updates", 0))
             encoder_updates = int(state["encoder_updates"])
             encoder_vocab_size = int(state["encoder_vocab_size"])
         except (KeyError, TypeError, ValueError):
@@ -273,6 +282,8 @@ class NixLMsNeuralCore:
         if decoder_vocab_size != len(self.decoder.vocab):
             return False
         if lif_updates != self.network.output_updates:
+            return False
+        if lif_recurrent_updates != self.network.recurrent_updates:
             return False
         if encoder_updates != self.encoder.updates or encoder_vocab_size != len(self.encoder.vocab):
             return False
@@ -697,7 +708,15 @@ class NixLMsNeuralCore:
             "planning": self.goals.stats(),
             "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
-            "architecture": "semantic_subword_encoder_lif_readout_autoregressive_decoder_memory_world_model_goal_manager",
+            "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
+            "lif_network": {
+                "recurrent_updates": self.network.recurrent_updates,
+                "readout_updates": self.network.output_updates,
+                "hidden_size": self.network.hidden_size,
+                "steps": self.network.steps,
+                "surrogate_training": "fast_sigmoid_bptt",
+                "contrastive_recurrent_training": True,
+            },
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,
                 "vocabulary_size": len(self.encoder.vocab),

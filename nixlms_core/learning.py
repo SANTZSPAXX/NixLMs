@@ -286,6 +286,7 @@ class LearningEngine:
             )
 
         representation = self.evaluate_representations()["metrics"]
+        lif_representation = self.evaluate_lif_representations()["metrics"]
         count = len(rows)
         metrics = {
             "decoder_loss": (
@@ -308,6 +309,8 @@ class LearningEngine:
             ),
             "representation_margin": representation.get("margin"),
             "representation_pairwise_accuracy": representation.get("pairwise_accuracy"),
+            "lif_contrastive_margin": lif_representation.get("margin"),
+            "lif_contrastive_pairwise_accuracy": lif_representation.get("pairwise_accuracy"),
         }
         return {
             "samples": count,
@@ -330,6 +333,8 @@ class LearningEngine:
             "lif_output_loss": -1.0,
             "representation_margin": 1.0,
             "representation_pairwise_accuracy": 1.0,
+            "lif_contrastive_margin": 1.0,
+            "lif_contrastive_pairwise_accuracy": 1.0,
         }
         comparisons = {}
         regressions = []
@@ -737,6 +742,9 @@ class LearningEngine:
         losses = []
         updates = 0
         lif_losses = []
+        lif_recurrent_losses = []
+        lif_pair_losses = []
+        lif_pair_updates = 0
         decoder_losses = []
         for _ in range(epochs):
             batch = list(pairs)
@@ -747,10 +755,33 @@ class LearningEngine:
                 )
                 losses.append(result["loss"])
                 updates += int(result["updated"])
-            # Treina a leitura depois da atualização contrastiva do encoder,
-            # mantendo os alvos semânticos alinhados aos embeddings atuais.
+                lif_pair_result = self.agent.network.train_recurrent_pair(
+                    self.agent.encoder.encode(pair["text_a"]),
+                    self.agent.encoder.encode(pair["text_b"]),
+                    pair.get("label", 1),
+                    learning_rate=self.agent.config.lif_recurrent_learning_rate,
+                    margin=self.agent.config.lif_contrastive_margin,
+                    surrogate_width=self.agent.config.lif_surrogate_width,
+                )
+                lif_pair_losses.append(lif_pair_result["loss"])
+                lif_pair_updates += int(lif_pair_result["updated"])
+            # Treina a dinâmica recorrente com o alvo semântico antes de ajustar
+            # o readout; o readout permanece congelado durante BPTT substituto.
             qa_batch = list(qa_rows)
             rng.shuffle(qa_batch)
+            for row in qa_batch:
+                vector = self.agent.encoder.encode(row["question"])
+                target = self.agent._compress_neural_target(
+                    self.agent.encoder.encode(row["answer"])
+                )
+                recurrent_result = self.agent.network.train_recurrent(
+                    vector, target,
+                    learning_rate=self.agent.config.lif_recurrent_learning_rate,
+                    surrogate_width=self.agent.config.lif_surrogate_width,
+                )
+                lif_recurrent_losses.append(recurrent_result["loss"])
+            # Treina a leitura depois da atualização recorrente,
+            # mantendo os alvos semânticos alinhados aos embeddings atuais.
             for row in qa_batch:
                 _, hidden, _, _ = self.agent._lif_forward(row["question"])
                 target = self.agent._compress_neural_target(
@@ -779,6 +810,17 @@ class LearningEngine:
             "epochs": epochs,
             "mean_contrastive_loss": sum(losses) / len(losses) if losses else None,
             "lif_output_updates": self.agent.network.output_updates,
+            "lif_recurrent_updates": self.agent.network.recurrent_updates,
+            "lif_recurrent_examples_trained": len(qa_rows),
+            "mean_lif_recurrent_loss": (
+                sum(lif_recurrent_losses) / len(lif_recurrent_losses)
+                if lif_recurrent_losses else None
+            ),
+            "lif_pair_updates": lif_pair_updates,
+            "mean_lif_pair_loss": (
+                sum(lif_pair_losses) / len(lif_pair_losses)
+                if lif_pair_losses else None
+            ),
             "lif_qa_examples_trained": len(qa_rows),
             "mean_lif_readout_loss": sum(lif_losses) / len(lif_losses) if lif_losses else None,
             "decoder_trained_steps": self.agent.decoder.trained_steps,
@@ -798,11 +840,30 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def lif_model_fingerprint(self):
+        """Fingerprint das matrizes LIF que determinam a recuperação neural."""
+        payload = {
+            "w_in": self.agent.network.w_in,
+            "w_rec": self.agent.network.w_rec,
+            "w_out": self.agent.network.w_out,
+            "recurrent_updates": self.agent.network.recurrent_updates,
+            "output_updates": self.agent.network.output_updates,
+        }
+        serialized = json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
     def decoder_model_fingerprint(self):
         """Fingerprint do decoder, readout LIF e versão do encoder usada no contexto."""
         payload = {
             "decoder": self.agent.decoder.state_dict(),
             "lif_readout": self.agent.network.w_out,
+            "lif_recurrent": {
+                "w_in": self.agent.network.w_in,
+                "w_rec": self.agent.network.w_rec,
+                "recurrent_updates": self.agent.network.recurrent_updates,
+            },
             "encoder_updates": self.agent.encoder.updates,
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "encoder_dimensions": self.agent.encoder.dimensions,
@@ -944,6 +1005,7 @@ class LearningEngine:
             "decoder_trained_steps": int(self.agent.decoder.trained_steps),
             "decoder_vocab_size": len(self.agent.decoder.vocab),
             "lif_readout_updates": int(self.agent.network.output_updates),
+            "lif_recurrent_updates": int(self.agent.network.recurrent_updates),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),
@@ -1103,6 +1165,57 @@ class LearningEngine:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
+    def evaluate_lif_representations(self, split="validation"):
+        """Avalia pares ocultos LIF em validation (gate) ou test (benchmark final)."""
+        if split not in {"validation", "test"}:
+            raise ValueError("split deve ser validation ou test.")
+        rows = [
+            row for row in self.dataset.load()
+            if row.get("type") == "pair" and row.get("split") == split
+        ]
+        positive = []
+        negative = []
+        cases = []
+        for row in rows:
+            _, hidden_a = self.agent.network.forward(
+                self.agent.encoder.encode(row.get("text_a", ""))
+            )
+            _, hidden_b = self.agent.network.forward(
+                self.agent.encoder.encode(row.get("text_b", ""))
+            )
+            similarity = cosine(hidden_a, hidden_b)
+            label = int(row.get("label", 1))
+            (positive if label == 1 else negative).append(similarity)
+            cases.append({"label": label, "similarity": similarity})
+        positive_mean = sum(positive) / len(positive) if positive else None
+        negative_mean = sum(negative) / len(negative) if negative else None
+        margin = (
+            positive_mean - negative_mean
+            if positive_mean is not None and negative_mean is not None else None
+        )
+        pairwise = (
+            sum(pos > neg for pos in positive for neg in negative)
+            / (len(positive) * len(negative))
+            if positive and negative else None
+        )
+        return {
+            "samples": len(rows),
+            "positive_samples": len(positive),
+            "negative_samples": len(negative),
+            "metrics": {
+                "positive_similarity": positive_mean,
+                "negative_similarity": negative_mean,
+                "margin": margin,
+                "pairwise_accuracy": pairwise,
+            },
+            "cases": cases,
+            "protocol": {
+                "validation_split_used": split == "validation",
+                "test_split_used": split == "test",
+                "weights_updated": False,
+            },
+        }
+
     def validation_fingerprint(self):
         """Fingerprint determinístico das perguntas/respostas QA de validation."""
         rows = [
@@ -1221,6 +1334,8 @@ class LearningEngine:
             "schema_version": 1,
             "threshold": threshold,
             "readout_updates": int(self.agent.network.output_updates),
+            "recurrent_updates": int(self.agent.network.recurrent_updates),
+            "lif_model_fingerprint": self.lif_model_fingerprint(),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),
@@ -1456,6 +1571,7 @@ class LearningEngine:
             "decision_threshold": threshold,
         }
         representations = self.evaluate_representations()
+        lif_representations = self.evaluate_lif_representations(split="test")
         decoder = self.evaluate_decoder(qa_test)
         cognition = self.evaluate_cognition(qa_test, include_llm=include_llm)
 
@@ -1463,6 +1579,7 @@ class LearningEngine:
             "retrieval": retrieval,
             "contrastive": contrastive,
             "representations": representations,
+            "lif_representations": lif_representations,
             "decoder": decoder,
             "cognition": cognition,
             "protocol": {

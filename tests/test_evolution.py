@@ -163,5 +163,42 @@ class PretrainedEncoderTests(unittest.TestCase):
             encoder.encode("texto")
 
 
+
+class IntegrationGuardTests(unittest.TestCase):
+    def test_agent_falls_back_to_native_encoder_when_optional_backend_is_missing(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+
+            class BrokenBackend:
+                def encode_query(self, _text):
+                    raise ImportError("optional backend unavailable")
+
+            ai.retrieval_encoder = BrokenBackend()
+            active = ai._active_retrieval_encoder()
+            self.assertIs(active, ai.encoder)
+            self.assertIn("ImportError", ai._retrieval_encoder_error)
+            self.assertEqual(ai.memory._embedding_cache, {})
+
+    def test_training_and_evaluation_refuse_legacy_split_leakage(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            ai.learning.dataset.path.write_text(json.dumps([
+                {"type": "pair", "text_a": "frase compartilhada", "text_b": "outra frase", "label": 1, "split": "train"},
+                {"type": "pair", "text_a": "frase compartilhada", "text_b": "terceira frase", "label": 1, "split": "test"},
+            ]), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                ai.learning.train()
+            with self.assertRaises(ValueError):
+                ai.learning.evaluate()
+
+    def test_goal_context_zero_limit_returns_empty(self):
+        from nixlms_core.planning import GoalManager
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = GoalManager(Path(tmp) / "goals.json")
+            manager.create_goal("Objetivo")
+            self.assertEqual(manager.active_context(limit=0), [])
+
 if __name__ == "__main__":
     unittest.main()

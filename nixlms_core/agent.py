@@ -248,6 +248,11 @@ class NixLMsNeuralCore:
             return False
         if state.get("validation_fingerprint") != self.learning.validation_fingerprint():
             return False
+        saved_lif_fingerprint = state.get("lif_model_fingerprint")
+        if saved_lif_fingerprint is not None and (
+            saved_lif_fingerprint != self.learning.lif_model_fingerprint()
+        ):
+            return False
         if state.get("candidate_memory_fingerprint") != self.learning.lif_candidate_fingerprint():
             return False
         self.config.lif_retrieval_threshold = threshold

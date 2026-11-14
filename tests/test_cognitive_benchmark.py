@@ -48,11 +48,19 @@ class CognitiveBenchmarkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))
             ai.learning.dataset.add("Pergunta de avaliação sem resposta", "Resposta esperada.", "test")
-            before = len(ai.episodic.items)
+            episodic_before = len(ai.episodic.items)
+            legacy_episodes_before = len(ai.memory.episodes)
+            working_before = len(ai.attention.working)
+            neural_weights_before = ai.network.state_dict()
+            encoder_before = ai.encoder.state_dict()
 
             ai.learning.evaluate()
 
-            self.assertEqual(len(ai.episodic.items), before)
+            self.assertEqual(len(ai.episodic.items), episodic_before)
+            self.assertEqual(len(ai.memory.episodes), legacy_episodes_before)
+            self.assertEqual(len(ai.attention.working), working_before)
+            self.assertEqual(ai.network.state_dict(), neural_weights_before)
+            self.assertEqual(ai.encoder.state_dict(), encoder_before)
 
     def test_empty_cognitive_test_set_is_reported_without_fake_scores(self):
         with tempfile.TemporaryDirectory() as tmp:

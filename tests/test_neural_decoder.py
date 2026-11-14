@@ -144,6 +144,27 @@ class NeuralTextDecoderTests(unittest.TestCase):
 
             self.assertEqual(checkpoint.read_text(encoding="utf-8"), "{not valid json")
 
+    def test_low_confidence_decoder_falls_back_to_local_llm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = CoreConfig(decoder_min_confidence=0.5)
+            ai = NixLMsNeuralCore(Path(tmp), config=config)
+            ai.decoder.trained_steps = 1
+            with patch.object(ai.decoder, "generate", return_value={
+                "text": "resposta fraca", "tokens": ["resposta", "fraca"],
+                "token_count": 2, "confidence": 0.01,
+                "terminated": True, "reason": None,
+            }):
+                with patch.object(ai.language, "generate", return_value=(
+                    "Uma explicação local com conteúdo suficiente."
+                )) as llm:
+                    answer = ai.respond("Explique um conceito novo", use_language=True)
+
+            self.assertIn("explicação local", answer)
+            llm.assert_called_once()
+            self.assertFalse(ai.last_trace["decoder_accepted"])
+            self.assertEqual(ai.last_trace["decoder_rejection_reason"], "low_confidence")
+            self.assertEqual(ai.last_trace["response_source"], "local_llm")
+
     def test_decoder_test_metrics_are_reported_without_training(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

@@ -1,5 +1,15 @@
 # Changelog
 
+## Conversational routing and Colab runtime fixes
+
+- Added deterministic handling for greetings, unknown user-name questions, and local date/time queries.
+- Prevented low-relevance semantic memories from becoming direct answers.
+- Rejects generic greeting replies, question echoes, and person answers that omit the requested entity.
+- Improves the Ollama system prompt and records answer-rejection diagnostics.
+- Makes Colab bootstrap update an existing checkout, clear stale imported modules, and print the exact commit and import path.
+- Adds `/diagnostico` to the Colab chat loop for runtime, LLM, and last-response inspection.
+
+
 ## Reliability improvements — runtime integration
 
 - Added deterministic local date/time responses that work without an installed LLM.

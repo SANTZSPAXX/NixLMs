@@ -148,9 +148,9 @@ No terminal:
 /importar datasets/starter_ptbr.jsonl
 /treinar 5
 /avaliar
+```
 
 O treinamento QA também ajusta a leitura de saída LIF para associar a representação recorrente da pergunta à representação semântica da resposta.
-```
 
 A auditoria pode ser consultada pela API:
 

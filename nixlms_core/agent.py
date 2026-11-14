@@ -1,8 +1,10 @@
 import os
 import math
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from .config import CoreConfig
+from .decoder import NeuralTextDecoder
 from .eeg import EEGInspiredEngine
 from .neural import LIFNetwork
 from .encoding import SemanticEncoder
@@ -40,6 +42,7 @@ class NixLMsNeuralCore:
         )
         self.data_dir = Path(data_dir or Path(__file__).resolve().parents[1] / "data")
         self.lif_calibration_path = self.data_dir / "lif_calibration.json"
+        self.decoder_path = self.data_dir / "neural_decoder.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
@@ -64,6 +67,26 @@ class NixLMsNeuralCore:
         weights = load_json(self.data_dir / "neural_weights.json", None)
         if weights:
             self.network.load_state_dict(weights)
+
+        self.decoder = NeuralTextDecoder(
+            context_size=self.config.output_size,
+            hidden_size=self.config.decoder_hidden_size,
+            embedding_size=self.config.decoder_embedding_size,
+            max_vocab=self.config.decoder_max_vocab,
+            learning_rate=self.config.decoder_learning_rate,
+            seed=self.config.seed,
+            max_sequence_length=self.config.decoder_max_sequence_length,
+        )
+        self.decoder_load_error = None
+        decoder_file_exists = self.decoder_path.exists()
+        decoder_state = load_json(self.decoder_path, None)
+        self.decoder_persistence_enabled = not decoder_file_exists or decoder_state is not None
+        if decoder_file_exists and decoder_state is None:
+            self.decoder_load_error = "decoder_state_unreadable"
+            self.decoder_persistence_enabled = False
+        elif decoder_state is not None and not self.decoder.load_state_dict(decoder_state):
+            self.decoder_load_error = "decoder_state_incompatible_or_invalid"
+            self.decoder_persistence_enabled = False
 
         self.eeg = EEGInspiredEngine(self.config.seed)
         self.memory = MemorySystem(self.data_dir, self.config.max_memory_items)
@@ -97,6 +120,12 @@ class NixLMsNeuralCore:
                            row.get("text_a", ""), row.get("text_b", "")])
         self.encoder.fit_vocabulary(corpus)
         self._save_encoder()
+        self.decoder.fit_vocabulary([
+            row.get("answer", "") for row in self.learning.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split", "train") == "train"
+        ])
+        if self.decoder_persistence_enabled:
+            self._save_decoder()
         self._load_lif_calibration()
 
         self.last_trace = {}
@@ -104,6 +133,31 @@ class NixLMsNeuralCore:
 
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
+
+    def _save_decoder(self):
+        save_json(self.decoder_path, self.decoder.state_dict())
+
+    def _lif_forward(self, text, signal=None):
+        if signal is None:
+            digest = hashlib.blake2b(
+                normalize(text).encode("utf-8"), digest_size=8
+            ).digest()
+            stable_seed = (
+                self.config.seed ^ int.from_bytes(digest, "little")
+            ) & 0xFFFFFFFF
+            eeg_engine = EEGInspiredEngine(stable_seed)
+            signal = eeg_engine.synthesize(profile={
+                "delta": .12, "theta": .24, "alpha": .32, "beta": .25, "gamma": .07
+            })
+        else:
+            eeg_engine = self.eeg
+        energies = eeg_engine.band_energy(signal)
+        eeg_state = eeg_engine.cognitive_state(energies)
+        vector = self.encoder.encode(text)
+        output, hidden = self.network.forward(
+            vector, modulation=.8 + eeg_state["focus"] * .4
+        )
+        return output, hidden, eeg_state, energies
 
     def _compress_neural_target(self, vector):
         """Projeta o embedding semântico para a dimensão da leitura de saída LIF."""
@@ -334,18 +388,10 @@ class NixLMsNeuralCore:
         if not text:
             return "Digite uma mensagem para começarmos."
 
-        signal = self.eeg.synthesize(profile={
-            "delta": .12, "theta": .24, "alpha": .32, "beta": .25, "gamma": .07
-        })
-        energies = self.eeg.band_energy(signal)
-        eeg_state = self.eeg.cognitive_state(energies)
         if isinstance(excluded_questions, str):
             excluded_questions = (excluded_questions,)
         excluded_questions = tuple(excluded_questions or ())
-        vector = self.encoder.encode(text)
-        output, hidden = self.network.forward(
-            vector, modulation=.8 + eeg_state["focus"] * .4
-        )
+        output, hidden, eeg_state, energies = self._lif_forward(text)
         lif_raw_ranked = self._lif_ranked_candidates(
             output, limit=3, exclude_questions=excluded_questions
         )
@@ -421,7 +467,37 @@ class NixLMsNeuralCore:
         temporal_answer = self._temporal_response(text)
         user_name_answer = self._user_name_response(text)
         greeting_answer = 'Olá! Sou a NixLMs. Como posso ajudar?' if self._is_greeting(text) else None
-        llm_attempted = (use_language and temporal_answer is None and user_name_answer is None and greeting_answer is None)
+        deterministic_answer = bool(temporal_answer or user_name_answer or greeting_answer)
+        decoder_result = (
+            self.decoder.generate(output, max_tokens=self.config.decoder_max_tokens)
+            if not deterministic_answer else {
+                "text": "", "tokens": [], "token_count": 0,
+                "confidence": 0.0, "terminated": False,
+                "reason": "deterministic_rule",
+            }
+        )
+        decoder_answer = str(decoder_result.get("text", "")).strip()
+        decoder_rejection_reason = None
+        decoder_accepted = False
+        if deterministic_answer:
+            decoder_rejection_reason = "deterministic_rule"
+        elif self.decoder.trained_steps <= 0:
+            decoder_rejection_reason = "decoder_untrained"
+        elif decoder_result.get("token_count", 0) < 2 or not decoder_answer:
+            decoder_rejection_reason = "too_few_tokens"
+        elif float(decoder_result.get("confidence", 0.0)) < float(self.config.decoder_min_confidence):
+            decoder_rejection_reason = "low_confidence"
+        elif normalize(decoder_answer) == normalize(text):
+            decoder_rejection_reason = "question_echo"
+        elif len(set(decoder_result.get("tokens", []))) <= 1:
+            decoder_rejection_reason = "repetitive_generation"
+        else:
+            decoder_accepted = True
+
+        llm_attempted = (
+            use_language and temporal_answer is None and user_name_answer is None
+            and greeting_answer is None and not decoder_accepted
+        )
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
             world_facts=world_facts, goals=goal_context,
@@ -430,6 +506,7 @@ class NixLMsNeuralCore:
                 "output_updates": self.network.output_updates,
                 "output_norm": sum(value * value for value in output) ** .5,
                 "readout_trained": self.network.output_updates > 0,
+                "neural_decoder_candidate": decoder_result,
             }
         ) if llm_attempted else None
         llm_rejection_reason = None
@@ -447,6 +524,9 @@ class NixLMsNeuralCore:
         elif greeting_answer:
             answer, source = greeting_answer, 'greeting_rule'
             confidence = 1.0
+        elif decoder_accepted:
+            answer, source = decoder_answer, "lif_neural_decoder"
+            confidence = float(decoder_result.get("confidence", 0.0))
         elif llm_answer:
             answer, source = llm_answer, 'lif_conditioned_llm' if lif_ranked else 'local_llm'
         elif lif_ranked:
@@ -489,7 +569,15 @@ class NixLMsNeuralCore:
             "lif_top_candidate_score": lif_raw_ranked[0]["score"] if lif_raw_ranked else None,
             "lif_top_candidate_answer": lif_raw_ranked[0]["answer"] if lif_raw_ranked else None,
             "lif_candidate_conditioned_generation": bool(lif_ranked and llm_answer),
+            "decoder_trained_steps": self.decoder.trained_steps,
+            "decoder_vocabulary_size": len(self.decoder.vocab),
+            "decoder_confidence": float(decoder_result.get("confidence", 0.0)),
+            "decoder_token_count": int(decoder_result.get("token_count", 0)),
+            "decoder_accepted": decoder_accepted,
+            "decoder_rejection_reason": decoder_rejection_reason,
+            "decoder_generated_text": decoder_answer,
             "neural_generation_path": (
+                "lif_neural_decoder" if source == "lif_neural_decoder" else
                 "lif_conditioned_llm" if lif_ranked and llm_answer else
                 "lif_associative_readout" if lif_ranked else
                 "llm_without_trained_lif_readout" if llm_answer else "no_trained_lif_readout"
@@ -503,7 +591,7 @@ class NixLMsNeuralCore:
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),
             "episodic_experiences_recalled": len(episodic_context),
-            "encoder": "trainable_word_bigram_contrastive"
+            "encoder": "trainable_word_bigram_char_subword"
         }
         if record:
             self.memory.add_episode("user", text)
@@ -560,7 +648,7 @@ class NixLMsNeuralCore:
             "planning": self.goals.stats(),
             "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
-            "architecture": "semantic_contrastive_recurrent_lif_memory_world_model_goal_manager",
+            "architecture": "semantic_subword_encoder_lif_readout_autoregressive_decoder_memory_world_model_goal_manager",
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,
                 "vocabulary_size": len(self.encoder.vocab),
@@ -572,6 +660,17 @@ class NixLMsNeuralCore:
                 "active_threshold": self.config.lif_retrieval_threshold,
                 "saved": self.lif_calibration_path.exists(),
                 "loaded": self._load_lif_calibration(),
+            },
+            "decoder": {
+                "type": "lif_conditioned_autoregressive_rnn",
+                "context_size": self.decoder.context_size,
+                "hidden_size": self.decoder.hidden_size,
+                "embedding_size": self.decoder.embedding_size,
+                "vocabulary_size": len(self.decoder.vocab),
+                "trained_steps": self.decoder.trained_steps,
+                "trained_tokens": self.decoder.trained_tokens,
+                "persistence_enabled": self.decoder_persistence_enabled,
+                "load_error": self.decoder_load_error,
             },
             "llm": self.language.status(), "last_trace": self.last_trace,
             "config": self.config.__dict__

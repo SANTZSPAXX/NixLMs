@@ -1,5 +1,15 @@
 # Changelog
 
+## LIF-conditioned autoregressive neural decoder
+
+- Adds a compact CPU-oriented Elman RNN conditioned on the supervised LIF output vector.
+- Trains the decoder with teacher forcing and backpropagation through time using QA rows from the train split only.
+- Makes accepted neural generations the primary response path; low-confidence, empty, echo, or short outputs fall back to Ollama when enabled.
+- Persists decoder vocabulary and weights separately in `neural_decoder.json`, preserving unreadable or incompatible checkpoints instead of overwriting them.
+- Makes the EEG-inspired modulation deterministic per question so decoder training and inference receive the same LIF context across restarts.
+- Adds decoder loss/perplexity/token-accuracy evaluation on the test split without updating weights.
+
+
 ## Trainable character subword encoder
 
 - Extends the native semantic encoder with trainable 3–5 character n-gram features for morphological and OOV generalization.

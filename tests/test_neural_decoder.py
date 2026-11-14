@@ -37,6 +37,9 @@ class NeuralTextDecoderTests(unittest.TestCase):
         self.assertGreater(decoder.trained_steps, 0)
         self.assertGreater(generated["token_count"], 0)
         self.assertTrue(generated["text"])
+        self.assertFalse(any(
+            left == right for left, right in zip(generated["tokens"], generated["tokens"][1:])
+        ))
 
     def test_generation_obeys_token_limit_and_reports_confidence(self):
         decoder = NeuralTextDecoder(context_size=3, hidden_size=8, embedding_size=8, seed=3)

@@ -143,3 +143,12 @@ Use small, reviewable commits per task. The final handoff must report exact comm
 - The optional E5 backend was validated with an injected test model. Actual loading of downloaded E5 weights was not exercised because no model files were provisioned in CI.
 - The test suite was authored before the implementation, but a failing CI run was not captured before the implementation commits. The final green run is verified; a strict red-green trace is not claimed.
 - Remaining validation: run on the user's Windows machine, provision the optional model locally, profile CPU/RAM, and evaluate on a licensed held-out Portuguese benchmark such as ASSIN/ASSIN2 or MTEB-BR with leakage controls.
+
+
+## Final verification after the last code changes
+
+- Pull-request CI run: [43544638232](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43544638232).
+- All four matrix jobs completed successfully: Ubuntu Python 3.10, 3.11, 3.12 and Windows Python 3.12.
+- Each matrix job executed **35 tests**.
+- The latest branch commit at the time of this record is `2af6b37ddcf4bc21caa7a2cb58c8d131accc08ff`.
+- No merge was performed. The draft PR remains based on `feature/semantic-learning-0.4`.

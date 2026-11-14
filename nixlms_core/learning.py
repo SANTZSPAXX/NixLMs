@@ -286,6 +286,15 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def lif_candidate_fingerprint(self):
+        """Fingerprint das respostas candidatas disponíveis para o readout LIF."""
+        rows = [
+            (normalize(item.get("question", "")), normalize(item.get("answer", "")))
+            for item in self.agent.memory.knowledge
+        ]
+        payload = json.dumps(sorted(rows), ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
     def validation_fingerprint(self):
         """Fingerprint determinístico das perguntas/respostas QA de validation."""
         rows = [
@@ -405,6 +414,7 @@ class LearningEngine:
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),
+            "candidate_memory_fingerprint": self.lif_candidate_fingerprint(),
             "validation_samples": len(rows),
             "scored_samples": len(cases),
             "metrics": metrics,

@@ -26,6 +26,36 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(ai.respond("qual é a capital do Brasil", use_language=False), "Brasília")
             self.assertGreater(ai.status()["semantic_items"], 0)
 
+    def test_typo_temporal_question_uses_runtime_date(self):
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            answer = ai.respond('Quem dia e hoje')
+            self.assertIn(datetime.now().astimezone().strftime('%d/%m/%Y'), answer)
+            self.assertEqual(ai.last_trace['response_source'], 'runtime_datetime')
+
+    def test_unknown_user_name_is_not_guessed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            with mock.patch.object(ai.language, 'generate', side_effect=AssertionError('não deve inventar nome')):
+                answer = ai.respond('Qual meu nome?')
+            self.assertIn('Ainda não sei seu nome', answer)
+            self.assertEqual(ai.last_trace['response_source'], 'unknown_user_profile')
+
+    def test_irrelevant_semantic_greeting_is_not_used_as_answer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            answer = ai.respond('O que é uma sombra na piscina?', use_language=False)
+            self.assertNotIn('Olá!', answer)
+            self.assertEqual(ai.last_trace['response_source'], 'fallback')
+
+    def test_llm_greeting_and_question_echo_are_rejected(self):
+        self.assertEqual(NixLMsNeuralCore._validate_llm_answer('O que é uma sombra na piscina?', 'Olá! Sou a NixLMs. Como posso ajudar hoje?'), (False, 'irrelevant_greeting'))
+        self.assertEqual(NixLMsNeuralCore._validate_llm_answer('Quem dia e hoje', 'Quem dia e hoje?'), (False, 'question_echo'))
+
+    def test_person_answer_must_mention_requested_entity(self):
+        self.assertEqual(NixLMsNeuralCore._validate_llm_answer('Quem foi Pedro Alvares', 'O nome de NixLMs é uma abreviação para Nix Language Models.'), (False, 'requested_person_not_mentioned'))
+        self.assertTrue(NixLMsNeuralCore._validate_llm_answer('Quem foi Pedro Alvares', 'Pedro Álvares Cabral foi um navegador português.')[0])
     def test_temporal_queries_use_runtime_clock_without_ollama(self):
         from datetime import datetime
         with tempfile.TemporaryDirectory() as tmp:

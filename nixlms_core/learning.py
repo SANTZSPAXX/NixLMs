@@ -1,4 +1,5 @@
 """Importação, treinamento contrastivo e avaliação sem vazamento de dados."""
+import hashlib
 import json
 import math
 import random
@@ -285,6 +286,16 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def validation_fingerprint(self):
+        """Fingerprint determinístico das perguntas/respostas QA de validation."""
+        rows = [
+            (normalize(row.get("question", "")), normalize(row.get("answer", "")))
+            for row in self.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        payload = json.dumps(sorted(rows), ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
     def calibrate_lif_threshold(self, min_validation_samples=4,
                                  min_correct_candidates=2,
                                  min_incorrect_candidates=2):
@@ -393,6 +404,7 @@ class LearningEngine:
             "readout_updates": int(self.agent.network.output_updates),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
+            "validation_fingerprint": self.validation_fingerprint(),
             "validation_samples": len(rows),
             "scored_samples": len(cases),
             "metrics": metrics,

@@ -489,6 +489,8 @@ class NixLMsNeuralCore:
             decoder_rejection_reason = "low_confidence"
         elif normalize(decoder_answer) == normalize(text):
             decoder_rejection_reason = "question_echo"
+        elif len(set(decoder_result.get("tokens", []))) <= 1:
+            decoder_rejection_reason = "repetitive_generation"
         else:
             decoder_accepted = True
 

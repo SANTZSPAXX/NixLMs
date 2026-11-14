@@ -180,6 +180,19 @@ class IntegrationGuardTests(unittest.TestCase):
             self.assertIn("ImportError", ai._retrieval_encoder_error)
             self.assertEqual(ai.memory._embedding_cache, {})
 
+
+    def test_world_model_facts_can_answer_without_optional_language_model(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            ai.memory.knowledge = []
+            ai.world_model.assert_fact("Terra", "orbita", "Sol", .99, "dataset científico")
+            answer = ai.respond("Terra orbita Sol", use_language=False)
+            self.assertIn("Terra", answer)
+            self.assertIn("Sol", answer)
+            self.assertIn("dataset científico", answer)
+            self.assertEqual(ai.last_trace["response_source"], "world_model")
+
     def test_training_and_evaluation_refuse_legacy_split_leakage(self):
         from nixlms_core import NixLMsNeuralCore
         with tempfile.TemporaryDirectory() as tmp:

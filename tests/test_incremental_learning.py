@@ -125,6 +125,33 @@ class SafeIncrementalLearningTests(unittest.TestCase):
             self.assertEqual(ai.mental_map.nodes, before["mental_map"]["nodes"])
             self.assertEqual(ai.mental_map.edges, before["mental_map"]["edges"])
 
+    def test_training_is_rejected_if_dataset_changes_during_candidate_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = self._agent(tmp)
+            calls = {"count": 0}
+
+            def metrics_with_concurrent_dataset_change(_engine):
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    return self._metrics(1.0, 0.4, 0.5)
+                ai.learning.dataset.add(
+                    "pergunta adicionada durante treino",
+                    "resposta adicionada durante treino",
+                    "train",
+                )
+                return self._metrics(0.8, 0.6, 0.3, margin=0.2)
+
+            with patch.object(
+                LearningEngine, "_validation_metrics",
+                side_effect=metrics_with_concurrent_dataset_change,
+            ):
+                report = ai.learning.train_incremental(epochs=1)
+
+            self.assertFalse(report["accepted"])
+            self.assertEqual(
+                report["reason"], "dataset_changed_during_candidate_training"
+            )
+
     def test_checkpoint_tampering_is_rejected_before_restore(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = self._agent(tmp)

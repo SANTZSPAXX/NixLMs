@@ -1,4 +1,5 @@
 """Safe candidate training, validation gates and checkpoint rollback."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -198,6 +199,19 @@ class SafeIncrementalLearningTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 ai.learning.restore_incremental_checkpoint(report["checkpoint_id"])
+
+    def test_colab_chat_command_cell_is_valid_python(self):
+        notebook_path = Path(__file__).resolve().parents[1] / "NixLMs_Colab.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        cells = [
+            cell for cell in notebook["cells"]
+            if cell.get("cell_type") == "code"
+            and any("elif low.startswith('/rollback ')" in line
+                    for line in cell.get("source", []))
+        ]
+        self.assertEqual(len(cells), 1)
+        source = "".join(cells[0]["source"])
+        compile(source, str(notebook_path), "exec")
 
     def test_checkpoint_identifier_cannot_escape_checkpoint_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -49,7 +49,7 @@ class SemanticEncoder:
         self.updates = 0
 
     def _features(self, text):
-        words = tokenize(text)
+        words = tokenize(text)[:128]
         if not words:
             return ["<empty>"]
         features = list(words)
@@ -57,7 +57,7 @@ class SemanticEncoder:
         # Subwords de caracteres permitem compartilhar parâmetros entre flexões
         # e palavras OOV sem expandir o vocabulário durante a inferência.
         for word in words:
-            padded = "^" + word[:48] + "$"
+            padded = "^" + word[:32] + "$"
             for size in (3, 4, 5):
                 features.extend(
                     "char:" + padded[index:index + size]

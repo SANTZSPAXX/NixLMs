@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from nixlms_core import NixLMsNeuralCore
@@ -24,6 +25,28 @@ class CoreTests(unittest.TestCase):
             ai.learn("qual é a capital do Brasil", "Brasília")
             self.assertEqual(ai.respond("qual é a capital do Brasil", use_language=False), "Brasília")
             self.assertGreater(ai.status()["semantic_items"], 0)
+
+    def test_temporal_queries_use_runtime_clock_without_ollama(self):
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            with mock.patch.object(
+                ai.language, "generate",
+                side_effect=AssertionError("consulta temporal não deve chamar o LLM")
+            ):
+                answer = ai.respond("Que dia é hoje?")
+            now = datetime.now().astimezone()
+            self.assertIn(now.strftime("%d/%m/%Y"), answer)
+            self.assertEqual(ai.last_trace["response_source"], "runtime_datetime")
+            self.assertEqual(ai.last_trace["confidence"], 1.0)
+
+    def test_temporal_time_query_is_deterministic(self):
+        from datetime import datetime
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            answer = ai.respond("Que horas são agora?", use_language=False)
+            self.assertIn(datetime.now().astimezone().strftime("%H:%M"), answer)
+            self.assertEqual(ai.last_trace["response_source"], "runtime_datetime")
 
     def test_empty_input(self):
         with tempfile.TemporaryDirectory() as tmp:

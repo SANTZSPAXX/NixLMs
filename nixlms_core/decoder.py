@@ -14,9 +14,9 @@ class NeuralTextDecoder:
     CLOSING_PUNCTUATION = {".", ",", "!", "?", ";", ":", "%", ")", "]", "}"}
     OPENING_PUNCTUATION = {"(", "[", "{"}
 
-    def __init__(self, context_size=32, hidden_size=24, embedding_size=24,
-                 max_vocab=1024, learning_rate=0.025, seed=42,
-                 max_sequence_length=48):
+    def __init__(self, context_size=32, hidden_size=16, embedding_size=16,
+                 max_vocab=512, learning_rate=0.03, seed=42,
+                 max_sequence_length=32):
         self.context_size = int(context_size)
         self.hidden_size = int(hidden_size)
         self.embedding_size = int(embedding_size)

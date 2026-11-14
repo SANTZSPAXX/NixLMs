@@ -551,6 +551,14 @@ class LearningEngine:
             candidate = self.agent.__class__(
                 candidate_dir, config=copy.deepcopy(self.agent.config), llm_model=None
             )
+            # A threshold loaded from a calibration file must not be mistaken for
+            # a user-supplied override merely because the active config is copied.
+            candidate._base_lif_retrieval_threshold = self.agent._base_lif_retrieval_threshold
+            candidate._explicit_lif_threshold = self.agent._explicit_lif_threshold
+            candidate._base_decoder_min_confidence = self.agent._base_decoder_min_confidence
+            candidate._explicit_decoder_min_confidence = self.agent._explicit_decoder_min_confidence
+            candidate._load_lif_calibration()
+            candidate._load_decoder_calibration()
             if (not getattr(candidate, "decoder_persistence_enabled", True)
                     or candidate.decoder_load_error):
                 manifest["status"] = "rejected"

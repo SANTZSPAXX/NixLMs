@@ -199,7 +199,7 @@ A PR [#23](https://github.com/SANTZSPAXX/NixLMs/pull/23) está aberta em draft, 
 
 **Ponto de segurança que merece correção/revisão antes de remover o draft:** `OllamaManager.start_service()` verifica que o endpoint usado pelo cliente é loopback, mas inicia `ollama serve` herdando o ambiente do processo. A documentação oficial do Ollama informa que `OLLAMA_HOST` controla o endereço de bind do servidor e pode ser configurado como `0.0.0.0`. Assim, um ambiente com `OLLAMA_HOST=0.0.0.0:11434` pode fazer o serviço escutar em todas as interfaces enquanto o cliente NixLMs continua consultando `127.0.0.1`. O mesmo risco existe quando a PR encontra um serviço já ativo: a conectividade local não prova que o bind é local.
 
-Antes de afirmar “loopback-only”, o fluxo gerenciado deve forçar/validar o bind `127.0.0.1:11434` e testar o caso de ambiente herdado com `OLLAMA_HOST` não local. Para um serviço preexistente cujo bind não possa ser verificado de forma portátil, o diagnóstico deve dizer “endpoint local acessível; bind do servidor não verificado”, não afirmar isolamento de rede. Referência: [FAQ oficial do Ollama](https://github.com/ollama/ollama/blob/main/docs/faq.md).
+Antes de afirmar “loopback-only”, o fluxo gerenciado deve forçar/validar o bind `127.0.0.1:11434` e testar o caso de ambiente herdado com `OLLAMA_HOST` não local. Para um serviço preexistente cujo bind não possa ser verificado de forma portátil, o diagnóstico deve dizer “endpoint local acessível; bind do servidor não verificado”, não afirmar isolamento de rede. Referência: [FAQ oficial do Ollama](https://github.com/ollama/ollama/blob/main/docs/faq.mdx).
 
 Observação secundária: no Linux, a instalação do Ollama pode executar `apt-get update` e instalar `zstd` como pré-requisito. Essa alteração de pacote de sistema deve ficar explícita no resumo de consentimento ou receber confirmação própria. Nenhuma dessas observações foi publicada como comentário nem aplicada à PR #23.
 
@@ -215,4 +215,4 @@ O ciclo da tarde deve começar confirmando novamente o HEAD de `main`, branches 
 - intfloat/multilingual-e5-small — model card, idioma, dimensão, licença e prefixos: https://huggingface.co/intfloat/multilingual-e5-small
 - ASSIN 2 — proceedings da shared task: https://ceur-ws.org/Vol-2583/
 - ASSIN 2 — dataset card; licença reportada como desconhecida: https://huggingface.co/datasets/nilc-nlp/assin2
-- Ollama — FAQ oficial sobre bind e `OLLAMA_HOST`: https://github.com/ollama/ollama/blob/main/docs/faq.md
+- Ollama — FAQ oficial sobre bind e `OLLAMA_HOST`: https://github.com/ollama/ollama/blob/main/docs/faq.mdx

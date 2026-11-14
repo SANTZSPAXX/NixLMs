@@ -130,7 +130,7 @@ class SafeIncrementalLearningTests(unittest.TestCase):
             ai = self._agent(tmp)
             calls = {"count": 0}
 
-            def metrics_with_concurrent_dataset_change(_engine):
+            def metrics_with_concurrent_dataset_change():
                 calls["count"] += 1
                 if calls["count"] == 1:
                     return self._metrics(1.0, 0.4, 0.5)

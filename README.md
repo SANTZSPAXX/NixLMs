@@ -1,6 +1,6 @@
 # NixLMs
 
-**NixLMs 0.5.0 — Balanced Cognitive Evolution** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
+**NixLMs 0.6.0 — Persistent Cognitive Scheduler** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
 
 ## Evolução 0.5
 
@@ -195,4 +195,4 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 
 ## Arquitetura
 
-`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.
+`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, agendador SQLite, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.

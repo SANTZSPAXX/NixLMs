@@ -162,6 +162,7 @@ class NixLMsNeuralCore:
     def _load_lif_calibration(self):
         if self._explicit_config:
             return False
+        self.config.lif_retrieval_threshold = self._base_lif_retrieval_threshold
         state = load_json(self.lif_calibration_path, None)
         if not isinstance(state, dict) or state.get("schema_version") != 1:
             return False
@@ -516,11 +517,11 @@ class NixLMsNeuralCore:
         question, answer = str(question).strip(), str(answer).strip()
         if not question or not answer:
             raise ValueError("Pergunta e resposta não podem ficar vazias.")
+        self.invalidate_lif_calibration()
         self.encoder.fit_vocabulary([question, answer])
         if remember:
             self.memory.remember(question, answer)
         if reinforce:
-            self.invalidate_lif_calibration()
             vector = self.encoder.encode(question)
             _, hidden = self.network.forward(vector, track_plasticity=True)
             target = self._compress_neural_target(self.encoder.encode(answer))

@@ -52,10 +52,11 @@ class MemorySystem:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
-    def recall(self, query, encoder, network=None, limit=5):
+    def recall(self, query, encoder, network=None, limit=5, exclude_questions=None):
         """Busca híbrida; não executa nem modifica a rede neural durante leitura."""
         if limit <= 0:
             return []
+        excluded = {normalize(text) for text in (exclude_questions or [])}
         qtokens = set(tokenize(query))
         qvec = self._encode_query(encoder, query)
         ranked = []
@@ -66,6 +67,8 @@ class MemorySystem:
         )
         for item in self.knowledge:
             text = item.get("question", "")
+            if normalize(text) in excluded:
+                continue
             tokens = set(tokenize(text))
             lexical = len(qtokens & tokens) / max(1, len(qtokens | tokens))
             cache_key = normalize(text)

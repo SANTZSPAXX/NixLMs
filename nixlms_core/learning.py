@@ -286,6 +286,89 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def evaluate_representations(self):
+        """Mede generalização semântica validation->train e cobertura de subwords."""
+        rows = self.dataset.load()
+        train_rows = [
+            row for row in rows
+            if row.get("type", "qa") == "qa" and row.get("split", "train") == "train"
+        ]
+        validation_rows = [
+            row for row in rows
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        cases = []
+        coverages = []
+        subword_coverages = []
+        for row in validation_rows:
+            expected = normalize(row.get("answer", ""))
+            positives = [
+                item for item in train_rows
+                if normalize(item.get("answer", "")) == expected
+            ]
+            negatives = [
+                item for item in train_rows
+                if normalize(item.get("answer", "")) != expected
+            ]
+            coverage = self.agent.encoder.feature_coverage(row.get("question", ""))
+            coverages.append(coverage["feature_coverage"])
+            subword_coverages.append(coverage["subword_feature_coverage"])
+            if not positives or not negatives:
+                continue
+            query_vector = self.agent.encoder.encode(row["question"])
+            positive_score = max(
+                cosine(query_vector, self.agent.encoder.encode(item["question"]))
+                for item in positives
+            )
+            negative_score = max(
+                cosine(query_vector, self.agent.encoder.encode(item["question"]))
+                for item in negatives
+            )
+            cases.append({
+                "question": row["question"],
+                "positive_similarity": positive_score,
+                "hard_negative_similarity": negative_score,
+                "margin": positive_score - negative_score,
+                "positive_ranked_above_negative": positive_score > negative_score,
+            })
+
+        count = len(cases)
+        metrics = {
+            "positive_similarity": (
+                sum(case["positive_similarity"] for case in cases) / count
+                if count else None
+            ),
+            "negative_similarity": (
+                sum(case["hard_negative_similarity"] for case in cases) / count
+                if count else None
+            ),
+            "margin": sum(case["margin"] for case in cases) / count if count else None,
+            "pairwise_accuracy": (
+                sum(case["positive_ranked_above_negative"] for case in cases) / count
+                if count else None
+            ),
+            "feature_coverage": (
+                sum(coverages) / len(coverages) if coverages else None
+            ),
+            "subword_feature_coverage": (
+                sum(subword_coverages) / len(subword_coverages)
+                if subword_coverages else None
+            ),
+        }
+        return {
+            "samples": count,
+            "validation_questions": len(validation_rows),
+            "metrics": metrics,
+            "cases": cases,
+            "protocol": {
+                "train_split_used": True,
+                "validation_split_used": True,
+                "test_split_used": False,
+                "weights_updated": False,
+                "vocabulary_mutated": False,
+            },
+        }
+
     def lif_candidate_fingerprint(self):
         """Fingerprint das respostas candidatas disponíveis para o readout LIF."""
         rows = [
@@ -647,11 +730,13 @@ class LearningEngine:
             "mean_negative_similarity": sum(negative) / len(negative) if negative else None,
             "decision_threshold": threshold,
         }
+        representations = self.evaluate_representations()
         cognition = self.evaluate_cognition(qa_test, include_llm=include_llm)
 
         return {
             "retrieval": retrieval,
             "contrastive": contrastive,
+            "representations": representations,
             "cognition": cognition,
             "protocol": {
                 "test_qa_samples": len(qa_test),

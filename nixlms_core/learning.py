@@ -508,7 +508,8 @@ class LearningEngine:
                 "channels": list(channels),
                 "ks": list(ks),
                 "threshold": threshold,
-                "test_data_used_for_training": False,
+                "test_split_submitted_to_training": False,
+                "historical_weight_provenance_verified": False,
                 "split_audit": "passed",
             },
             "note": "Métricas de recuperação e classificação são separadas; "

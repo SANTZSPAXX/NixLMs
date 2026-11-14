@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interface de terminal da NixLMs Neural Core 0.5."""
+"""Interface de terminal da NixLMs Neural Core 0.7."""
 from pathlib import Path
 from nixlms_core import NixLMsNeuralCore
 
@@ -96,7 +96,7 @@ def _scheduler_command(ai, message):
 
 def main():
     ai = NixLMsNeuralCore()
-    print("NixLMs Neural Core 0.5.0 | Balanced Cognitive Evolution")
+    print("NixLMs Neural Core 0.7 | Episodic Memory")
     print("LLM local:", "disponível" if ai.language.available() else "não detectado; fallback para memória")
     print("Digite /ajuda para comandos.")
     ai.scheduler.start()
@@ -147,8 +147,19 @@ def main():
             _objective_command(ai, msg)
             continue
         if low == "/llm":
-            print(ai.language.status(), "available=", ai.language.available())
+            available = ai.language.available()
+            print("Ollama:", "disponível" if available else "indisponível")
+            print(ai.language.status())
+            if not available:
+                print("Diagnóstico:", ai.language.last_error or "Nenhum modelo local disponível.")
             print("Encoder de recuperação:", ai.status()["retrieval_encoder"])
+            continue
+        if low.startswith("/llm usar "):
+            model = msg[len("/llm usar "):].strip()
+            try:
+                print("Modelo selecionado:", ai.language.select_model(model))
+            except ValueError as exc:
+                print("Falha ao selecionar modelo:", exc)
             continue
         if low.startswith("/importar "):
             source = Path(msg[len("/importar "):].strip()).expanduser()
@@ -171,8 +182,9 @@ def main():
                 print("Falha na avaliação:", exc)
             continue
         if low in {"/positivo", "/negativo"}:
-            ai.feedback(ai.last_question, low == "/positivo")
-            print("Feedback aplicado.")
+            applied = ai.feedback(ai.last_question, low == "/positivo")
+            print("Feedback registrado na memória episódica." if applied else
+                  "Nenhum episódio correspondente. Envie uma mensagem antes de avaliar.")
             continue
         if low.startswith("/ensinar-par "):
             parts = [part.strip() for part in msg[len("/ensinar-par "):].split("||")]

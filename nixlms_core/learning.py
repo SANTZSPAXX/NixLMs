@@ -387,7 +387,8 @@ class LearningEngine:
                 "llm_enabled": bool(include_llm),
                 "response_recording": False,
                 "exact_test_questions_excluded": True,
-                "test_data_used_for_training": False,
+                "training_pipeline_uses_only_train_split": True,
+                "historical_weight_provenance_verified": False,
                 "quality_metric_note": (
                     "Token F1 e exact match são proxies de correspondência textual; "
                     "não comprovam factualidade nem compreensão geral."
@@ -396,7 +397,7 @@ class LearningEngine:
         }
 
     def evaluate(self, threshold=0.25, ks=(1, 3, 5), include_llm=False):
-        """Benchmark reproduzível de recuperação e classificação contrastiva."""
+        """Benchmark de recuperação, classificação contrastiva e respostas completas."""
         threshold = float(threshold)
         if not -1.0 <= threshold <= 1.0:
             raise ValueError("threshold deve estar entre -1 e 1.")

@@ -187,6 +187,29 @@ class LIFCalibrationTests(unittest.TestCase):
 
             self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.45)
 
+    def test_calibration_is_ignored_when_candidate_memory_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            ai.network.output_updates = 12
+            ai.encoder.updates = 7
+            save_json(data_dir / "neural_weights.json", ai.network.state_dict())
+            ai._save_encoder()
+            save_json(data_dir / "lif_calibration.json", {
+                "schema_version": 1,
+                "threshold": 0.80,
+                "readout_updates": 12,
+                "encoder_updates": 7,
+                "encoder_vocab_size": len(ai.encoder.vocab),
+                "validation_fingerprint": ai.learning.validation_fingerprint(),
+                "candidate_memory_fingerprint": ai.learning.lif_candidate_fingerprint(),
+            })
+
+            ai.memory.remember("novo candidato", "nova resposta candidata")
+            restored = NixLMsNeuralCore(data_dir)
+
+            self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.45)
+
     def test_new_training_invalidates_persisted_calibration(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

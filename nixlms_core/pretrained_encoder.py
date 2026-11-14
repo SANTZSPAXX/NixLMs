@@ -23,6 +23,9 @@ class TransformersSentenceEncoder:
         self._model = None
         self.dimensions = None
         self.updates = 0
+        # Backend pré-treinado já chega com representações aprendidas; usa o
+        # teto semântico do sistema híbrido, sem depender de updates contrastivos.
+        self.semantic_weight = 0.85
 
     def _load(self):
         if self._model is not None:
@@ -85,4 +88,5 @@ class TransformersSentenceEncoder:
         return {"type": "transformers_sentence_encoder",
                 "model_path": self.model_path, "device": self.device,
                 "local_files_only": self.local_files_only,
-                "loaded": self._model is not None, "dimensions": self.dimensions}
+                "loaded": self._model is not None, "dimensions": self.dimensions,
+                "semantic_weight": self.semantic_weight}

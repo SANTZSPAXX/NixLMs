@@ -8,7 +8,7 @@ from .utils import save_json, load_json, normalize, tokenize, cosine
 
 
 class DatasetStore:
-    VALID_SPLITS = {"train", "test"}
+    VALID_SPLITS = {"train", "validation", "test"}
 
     def __init__(self, path):
         self.path = Path(path)
@@ -26,7 +26,7 @@ class DatasetStore:
     @staticmethod
     def _validate_split(split):
         if split not in DatasetStore.VALID_SPLITS:
-            raise ValueError("split deve ser train ou test.")
+            raise ValueError("split deve ser train, validation ou test.")
 
     @classmethod
     def _insert_qa(cls, rows, question, answer, split):
@@ -97,7 +97,11 @@ class DatasetStore:
 
     def audit_splits(self):
         rows = self.load()
-        counts = {"qa_train": 0, "qa_test": 0, "pair_train": 0, "pair_test": 0}
+        counts = {
+            f"{kind}_{split}": 0
+            for kind in ("qa", "pair")
+            for split in ("train", "validation", "test")
+        }
         seen = {}
         violations = []
         for index, row in enumerate(rows):
@@ -157,7 +161,11 @@ class DatasetStore:
         # Compartilha a mesma auditoria para importações ainda não persistidas.
         seen = {}
         violations = []
-        counts = {"qa_train": 0, "qa_test": 0, "pair_train": 0, "pair_test": 0}
+        counts = {
+            f"{kind}_{split}": 0
+            for kind in ("qa", "pair")
+            for split in ("train", "validation", "test")
+        }
         for index, row in enumerate(rows):
             kind = "pair" if row.get("type") == "pair" else "qa"
             split = row.get("split", "train")

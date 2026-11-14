@@ -27,7 +27,7 @@ Evoluir a NixLMs de um protótipo de recuperação lexical/contrastiva para uma 
 ## Arquitetura e decisões
 - Python 3.10+, sem dependências obrigatórias adicionais.
 - O encoder nativo continua alimentando a rede LIF e recebendo treinamento contrastivo.
-- `TransformersSentenceEncoder` será um backend opcional e independente para recuperação semântica, carregado sob demanda, CPU e `local_files_only=True`. A primeira referência recomendada é `intfloat/multilingual-e5-small` (384 dimensões, 118M parâmetros, aproximadamente 449 MB de pesos, MIT e suporte multilíngue incluindo português); o usuário deverá disponibilizar os arquivos localmente.
+- `TransformersSentenceEncoder` será um backend opcional e independente para recuperação semântica, carregado sob demanda, CPU e `local_files_only=True`. A primeira referência recomendada é `intfloat/multilingual-e5-small` (384 dimensões, 118M parâmetros, até 512 tokens, MIT e suporte multilíngue incluindo português; o leaderboard MTEB reporta cerca de 449 MB de memória, não o consumo total do processo); o usuário deverá disponibilizar os arquivos localmente.
 - E5 usa prefixos distintos para consulta (`query:`) e conteúdo indexado (`passage:`); a camada de memória deve respeitar esse contrato.
 - `WorldModel` armazenará fatos estruturados e suas fontes. Conflitos serão reportados como possíveis inconsistências, nunca resolvidos automaticamente.
 - `GoalManager` armazenará objetivos e etapas com dependências; apenas registra e apresenta próximas ações, sem executá-las.

@@ -12,6 +12,8 @@ class FakeLanguage:
         self.model = "qwen2.5:0.5b"
         self.installed_models = list(models or [])
         self.last_error = None
+        self.last_used_model = None
+        self.last_generation = None
 
     def refresh_models(self):
         return list(self.installed_models)

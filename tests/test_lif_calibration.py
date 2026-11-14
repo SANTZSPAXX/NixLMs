@@ -61,6 +61,7 @@ class LIFCalibrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))
             rows = self._add_validation_cases(ai)
+            ai.learning.dataset.add("pergunta exclusiva de teste", "Resposta de teste.", split="test")
             ai.network.output_updates = 12
             outcomes = iter([
                 (0.90, "Resposta Alfa."),
@@ -84,6 +85,7 @@ class LIFCalibrationTests(unittest.TestCase):
             self.assertAlmostEqual(report["threshold"], 0.80)
             self.assertEqual(report["metrics"]["positive_top1"], 2)
             self.assertEqual(report["metrics"]["negative_top1"], 2)
+            self.assertEqual(report["validation_samples"], 4)
             self.assertTrue((Path(tmp) / "lif_calibration.json").exists())
             self.assertEqual(ai.config.lif_retrieval_threshold, report["threshold"])
 

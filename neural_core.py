@@ -26,7 +26,8 @@ HELP = """Comandos:
   /agenda cancelar ID                 cancela tarefa pendente
   /agenda executar                    executa tarefas vencidas agora
   Handlers: memory_housekeeping, dataset_audit, goal_review
-  /treinar [epocas]                    treino contrastivo incremental
+  /treinar [epocas]                    treino isolado com validação e checkpoint
+  /rollback ID                         restaura checkpoint de aprendizagem
   /calibrar-lif                        calibra limiar LIF com split validation
   /calibrar-decoder                    calibra confiança do decoder com split validation
   /avaliar                             benchmark offline de recuperação, semântica e respostas
@@ -178,9 +179,16 @@ def main():
         if low.startswith("/treinar"):
             parts = low.split()
             try:
-                print(ai.learning.train(int(parts[1]) if len(parts) > 1 else 1))
+                print(ai.learning.train_incremental(int(parts[1]) if len(parts) > 1 else 1))
             except ValueError as exc:
                 print("Falha no treinamento:", exc)
+            continue
+        if low.startswith("/rollback "):
+            checkpoint_id = message.split(None, 1)[1].strip()
+            try:
+                print(ai.learning.restore_incremental_checkpoint(checkpoint_id))
+            except (OSError, ValueError) as exc:
+                print("Falha no rollback:", exc)
             continue
         if low == "/calibrar-lif":
             try:

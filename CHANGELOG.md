@@ -1,5 +1,14 @@
 # Changelog
 
+## Validation-calibrated neural decoder confidence
+
+- Adds a validation-only calibration flow for the autoregressive decoder's mean token probability threshold.
+- Labels candidate generations with token-F1 overlap, requires a minimum sample count and both positive/negative outcomes, and selects the threshold maximizing acceptance F1.
+- Persists calibration bound to decoder weights, LIF readout, encoder version counters, and validation fingerprint.
+- Invalidates decoder calibration whenever training or LIF/encoder calibration invalidation occurs; explicit config thresholds remain authoritative.
+- Exposes `/calibrar-decoder` in the CLI and Colab notebook; calibration does not update model weights or use the test split.
+
+
 ## LIF-conditioned autoregressive neural decoder
 
 - Adds a compact CPU-oriented Elman RNN conditioned on the supervised LIF output vector.

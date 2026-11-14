@@ -148,10 +148,11 @@ No terminal:
 /importar datasets/starter_ptbr.jsonl
 /treinar 5
 /calibrar-lif
+/calibrar-decoder
 /avaliar
 ```
 
-O comando `/treinar` ajusta o encoder contrastivo, o readout LIF e o decoder autoregressivo com pares QA do split `train`. O contexto LIF é determinístico por pergunta para manter treino e inferência consistentes. O relatório inclui loss média do decoder e número de sequências treinadas. O split `validation` não participa do treinamento: use `/calibrar-lif` depois de treinar para selecionar o limiar de aceitação do readout com base no acerto do melhor candidato LIF. A calibração exige pelo menos quatro exemplos pontuados, com ao menos dois candidatos top-1 corretos e dois incorretos; se a evidência for insuficiente, o limiar atual é preservado. Para datasets persistentes já existentes, importe novamente o starter atualizado com `/importar datasets/starter_ptbr.jsonl` para acrescentar o split validation. A calibração é persistida e vinculada às contagens do readout/encoder, ao vocabulário, ao fingerprint do conjunto validation e à memória candidata. Ela é ignorada quando esses dados divergem e invalidada antes de novos treinos ou mudanças de vocabulário.
+O comando `/treinar` ajusta o encoder contrastivo, o readout LIF e o decoder autoregressivo com pares QA do split `train`. O contexto LIF é determinístico por pergunta para manter treino e inferência consistentes. O relatório inclui loss média do decoder e número de sequências treinadas. O split `validation` não participa do treinamento: use `/calibrar-lif` depois de treinar para selecionar o limiar de aceitação do readout com base no acerto do melhor candidato LIF. A calibração LIF exige pelo menos quatro exemplos pontuados, com ao menos dois candidatos top-1 corretos e dois incorretos; se a evidência for insuficiente, o limiar atual é preservado. Use `/calibrar-decoder` para calibrar separadamente a confiança média do decoder: ele gera respostas para o split `validation`, classifica a qualidade por token-F1 (limiar padrão 0,60) e escolhe o limiar que maximiza F1 de aceitação, exigindo no mínimo quatro exemplos, dois positivos e dois negativos. Essa qualidade é apenas sobreposição textual, não verificação factual; a calibração não atualiza pesos e é invalidada quando o decoder, o readout LIF, o encoder ou o split validation muda. Para datasets persistentes já existentes, importe novamente o starter atualizado com `/importar datasets/starter_ptbr.jsonl` para acrescentar o split validation. A calibração é persistida e vinculada às contagens do readout/encoder, ao vocabulário, ao fingerprint do conjunto validation e à memória candidata. Ela é ignorada quando esses dados divergem e invalidada antes de novos treinos ou mudanças de vocabulário.
 
 A auditoria pode ser consultada pela API:
 
@@ -199,6 +200,7 @@ Os arquivos em `data/` incluem:
 - `goals.json`: objetivos e etapas.
 - `neural_weights.json`: pesos LIF, elegibilidade e contador de atualizações do readout supervisionado.
 - `neural_decoder.json`: vocabulário e pesos do decoder autoregressivo condicionado pela saída LIF.
+- `decoder_calibration.json`: limiar de confiança do decoder, vinculado aos pesos LIF/decoder e ao fingerprint de validation.
 - `dataset.json`: exemplos locais de treinamento.
 
 Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso. Os novos módulos criam seus próprios arquivos sem sobrescrever os arquivos anteriores.

@@ -40,9 +40,15 @@ class NixLMsNeuralCore:
             config is not None
             and self._base_lif_retrieval_threshold != float(CoreConfig().lif_retrieval_threshold)
         )
+        self._base_decoder_min_confidence = float(self.config.decoder_min_confidence)
+        self._explicit_decoder_min_confidence = (
+            config is not None
+            and self._base_decoder_min_confidence != float(CoreConfig().decoder_min_confidence)
+        )
         self.data_dir = Path(data_dir or Path(__file__).resolve().parents[1] / "data")
         self.lif_calibration_path = self.data_dir / "lif_calibration.json"
         self.decoder_path = self.data_dir / "neural_decoder.json"
+        self.decoder_calibration_path = self.data_dir / "decoder_calibration.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
@@ -127,6 +133,7 @@ class NixLMsNeuralCore:
         if self.decoder_persistence_enabled:
             self._save_decoder()
         self._load_lif_calibration()
+        self._load_decoder_calibration()
 
         self.last_trace = {}
         self.last_question = ""
@@ -243,6 +250,47 @@ class NixLMsNeuralCore:
         self.config.lif_retrieval_threshold = threshold
         return True
 
+    def _load_decoder_calibration(self):
+        if self._explicit_decoder_min_confidence:
+            return False
+        self.config.decoder_min_confidence = self._base_decoder_min_confidence
+        state = load_json(self.decoder_calibration_path, None)
+        if not isinstance(state, dict) or state.get("schema_version") != 1:
+            return False
+        try:
+            threshold = float(state["threshold"])
+            decoder_steps = int(state["decoder_trained_steps"])
+            decoder_vocab_size = int(state["decoder_vocab_size"])
+            lif_updates = int(state["lif_readout_updates"])
+            encoder_updates = int(state["encoder_updates"])
+            encoder_vocab_size = int(state["encoder_vocab_size"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.000001:
+            return False
+        if decoder_steps != self.decoder.trained_steps:
+            return False
+        if decoder_vocab_size != len(self.decoder.vocab):
+            return False
+        if lif_updates != self.network.output_updates:
+            return False
+        if encoder_updates != self.encoder.updates or encoder_vocab_size != len(self.encoder.vocab):
+            return False
+        if state.get("validation_fingerprint") != self.learning.validation_fingerprint():
+            return False
+        if state.get("decoder_model_fingerprint") != self.learning.decoder_model_fingerprint():
+            return False
+        self.config.decoder_min_confidence = threshold
+        return True
+
+    def invalidate_decoder_calibration(self):
+        """Remove o limiar do decoder quando seus pesos ou dados mudam."""
+        self.config.decoder_min_confidence = self._base_decoder_min_confidence
+        try:
+            self.decoder_calibration_path.unlink()
+        except FileNotFoundError:
+            pass
+
     def invalidate_lif_calibration(self):
         """Remove calibração obsoleta após mudanças nos pesos ou embeddings."""
         self.config.lif_retrieval_threshold = self._base_lif_retrieval_threshold
@@ -250,6 +298,7 @@ class NixLMsNeuralCore:
             self.lif_calibration_path.unlink()
         except FileNotFoundError:
             pass
+        self.invalidate_decoder_calibration()
 
     def _active_retrieval_encoder(self):
         if self.retrieval_encoder is self.encoder:
@@ -661,8 +710,14 @@ class NixLMsNeuralCore:
                 "saved": self.lif_calibration_path.exists(),
                 "loaded": self._load_lif_calibration(),
             },
+            "decoder_calibration": {
+                "active_threshold": self.config.decoder_min_confidence,
+                "saved": self.decoder_calibration_path.exists(),
+                "loaded": self._load_decoder_calibration(),
+            },
             "decoder": {
                 "type": "lif_conditioned_autoregressive_rnn",
+                "minimum_confidence": self.config.decoder_min_confidence,
                 "context_size": self.decoder.context_size,
                 "hidden_size": self.decoder.hidden_size,
                 "embedding_size": self.decoder.embedding_size,

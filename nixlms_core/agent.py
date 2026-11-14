@@ -157,6 +157,14 @@ class NixLMsNeuralCore:
             answer, source = llm_answer, "local_llm"
         elif selected:
             answer, source = selected.get("answer", ""), "semantic_memory"
+        elif world_facts:
+            statements = [
+                f"{fact.get('subject', '')} {fact.get('predicate', '')} "
+                f"{fact.get('object', '')} (fonte: {fact.get('source', 'não informada')}; "
+                f"confiança registrada: {float(fact.get('confidence', 0.0)):.2f})"
+                for fact in world_facts
+            ]
+            answer, source = "Encontrei estes registros no modelo de mundo: " + "; ".join(statements), "world_model"
         else:
             answer = ("Ainda não encontrei uma resposta confiável. Você pode me ensinar "
                       "com /ensinar pergunta => resposta ou treinar pares semânticos.")
@@ -173,6 +181,7 @@ class NixLMsNeuralCore:
             "network_output_norm": sum(x * x for x in output) ** .5,
             "response_source": source, "concepts": concepts,
             "world_facts_considered": len(world_facts),
+            "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),
             "encoder": "trainable_word_bigram_contrastive"
         }
@@ -217,6 +226,7 @@ class NixLMsNeuralCore:
             **self.memory.stats(), **self.mental_map.stats(), **self.learner.stats(),
             "world_model": self.world_model.stats(),
             "planning": self.goals.stats(),
+            "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_contrastive_recurrent_lif_memory_world_model_goal_manager",
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,

@@ -43,6 +43,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
             self.assertNotEqual(case["answer"], leaked_answer)
             self.assertEqual(case["response_source"], "fallback")
             self.assertTrue(report["cognition"]["protocol"]["exact_test_questions_excluded"])
+            self.assertFalse(report["cognition"]["protocol"]["historical_weight_provenance_verified"])
 
     def test_evaluate_does_not_persist_benchmark_interactions_as_episodes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -71,6 +72,29 @@ class CognitiveBenchmarkTests(unittest.TestCase):
             self.assertEqual(report["cognition"]["samples"], 0)
             self.assertIsNone(report["cognition"]["metrics"]["token_f1"])
             self.assertEqual(report["cognition"]["cases"], [])
+
+    def test_cognitive_benchmark_restores_memory_when_response_raises(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            question = "Pergunta de restauração?"
+            ai.learning.dataset.add(question, "Resposta.", "test")
+            knowledge_ref = ai.memory.knowledge
+            episodic_ref = ai.episodic.items
+            with patch.object(ai, "respond", side_effect=RuntimeError("simulated failure")):
+                with self.assertRaises(RuntimeError):
+                    ai.learning.evaluate()
+
+            self.assertIs(ai.memory.knowledge, knowledge_ref)
+            self.assertIs(ai.episodic.items, episodic_ref)
+
+    def test_token_f1_uses_multiset_overlap(self):
+        self.assertAlmostEqual(
+            ai_f1 := __import__("nixlms_core.learning", fromlist=["LearningEngine"]).LearningEngine._token_f1(
+                "gato gato caça rato", "gato caça rato"
+            ),
+            6 / 7,
+        )
 
     def test_live_language_generation_is_opt_in_for_cognitive_benchmark(self):
         from unittest.mock import patch

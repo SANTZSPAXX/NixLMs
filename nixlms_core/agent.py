@@ -224,10 +224,11 @@ class NixLMsNeuralCore:
         goal_context = self.goals.active_context(limit=5)
         history = self.attention.working.context(limit=6)
         temporal_answer = self._temporal_response(text)
+        llm_attempted = use_language and temporal_answer is None
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
             world_facts=world_facts, goals=goal_context
-        ) if use_language and temporal_answer is None else None
+        ) if llm_attempted else None
 
         if temporal_answer:
             answer, source = temporal_answer, "runtime_datetime"
@@ -259,7 +260,7 @@ class NixLMsNeuralCore:
             "active_neurons": sum(1 for count in self.network.last_spike_counts if count > 0),
             "network_output_norm": sum(x * x for x in output) ** .5,
             "response_source": source, "concepts": concepts,
-            "llm_error": self.language.last_error if source != "runtime_datetime" else None,
+            "llm_error": self.language.last_error if llm_attempted else None,
             "retrieval_encoder_error": self._retrieval_encoder_error,
             "world_facts_considered": len(world_facts),
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),

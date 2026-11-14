@@ -6,7 +6,7 @@ class CoreConfig:
     hidden_size: int = 48
     output_size: int = 32
     steps: int = 24
-    threshold: float = 1.0
+    threshold: float = 0.08
     leak: float = 0.88
     learning_rate: float = 0.025
     seed: int = 42

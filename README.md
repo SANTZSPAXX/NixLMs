@@ -1,57 +1,104 @@
 # NixLMs
 
-**NixLMs 0.3.0 — Cognitive Hybrid Architecture** é uma IA experimental modular em Python, compatível com Windows e Google Colab.
+**NixLMs 0.4.0 — Semantic Learning Architecture** é uma IA experimental modular em Python, compatível com Windows e Google Colab. Esta versão introduz um encoder de palavras e bigramas treinável por pares contrastivos, memória vetorial híbrida e avaliação separada de recuperação e similaridade.
 
-## Arquitetura 0.3
-- **Neural Core:** rede recorrente LIF, sinapses recorrentes, traços de elegibilidade e plasticidade STDP aproximada modulada por recompensa.
-- **EEG-inspired:** osciladores sintéticos Delta, Theta, Alpha, Beta e Gamma.
-- **Mental Map:** grafo persistente de conceitos e associações.
-- **Attention System:** seleção dinâmica de contexto e memória de trabalho limitada.
-- **Learning Engine:** datasets locais, treino incremental e avaliação de recuperação (hit rate top-5 e MRR).
-- **Language Engine:** integração opcional com LLM pequeno executado localmente via Ollama.
-- **Memória:** armazenamento semântico e episódico em JSON.
+## O que mudou na 0.4
+
+- **Semantic Encoder:** embeddings densos treináveis de tokens e bigramas, com vocabulário persistente e inicialização determinística.
+- **Contrastive Learning:** pares positivos aproximam representações; pares negativos com similaridade acima da margem são afastados.
+- **Semantic Memory:** recuperação combina similaridade vetorial e sobreposição lexical; o peso semântico cresce gradualmente conforme o encoder acumula atualizações contrastivas, até 85%; não executa a rede LIF para cada memória.
+- **Memory Upsert:** ensinar ou treinar repetidamente uma mesma pergunta atualiza o registro em vez de duplicá-lo.
+- **LIF:** telemetria de disparos real, traços de elegibilidade corrigidos e plasticidade acumulada apenas durante aprendizagem/feedback explícitos.
+- **Evaluation Engine:** métricas separadas de recuperação QA e classificação de pares contrastivos.
+- **Ollama:** integração opcional com endpoint localhost; endereços remotos são recusados.
+
+## Benchmark semântico (base da 0.5)
+
+O comando `/avaliar` agora compara três estratégias de recuperação sobre os mesmos exemplos QA de teste:
+
+- **Lexical:** Jaccard entre tokens normalizados.
+- **Semantic:** similaridade cosseno entre embeddings.
+- **Hybrid:** combinação ponderada das duas estratégias, usando o mesmo peso progressivo da memória.
+
+Para cada canal são calculados **MRR** e **Recall@1, @3 e @5**. A classificação de pares contrastivos informa accuracy, precision, recall, F1, specificity, matriz de confusão e médias de similaridade positiva/negativa. A avaliação aceita limiar e K's configuráveis pela API Python: `ai.learning.evaluate(threshold=0.25, ks=(1, 3, 5))`.
+
+O conjunto QA de teste é comparado com o conteúdo atualmente presente em `memory.knowledge`; ele não é inserido automaticamente na memória durante a avaliação. Por isso, para medir recuperação de forma válida, cadastre exemplos de treino na memória e mantenha perguntas/respostas de teste realmente separadas. Os pares de teste também não participam do treinamento. O dataset inicial é pequeno e serve apenas como smoke test: resultados estatisticamente úteis exigem um conjunto de teste maior, representativo e sem paráfrases duplicadas entre divisões.
+
+## Limitações importantes
+
+O Semantic Encoder 0.4 é um modelo compacto treinável de embeddings de palavras e bigramas, não um Transformer contextual pré-treinado. Ele começa com vetores determinísticos inicializados aleatoriamente e aprende similaridades a partir dos pares contrastivos fornecidos. Portanto, **não possui semântica geral garantida sem dados de treinamento suficientes e representativos**. A ordem local é parcialmente representada por bigramas; relações linguísticas complexas e contexto longo ainda não são modelados adequadamente.
+
+O HashEncoder permanece no código apenas para compatibilidade. A rede LIF/STDP é experimental e não substitui o encoder semântico. As métricas são proxies de tarefas específicas, não prova de compreensão geral, consciência ou senciência.
 
 ## Requisitos
-Python 3.10+. O núcleo usa apenas a biblioteca padrão e funciona em CPU. GPU não é necessária.
+
+- Python 3.10 ou superior.
+- Núcleo sem dependências externas obrigatórias.
+- Execução em CPU; GPU não é necessária.
+- Para máquinas com 8 GB de RAM, mantenha o LLM opcional desativado ou use um modelo Ollama pequeno.
 
 ## Windows
-Execute `iniciar_neural.bat` ou `python neural_core.py`. O protótipo original segue disponível em `python nixlms.py`.
 
-## LLM local (opcional)
-Para máquinas com 8 GB de RAM e CPU sem GPU dedicada, comece pelo modelo pequeno:
 ```powershell
-# Instale Ollama: https://ollama.com/download
-ollama pull qwen2.5:0.5b
-ollama serve
 python neural_core.py
 ```
-O adaptador conecta apenas a `http://127.0.0.1:11434`. Sem Ollama, a NixLMs continua funcionando com memória e recuperação local. O modelo pode ser lento em CPU; feche aplicativos pesados. Para trocar o modelo use `NIXLMS_LLM_MODEL`; para desativar `NIXLMS_LLM_ENABLED=0`.
+
+Ou execute `iniciar_neural.bat`.
 
 ## Google Colab
-Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb). O notebook executa o núcleo sem LLM remoto. Para persistência, salve `data/` no Google Drive; o filesystem temporário do Colab pode ser apagado ao encerrar a sessão.
 
-## Dataset, treino e avaliação
-O conjunto inicial em português está em `datasets/starter_ptbr.jsonl`, com partições `train` e `test`. No terminal:
+Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/feature/semantic-learning-0.4/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.
+
+## Treinamento
+
+O dataset inicial está em `datasets/starter_ptbr.jsonl`. Ele contém exemplos QA e pares contrastivos:
+
+- QA: `question`, `answer`, `split`.
+- Par: `type: "pair"`, `text_a`, `text_b`, `label` (1 = similar; 0 = diferente), `split`.
+
+No terminal:
+
 ```text
 /importar datasets/starter_ptbr.jsonl
-/treinar 2
+/treinar 5
 /avaliar
 ```
-As métricas avaliam recuperação de exemplos conhecidos, não qualidade geral de linguagem. Para novos dados, use JSONL com campos `question`, `answer` e `split` (`train` ou `test`). Não inclua dados pessoais ou confidenciais sem base legal e autorização.
 
-## Comandos
-- `/ensinar pergunta => resposta`: grava conhecimento, atualiza o grafo e adiciona ao dataset.
-- `/importar arquivo.jsonl`: importa dataset JSONL.
-- `/treinar [epocas]`: aprendizagem incremental no dataset.
-- `/avaliar`: métricas top-5 e MRR.
-- `/mapa`: conceitos e associações.
-- `/eeg`, `/llm`, `/status`, `/positivo`, `/negativo`, `/ajuda`, `/sair`.
+Para criar pares manualmente:
+
+```text
+/ensinar-par estou feliz || estou contente || 1
+/ensinar-par o cachorro persegue o gato || o gato persegue o cachorro || 0
+/treinar 5
+```
+
+O conjunto de teste não é utilizado pelo treinamento. Separe pares de teste que não sejam simples duplicatas ou reformulações triviais dos pares de treino.
+
+## Memória e persistência
+
+Os arquivos em `data/` incluem:
+
+- `semantic_encoder.json`: vocabulário, embeddings e contagem de atualizações.
+- `knowledge.json`: conhecimento QA.
+- `episodes.json`: histórico episódico.
+- `mental_map.json`: grafo associativo.
+- `neural_weights.json`: pesos LIF e elegibilidade.
+- `dataset.json`: exemplos locais de treinamento.
+
+Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso.
 
 ## Testes
-`python -m unittest discover -s tests -v`
 
-## Estrutura
-`nixlms_core/` contém os módulos `neural`, `eeg`, `mental_map`, `attention`, `memory`, `cognition`, `learning`, `language`, `learner`, `encoding`, `config`, `utils` e `agent`.
+```powershell
+python -m unittest discover -s tests -v
+```
 
-## Limitações
-A rede LIF/STDP é uma aproximação didática, não neurobiologia validada. O mapa usa associações lexicais. As métricas avaliam recuperação de exemplos, não qualidade geral de linguagem. O LLM pequeno pode cometer erros. O EEG é sintético e não lê pensamentos, não acessa sensores nem realiza diagnósticos. A arquitetura não demonstra consciência ou senciência.
+A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
+
+## Segurança e privacidade
+
+O adaptador Ollama aceita somente `localhost`, `127.0.0.1` ou `::1`. Não inclua dados pessoais ou confidenciais nos datasets sem autorização e base legal. O núcleo não acessa sensores nem dispositivos.
+
+## Arquitetura
+
+`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, aprendizagem, cognição, EEG sintético e adaptador linguístico opcional.

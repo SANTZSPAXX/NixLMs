@@ -1,1 +1,1 @@
-# NixLMs 0.1 usa apenas a biblioteca padrão do Python.
+# NixLMs 0.4: núcleo Python padrão, sem dependências obrigatórias.

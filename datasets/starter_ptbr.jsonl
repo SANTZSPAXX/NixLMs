@@ -10,3 +10,9 @@
 {"question":"qual linguagem é usada nesta implementação","answer":"A implementação da NixLMs Neural Core é escrita em Python.","split":"test"}
 {"question":"o que significa LIF","answer":"LIF significa Leaky Integrate-and-Fire, um modelo simplificado de neurônio que acumula potencial e dispara ao atingir um limiar.","split":"test"}
 {"question":"O que é um mapa mental computacional","answer":"É uma representação em grafo de conceitos e relações que permite explorar associações entre informações.","split":"test"}
+{"type":"pair","text_a":"estou feliz","text_b":"estou contente","label":1,"split":"train"}
+{"type":"pair","text_a":"qual é a capital do Brasil","text_b":"que cidade é a capital brasileira","label":1,"split":"train"}
+{"type":"pair","text_a":"como posso aprender programação","text_b":"qual é uma boa forma de estudar programação","label":1,"split":"train"}
+{"type":"pair","text_a":"o cachorro persegue o gato","text_b":"o gato persegue o cachorro","label":0,"split":"train"}
+{"type":"pair","text_a":"o gato caça o rato","text_b":"o rato caça o gato","label":0,"split":"test"}
+{"type":"pair","text_a":"estou alegre","text_b":"sinto muita felicidade","label":1,"split":"test"}

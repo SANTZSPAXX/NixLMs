@@ -1,8 +1,13 @@
 """Importação, treinamento contrastivo e avaliação sem vazamento de dados."""
+import copy
 import hashlib
 import json
 import math
+import os
 import random
+import shutil
+import tempfile
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -206,6 +211,501 @@ class LearningEngine:
                 "e corrija as sobreposições antes de treinar ou avaliar."
             )
         return audit
+
+    INCREMENTAL_MODEL_FILES = (
+        "semantic_encoder.json",
+        "neural_weights.json",
+        "neural_decoder.json",
+        "knowledge.json",
+        "mental_map.json",
+    )
+    INCREMENTAL_CALIBRATION_FILES = (
+        "lif_calibration.json",
+        "decoder_calibration.json",
+    )
+
+    @staticmethod
+    def _state_fingerprint(state):
+        payload = json.dumps(
+            state, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _live_model_state(self):
+        return {
+            "semantic_encoder.json": self.agent.encoder.state_dict(),
+            "neural_weights.json": self.agent.network.state_dict(),
+            "neural_decoder.json": self.agent.decoder.state_dict(),
+            "knowledge.json": self.agent.memory.knowledge,
+            "mental_map.json": {
+                "nodes": self.agent.mental_map.nodes,
+                "edges": self.agent.mental_map.edges,
+            },
+        }
+
+    def _validation_metrics(self):
+        """Compara o estado atual somente com exemplos QA do split validation."""
+        self._require_clean_splits()
+        rows = [
+            row for row in self.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        decoder_losses = []
+        decoder_accuracies = []
+        decoder_known = 0
+        decoder_oov = 0
+        generation_scores = []
+        lif_losses = []
+
+        for row in rows:
+            question = str(row.get("question", "")).strip()
+            answer = str(row.get("answer", "")).strip()
+            context, _, _, _ = self.agent._lif_forward(question)
+            decoder_score = self.agent.decoder.score(context, answer)
+            if decoder_score.get("loss") is not None:
+                decoder_losses.append(float(decoder_score["loss"]))
+                if decoder_score.get("token_accuracy") is not None:
+                    decoder_accuracies.append(float(decoder_score["token_accuracy"]))
+                decoder_known += int(decoder_score.get("known_tokens", 0))
+                decoder_oov += int(decoder_score.get("oov_tokens", 0))
+
+            generated = self.agent.decoder.generate(
+                context, max_tokens=self.agent.config.decoder_max_tokens
+            )
+            generation_scores.append(
+                self._token_f1(answer, generated.get("text", ""))
+            )
+            target = self.agent._compress_neural_target(
+                self.agent.encoder.encode(answer)
+            )
+            prediction = context
+            lif_losses.append(
+                sum((float(left) - float(right)) ** 2
+                    for left, right in zip(prediction, target))
+                / max(1, len(target))
+            )
+
+        representation = self.evaluate_representations()["metrics"]
+        count = len(rows)
+        metrics = {
+            "decoder_loss": (
+                sum(decoder_losses) / len(decoder_losses) if decoder_losses else None
+            ),
+            "decoder_token_accuracy": (
+                sum(decoder_accuracies) / len(decoder_accuracies)
+                if decoder_accuracies else None
+            ),
+            "decoder_oov_rate": (
+                decoder_oov / (decoder_known + decoder_oov)
+                if decoder_known + decoder_oov else None
+            ),
+            "generation_token_f1": (
+                sum(generation_scores) / len(generation_scores)
+                if generation_scores else None
+            ),
+            "lif_output_loss": (
+                sum(lif_losses) / len(lif_losses) if lif_losses else None
+            ),
+            "representation_margin": representation.get("margin"),
+            "representation_pairwise_accuracy": representation.get("pairwise_accuracy"),
+        }
+        return {
+            "samples": count,
+            "metrics": metrics,
+            "protocol": {
+                "validation_split_used": True,
+                "test_split_used": False,
+                "weights_updated": False,
+                "llm_enabled": False,
+            },
+        }
+
+    @staticmethod
+    def _compare_validation_metrics(before, after, regression_tolerance, min_improvement):
+        directions = {
+            "decoder_loss": -1.0,
+            "decoder_token_accuracy": 1.0,
+            "decoder_oov_rate": -1.0,
+            "generation_token_f1": 1.0,
+            "lif_output_loss": -1.0,
+            "representation_margin": 1.0,
+            "representation_pairwise_accuracy": 1.0,
+        }
+        comparisons = {}
+        regressions = []
+        improvements = []
+        before_metrics = before.get("metrics", {})
+        after_metrics = after.get("metrics", {})
+        for name, direction in directions.items():
+            left = before_metrics.get(name)
+            right = after_metrics.get(name)
+            if left is None and right is None:
+                continue
+            if right is None:
+                regressions.append(name)
+                comparisons[name] = {"before": left, "after": None, "status": "missing_after"}
+                continue
+            if left is None:
+                improvements.append(name)
+                comparisons[name] = {"before": None, "after": right, "status": "new_metric"}
+                continue
+            left, right = float(left), float(right)
+            if not math.isfinite(left) or not math.isfinite(right):
+                regressions.append(name)
+                comparisons[name] = {"before": left, "after": right, "status": "non_finite"}
+                continue
+            gain = (right - left) * direction
+            if gain < -regression_tolerance:
+                regressions.append(name)
+                status = "regression"
+            elif gain > min_improvement:
+                improvements.append(name)
+                status = "improved"
+            else:
+                status = "stable"
+            comparisons[name] = {
+                "before": left, "after": right, "directional_gain": gain,
+                "status": status,
+            }
+        accepted = bool(comparisons) and not regressions and bool(improvements)
+        reason = (
+            "accepted" if accepted else
+            "validation_regression" if regressions else
+            "no_measurable_improvement"
+        )
+        return {
+            "accepted": accepted,
+            "reason": reason,
+            "comparisons": comparisons,
+            "improvements": improvements,
+            "regressions": regressions,
+        }
+
+    def _checkpoint_root(self):
+        return self.agent.data_dir / "checkpoints" / "incremental"
+
+    def _create_incremental_checkpoint(self, checkpoint_id, baseline_metrics,
+                                       validation_fingerprint, state_fingerprint):
+        checkpoint_dir = self._checkpoint_root() / checkpoint_id
+        checkpoint_dir.mkdir(parents=True, exist_ok=False)
+        state = self._live_model_state()
+        for filename, payload in state.items():
+            save_json(checkpoint_dir / filename, payload)
+        files = {}
+        for filename in self.INCREMENTAL_MODEL_FILES + self.INCREMENTAL_CALIBRATION_FILES:
+            source = self.agent.data_dir / filename
+            target = checkpoint_dir / filename
+            if filename in state:
+                files[filename] = {
+                    "present": True,
+                    "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                }
+            elif source.is_file():
+                shutil.copy2(source, target)
+                files[filename] = {
+                    "present": True,
+                    "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                }
+            else:
+                files[filename] = {"present": False, "sha256": None}
+        manifest = {
+            "schema_version": 1,
+            "checkpoint_id": checkpoint_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": "candidate_pending",
+            "files": files,
+            "baseline_state_fingerprint": state_fingerprint,
+            "validation_fingerprint": validation_fingerprint,
+            "baseline_metrics": baseline_metrics,
+            "candidate_metrics": None,
+            "training": None,
+        }
+        save_json(checkpoint_dir / "manifest.json", manifest)
+        return checkpoint_dir, manifest
+
+    def _write_checkpoint_manifest(self, checkpoint_dir, manifest):
+        save_json(checkpoint_dir / "manifest.json", manifest)
+
+    def _checkpoint_directory(self, checkpoint_id):
+        identifier = str(checkpoint_id or "")
+        if not identifier or Path(identifier).name != identifier or identifier in {".", ".."}:
+            raise ValueError("Identificador de checkpoint inválido.")
+        return self._checkpoint_root() / identifier
+
+    def restore_incremental_checkpoint(self, checkpoint_id):
+        """Restaura pesos e calibrações verificando hashes antes de qualquer gravação."""
+        checkpoint_dir = self._checkpoint_directory(checkpoint_id)
+        manifest_path = checkpoint_dir / "manifest.json"
+        manifest = load_json(manifest_path, None)
+        if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+            raise ValueError("Manifesto de checkpoint ausente ou incompatível.")
+        if manifest.get("checkpoint_id") != str(checkpoint_id):
+            raise ValueError("O identificador não corresponde ao manifesto do checkpoint.")
+
+        filenames = self.INCREMENTAL_MODEL_FILES + self.INCREMENTAL_CALIBRATION_FILES
+        for filename in filenames:
+            record = manifest.get("files", {}).get(filename)
+            if not isinstance(record, dict):
+                raise ValueError("Manifesto de checkpoint incompleto.")
+            source = checkpoint_dir / filename
+            if record.get("present"):
+                if not source.is_file():
+                    raise ValueError("Arquivo de checkpoint ausente: " + filename)
+                digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                if digest != record.get("sha256"):
+                    raise ValueError("Integridade do checkpoint inválida: " + filename)
+
+        with tempfile.TemporaryDirectory(
+            prefix=".nixlms-restore-", dir=str(self.agent.data_dir)
+        ) as staging:
+            staging_dir = Path(staging)
+            for filename in filenames:
+                record = manifest["files"][filename]
+                if record["present"]:
+                    shutil.copy2(checkpoint_dir / filename, staging_dir / filename)
+            try:
+                for filename in filenames:
+                    destination = self.agent.data_dir / filename
+                    staged = staging_dir / filename
+                    if manifest["files"][filename]["present"]:
+                        os.replace(staged, destination)
+                    elif destination.exists():
+                        destination.unlink()
+                if not self.agent.encoder.load_state_dict(
+                    load_json(self.agent.data_dir / "semantic_encoder.json", None)
+                ):
+                    raise ValueError("Checkpoint do encoder incompatível.")
+                if not self.agent.network.load_state_dict(
+                    load_json(self.agent.data_dir / "neural_weights.json", None)
+                ):
+                    raise ValueError("Checkpoint da rede LIF incompatível.")
+                if not self.agent.decoder.load_state_dict(
+                    load_json(self.agent.data_dir / "neural_decoder.json", None)
+                ):
+                    raise ValueError("Checkpoint do decoder incompatível.")
+                self.agent.memory.knowledge = load_json(
+                    self.agent.data_dir / "knowledge.json", []
+                )
+                self.agent.memory._embedding_cache.clear()
+                mental_state = load_json(
+                    self.agent.data_dir / "mental_map.json", {"nodes": {}, "edges": {}}
+                )
+                self.agent.mental_map.nodes = mental_state.get("nodes", {})
+                self.agent.mental_map.edges = mental_state.get("edges", {})
+                self.agent._load_lif_calibration()
+                self.agent._load_decoder_calibration()
+            except Exception:
+                raise
+
+        manifest["status"] = "rolled_back"
+        manifest["rolled_back_at"] = datetime.now(timezone.utc).isoformat()
+        self._write_checkpoint_manifest(checkpoint_dir, manifest)
+        return {
+            "restored": True,
+            "checkpoint_id": str(checkpoint_id),
+            "status": manifest["status"],
+        }
+
+    def train_incremental(self, epochs=1, seed=42, min_validation_samples=2,
+                          regression_tolerance=0.02, min_improvement=0.001):
+        """Treina candidato isolado e só promove pesos se validation não regredir."""
+        epochs = int(epochs)
+        min_validation_samples = int(min_validation_samples)
+        regression_tolerance = float(regression_tolerance)
+        min_improvement = float(min_improvement)
+        if epochs < 1 or epochs > 100:
+            raise ValueError("epochs deve estar entre 1 e 100.")
+        if min_validation_samples < 2:
+            raise ValueError("min_validation_samples deve ser pelo menos 2.")
+        if (not math.isfinite(regression_tolerance) or regression_tolerance < 0
+                or not math.isfinite(min_improvement) or min_improvement <= 0):
+            raise ValueError("Tolerância deve ser não negativa e melhoria mínima positiva.")
+        self._require_clean_splits()
+        rows = self.dataset.load()
+        validation_rows = [
+            row for row in rows
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        if len(validation_rows) < min_validation_samples:
+            return {
+                "accepted": False,
+                "reason": "insufficient_validation_samples",
+                "validation_samples": len(validation_rows),
+                "required_samples": min_validation_samples,
+            }
+        if not any(
+            row.get("split", "train") == "train"
+            and row.get("type", "qa") in {"qa", "pair"}
+            for row in rows
+        ):
+            return {"accepted": False, "reason": "training_split_empty"}
+        if not getattr(self.agent, "decoder_persistence_enabled", True):
+            return {"accepted": False, "reason": "decoder_checkpoint_unavailable"}
+
+        baseline_metrics = self._validation_metrics()
+        if baseline_metrics.get("samples", 0) < min_validation_samples:
+            return {"accepted": False, "reason": "insufficient_validation_metrics"}
+
+        validation_fingerprint = self.validation_fingerprint()
+        dataset_fingerprint = self.dataset_fingerprint()
+        live_state = self._live_model_state()
+        state_fingerprint = self._state_fingerprint(live_state)
+        checkpoint_id = uuid.uuid4().hex
+        checkpoint_dir, manifest = self._create_incremental_checkpoint(
+            checkpoint_id, baseline_metrics, validation_fingerprint, state_fingerprint
+        )
+        manifest["dataset_fingerprint"] = dataset_fingerprint
+        self._write_checkpoint_manifest(checkpoint_dir, manifest)
+
+        with tempfile.TemporaryDirectory(prefix="nixlms-incremental-") as temporary:
+            candidate_dir = Path(temporary) / "candidate"
+            shutil.copytree(
+                self.agent.data_dir, candidate_dir, dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns("checkpoints"),
+            )
+            for filename, payload in live_state.items():
+                save_json(candidate_dir / filename, payload)
+            candidate = self.agent.__class__(
+                candidate_dir, config=copy.deepcopy(self.agent.config), llm_model=None
+            )
+            # A threshold loaded from a calibration file must not be mistaken for
+            # a user-supplied override merely because the active config is copied.
+            candidate._base_lif_retrieval_threshold = self.agent._base_lif_retrieval_threshold
+            candidate._explicit_lif_threshold = self.agent._explicit_lif_threshold
+            candidate._base_decoder_min_confidence = self.agent._base_decoder_min_confidence
+            candidate._explicit_decoder_min_confidence = self.agent._explicit_decoder_min_confidence
+            candidate._load_lif_calibration()
+            candidate._load_decoder_calibration()
+            if (not getattr(candidate, "decoder_persistence_enabled", True)
+                    or candidate.decoder_load_error):
+                manifest["status"] = "rejected"
+                manifest["reason"] = "candidate_decoder_state_unavailable"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+
+            training_report = candidate.learning.train(epochs=epochs, seed=seed)
+            if training_report.get("trained") == 0:
+                manifest["status"] = "rejected"
+                manifest["reason"] = "no_training_updates"
+                manifest["training"] = training_report
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+
+            candidate_metrics = candidate.learning._validation_metrics()
+            comparison = self._compare_validation_metrics(
+                baseline_metrics, candidate_metrics,
+                regression_tolerance, min_improvement,
+            )
+            manifest["candidate_metrics"] = candidate_metrics
+            manifest["training"] = training_report
+            manifest["comparison"] = comparison
+            if not comparison["accepted"]:
+                manifest["status"] = "rejected"
+                manifest["reason"] = comparison["reason"]
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False,
+                    "reason": comparison["reason"],
+                    "checkpoint_id": checkpoint_id,
+                    "rollback_available": True,
+                    "baseline": baseline_metrics,
+                    "candidate": candidate_metrics,
+                    "comparison": comparison,
+                    "training": training_report,
+                }
+
+            if self.validation_fingerprint() != validation_fingerprint:
+                manifest["status"] = "rejected"
+                manifest["reason"] = "validation_dataset_changed"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+            if self.dataset_fingerprint() != dataset_fingerprint:
+                manifest["status"] = "rejected"
+                manifest["reason"] = "dataset_changed_during_candidate_training"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+            if self._state_fingerprint(self._live_model_state()) != state_fingerprint:
+                manifest["status"] = "rejected"
+                manifest["reason"] = "live_model_changed_during_candidate_training"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+
+            candidate_state = candidate.learning._live_model_state()
+            try:
+                candidate_state_fingerprint = self._state_fingerprint(candidate_state)
+            except (TypeError, ValueError):
+                manifest["status"] = "rejected"
+                manifest["reason"] = "candidate_state_invalid"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+            manifest["candidate_state_fingerprint"] = candidate_state_fingerprint
+            try:
+                with tempfile.TemporaryDirectory(
+                    prefix=".nixlms-candidate-", dir=str(self.agent.data_dir)
+                ) as staging:
+                    staging_dir = Path(staging)
+                    for filename, payload in candidate_state.items():
+                        save_json(staging_dir / filename, payload)
+                    for filename in self.INCREMENTAL_MODEL_FILES:
+                        os.replace(
+                            staging_dir / filename, self.agent.data_dir / filename
+                        )
+                if not self.agent.encoder.load_state_dict(
+                    candidate_state["semantic_encoder.json"]
+                ):
+                    raise ValueError("Encoder candidato incompatível.")
+                if not self.agent.network.load_state_dict(
+                    candidate_state["neural_weights.json"]
+                ):
+                    raise ValueError("Rede LIF candidata incompatível.")
+                if not self.agent.decoder.load_state_dict(
+                    candidate_state["neural_decoder.json"]
+                ):
+                    raise ValueError("Decoder candidato incompatível.")
+                self.agent.memory.knowledge = copy.deepcopy(candidate_state["knowledge.json"])
+                self.agent.memory._embedding_cache.clear()
+                self.agent.mental_map.nodes = copy.deepcopy(
+                    candidate_state["mental_map.json"].get("nodes", {})
+                )
+                self.agent.mental_map.edges = copy.deepcopy(
+                    candidate_state["mental_map.json"].get("edges", {})
+                )
+                self.agent.invalidate_lif_calibration()
+            except Exception:
+                self.restore_incremental_checkpoint(checkpoint_id)
+                raise
+
+        manifest["status"] = "accepted"
+        manifest["accepted_at"] = datetime.now(timezone.utc).isoformat()
+        self._write_checkpoint_manifest(checkpoint_dir, manifest)
+        return {
+            "accepted": True,
+            "reason": "accepted",
+            "checkpoint_id": checkpoint_id,
+            "rollback_available": True,
+            "baseline": baseline_metrics,
+            "candidate": candidate_metrics,
+            "comparison": comparison,
+            "training": training_report,
+        }
 
     def train(self, epochs=1, seed=42):
         epochs = int(epochs)
@@ -594,6 +1094,13 @@ class LearningEngine:
             for item in self.agent.memory.knowledge
         ]
         payload = json.dumps(sorted(rows), ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def dataset_fingerprint(self):
+        """Fingerprint de todos os registros para detectar mudanças durante treino isolado."""
+        payload = json.dumps(
+            self.dataset.load(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def validation_fingerprint(self):

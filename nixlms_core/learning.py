@@ -305,6 +305,16 @@ class LearningEngine:
             "lif_readout": self.agent.network.w_out,
             "encoder_updates": self.agent.encoder.updates,
             "encoder_vocab_size": len(self.agent.encoder.vocab),
+            "encoder_dimensions": self.agent.encoder.dimensions,
+            "lif_config": {
+                "input_size": self.agent.config.input_size,
+                "hidden_size": self.agent.config.hidden_size,
+                "output_size": self.agent.config.output_size,
+                "steps": self.agent.config.steps,
+                "threshold": self.agent.config.threshold,
+                "leak": self.agent.config.leak,
+                "seed": self.agent.config.seed,
+            },
         }
         serialized = json.dumps(
             payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")

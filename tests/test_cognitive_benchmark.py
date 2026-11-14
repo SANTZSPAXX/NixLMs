@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from nixlms_core import NixLMsNeuralCore
+from nixlms_core.learning import LearningEngine
 
 
 class CognitiveBenchmarkTests(unittest.TestCase):
@@ -90,9 +91,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
 
     def test_token_f1_uses_multiset_overlap(self):
         self.assertAlmostEqual(
-            ai_f1 := __import__("nixlms_core.learning", fromlist=["LearningEngine"]).LearningEngine._token_f1(
-                "gato gato caça rato", "gato caça rato"
-            ),
+            LearningEngine._token_f1("gato gato caça rato", "gato caça rato"),
             6 / 7,
         )
 

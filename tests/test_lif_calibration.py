@@ -43,6 +43,20 @@ class LIFCalibrationTests(unittest.TestCase):
             self.assertIn("pergunta de treino", questions)
             self.assertNotIn("pergunta de validação", questions)
 
+    def test_validation_and_test_texts_do_not_expand_training_vocabulary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            ai.learning.dataset.add("trainvocabtoken alpha", "resposta de treino", "train")
+            ai.learning.dataset.add("validationvocabtoken beta", "resposta de validação", "validation")
+            ai.learning.dataset.add("testvocabtoken gamma", "resposta de teste", "test")
+
+            restored = NixLMsNeuralCore(data_dir)
+
+            self.assertIn("trainvocabtoken", restored.encoder.vocab)
+            self.assertNotIn("validationvocabtoken", restored.encoder.vocab)
+            self.assertNotIn("testvocabtoken", restored.encoder.vocab)
+
     def test_calibration_selects_threshold_from_validation_top_candidate_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

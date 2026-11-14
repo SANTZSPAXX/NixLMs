@@ -1,0 +1,65 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from nixlms_core.episodic import EpisodicMemory
+
+
+class EpisodicMemoryTests(unittest.TestCase):
+    def test_record_persists_complete_experience_and_reloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "episodic.json"
+            memory = EpisodicMemory(path)
+            episode = memory.record(
+                "Como configurar Python?", "Instale Python 3.12.",
+                context={"response_source": "local_llm"},
+                outcome="Resposta entregue", importance=0.8, tags=["python"],
+            )
+            restored = EpisodicMemory(path)
+            self.assertEqual(len(restored.items), 1)
+            self.assertEqual(restored.items[0]["id"], episode["id"])
+            self.assertEqual(restored.items[0]["context"]["response_source"], "local_llm")
+            self.assertIsNone(restored.items[0]["feedback"])
+
+    def test_recall_uses_content_and_returns_ranked_episode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = EpisodicMemory(Path(tmp) / "episodic.json")
+            memory.record("Como instalar Python no Windows", "Use o instalador oficial.")
+            memory.record("Receita de pão caseiro", "Misture farinha e água.")
+            results = memory.recall("instalar Python Windows")
+            self.assertEqual(len(results), 1)
+            self.assertIn("Python", results[0][1]["user_input"])
+
+    def test_feedback_updates_latest_matching_experience(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = EpisodicMemory(Path(tmp) / "episodic.json")
+            first = memory.record("Como usar Git?", "Comandos básicos.")
+            second = memory.record("Como usar Git?", "Use git status e git commit.")
+            updated = memory.set_feedback("Como usar Git?", True)
+            self.assertEqual(updated["id"], second["id"])
+            self.assertIsNone(memory.items[0]["feedback"])
+            self.assertEqual(memory.items[1]["feedback"], "positive")
+            self.assertEqual(memory.stats()["positive_feedback"], 1)
+
+    def test_invalid_inputs_and_limits_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = EpisodicMemory(Path(tmp) / "episodic.json", max_items=1)
+            with self.assertRaises(ValueError):
+                memory.record("", "resposta")
+            with self.assertRaises(ValueError):
+                memory.record("pergunta", "resposta", importance=1.5)
+            memory.record("primeira", "resposta")
+            memory.record("segunda", "resposta")
+            self.assertEqual(len(memory.items), 1)
+            self.assertEqual(memory.items[0]["user_input"], "segunda")
+
+    def test_empty_query_and_nonpositive_limit_return_no_results(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = EpisodicMemory(Path(tmp) / "episodic.json")
+            memory.record("pergunta", "resposta")
+            self.assertEqual(memory.recall(""), [])
+            self.assertEqual(memory.recall("pergunta", limit=0), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

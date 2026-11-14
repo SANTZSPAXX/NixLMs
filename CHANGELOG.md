@@ -1,5 +1,16 @@
 # Changelog
 
+## Consent-gated Ollama setup and runtime verification
+
+- Adds an explicit `/llm preparar` CLI workflow with separate confirmation before installation, service startup, and Qwen model download.
+- Adds a platform-aware Ollama manager: WinGet on Windows and the official installer on Linux; unsupported platforms receive a manual-install diagnostic.
+- Starts only the local Ollama service and waits for a successful `/api/tags` response before continuing.
+- Verifies the exact `qwen2.5:0.5b` model appears in the local model inventory after download.
+- Requires Ollama `/api/chat` to return the expected model name, `done=true`, and non-empty content before marking generation as verified.
+- Exposes the Ollama manager status and the verified model identity in runtime diagnostics.
+- Reports installation, startup, download, API, and generation failures without claiming success.
+
+
 ## Surrogate-gradient training for recurrent LIF dynamics
 
 - Adds fast-sigmoid surrogate-gradient BPTT for the LIF input and recurrent weights while keeping the supervised output readout frozen during recurrent updates.

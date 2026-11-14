@@ -266,7 +266,11 @@ class LearningEngine:
         qa_test = [r for r in rows if r.get("type", "qa") == "qa" and r.get("split") == "test"]
         pair_test = [r for r in rows if r.get("type") == "pair" and r.get("split") == "test"]
         candidates = list(self.agent.memory.knowledge)
-        retrieval_encoder = getattr(self.agent, "retrieval_encoder", self.agent.encoder)
+        retrieval_encoder = (
+            self.agent._active_retrieval_encoder()
+            if hasattr(self.agent, "_active_retrieval_encoder")
+            else getattr(self.agent, "retrieval_encoder", self.agent.encoder)
+        )
         retrieval = {"samples": len(qa_test), "candidate_count": len(candidates), "metrics": {}}
         channels = ("lexical", "semantic", "hybrid")
         reciprocal = {name: 0.0 for name in channels}

@@ -1,5 +1,16 @@
 # Changelog
 
+## Surrogate-gradient training for recurrent LIF dynamics
+
+- Adds fast-sigmoid surrogate-gradient BPTT for the LIF input and recurrent weights while keeping the supervised output readout frozen during recurrent updates.
+- Adds a readout-independent contrastive objective directly on hidden LIF representations for positive and negative sentence pairs.
+- Integrates recurrent and contrastive LIF updates into the train-only learning pipeline and reports update counts/losses.
+- Persists a backward-compatible recurrent update counter in LIF checkpoints.
+- Binds LIF and decoder confidence calibrations to recurrent update counts and recurrent weights so stale thresholds are rejected.
+- Adds a validation-only hidden-representation benchmark for contrastive pairs; it does not update weights or inspect test examples.
+- The safe incremental training gate also compares recurrent LIF validation metrics before promoting candidate weights.
+
+
 ## Safe incremental learning and rollback checkpoints
 
 - Adds isolated candidate training: the active model is never modified while training and evaluating a candidate.

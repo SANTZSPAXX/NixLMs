@@ -131,5 +131,40 @@ class OllamaDiagnosticsTests(unittest.TestCase):
         self.assertIn("data_hora_local", payload["messages"][1]["content"])
 
 
+    def test_rejects_chat_response_when_model_identity_is_missing(self):
+        engine = LanguageEngine()
+        responses = [
+            FakeResponse({"models": [{"name": "qwen2.5:0.5b"}]}),
+            FakeResponse({"done": True, "message": {"content": "Resposta sem identidade."}}),
+        ]
+        with patch("nixlms_core.language.urlopen", side_effect=responses):
+            self.assertIsNone(engine.generate("Pergunta de teste"))
+        self.assertIn("Modelo não confirmado", engine.last_error)
+        self.assertIsNone(engine.last_used_model)
+
+    def test_rejects_chat_response_when_model_does_not_match(self):
+        engine = LanguageEngine()
+        responses = [
+            FakeResponse({"models": [{"name": "qwen2.5:0.5b"}]}),
+            FakeResponse({"model": "llama3.2:1b", "done": True,
+                          "message": {"content": "Resposta de outro modelo."}}),
+        ]
+        with patch("nixlms_core.language.urlopen", side_effect=responses):
+            self.assertIsNone(engine.generate("Pergunta de teste"))
+        self.assertIn("llama3.2:1b", engine.last_error)
+        self.assertIsNone(engine.last_used_model)
+
+    def test_rejects_chat_response_without_done_flag(self):
+        engine = LanguageEngine()
+        responses = [
+            FakeResponse({"models": [{"name": "qwen2.5:0.5b"}]}),
+            FakeResponse({"model": "qwen2.5:0.5b",
+                          "message": {"content": "Resposta incompleta."}}),
+        ]
+        with patch("nixlms_core.language.urlopen", side_effect=responses):
+            self.assertIsNone(engine.generate("Pergunta de teste"))
+        self.assertIn("done=true", engine.last_error)
+        self.assertIsNone(engine.last_used_model)
+
 if __name__ == "__main__":
     unittest.main()

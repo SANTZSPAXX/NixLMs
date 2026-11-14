@@ -27,6 +27,25 @@ O feedback `/positivo` e `/negativo` atualiza a avaliação do episódio corresp
 
 Limites: feedback não comprova que uma resposta está correta; episódios não são automaticamente convertidos em conhecimento factual; não há consolidação abstrativa nem alteração autônoma de pesos. A recuperação é uma heurística híbrida e deve ser avaliada em benchmark antes de qualquer alegação de melhoria geral.
 
+### Desempenho da recuperação episódica
+
+Quando um encoder semântico é fornecido, os embeddings das passagens são mantidos em um cache LRU volátil, limitado por padrão ao número máximo de episódios. O cache usa a identidade/versão do encoder e fingerprints do conteúdo; alterações de texto, substituição do encoder ou remoção de episódios invalidam somente as entradas afetadas. Os vetores são armazenados em float32 e não são gravados no JSON de memória.
+
+As passagens ausentes são codificadas em lotes pequenos (padrão 8, máximo 32) quando o encoder oferece encode_passages. Encoders antigos que oferecem somente encode_passage ou encode continuam compatíveis. A consulta continua sendo codificada a cada recuperação; recência, importância e feedback continuam sendo recalculados em tempo de consulta. O cache não muda o formato dos episódios nem a fórmula de ranking.
+
+O diagnóstico episodic.stats() inclui hits, misses, evictions, passagens codificadas, chamadas ao encoder, limite e quantidade atual de entradas. O tamanho pode ser ajustado ao construir EpisodicMemory por embedding_cache_size e passage_batch_size; não há configuração global nem dependência adicional obrigatória.
+
+Para medir 100, 500 e 2.000 episódios com encoder sintético determinístico:
+
+    python benchmarks/episodic_retrieval.py
+
+Para medir o backend E5, use um modelo que já esteja disponível localmente:
+
+    python benchmarks/episodic_retrieval.py --model-path models/multilingual-e5-small --batch-size 8
+
+O benchmark compara latência fria/aquecida, ordenação, passagens codificadas e chamadas ao encoder. O modo sintético mede o custo do cache, não a qualidade nem a latência de um modelo pré-treinado. O modo E5 não baixa pesos.
+
+
 ## Agendador persistente (0.6)
 
 O `TaskScheduler` usa SQLite e apenas a biblioteca padrão do Python. As tarefas sobrevivem ao reinício do processo e são executadas por handlers registrados explicitamente pelo runtime.

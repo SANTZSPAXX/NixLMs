@@ -1,5 +1,14 @@
 # Changelog
 
+## Recuperação episódica otimizada — cache LRU e codificação em lote
+
+- Adiciona cache LRU volátil e limitado para embeddings de passagens episódicas, armazenados em float32 e sem alterar o JSON persistido.
+- Vincula entradas ao fingerprint do conteúdo e à identidade/configuração/versão do encoder; invalida entradas obsoletas e libera itens removidos.
+- Codifica somente misses em lotes limitados; mantém fallback compatível para encoders que oferecem apenas encode_passage ou encode.
+- Adiciona métricas de hits, misses, evictions, passagens codificadas e chamadas ao encoder.
+- Adiciona testes com encoders determinísticos/fakes e benchmark reproduzível para 100, 500 e 2.000 episódios; o modo E5 usa exclusivamente um modelo local informado pelo usuário.
+
+
 ## Surrogate-gradient training for recurrent LIF dynamics
 
 - Adds fast-sigmoid surrogate-gradient BPTT for the LIF input and recurrent weights while keeping the supervised output readout frozen during recurrent updates.

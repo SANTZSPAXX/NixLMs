@@ -110,6 +110,21 @@ class TaskSchedulerTests(unittest.TestCase):
             self.assertTrue(scheduler.stop())
             self.assertFalse(scheduler.running)
 
+    def test_agent_registers_internal_cognitive_handlers(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            self.assertEqual(
+                set(ai.scheduler.stats()["registered_handlers"]),
+                {"memory_housekeeping", "dataset_audit", "goal_review"},
+            )
+            job_id = ai.scheduler.schedule_once("dataset_audit")
+            self.assertTrue(ai.scheduler.run_once())
+            job = next(item for item in ai.scheduler.list_jobs() if item["id"] == job_id)
+            self.assertEqual(job["status"], "completed")
+            self.assertTrue(job["last_result"]["valid"])
+            self.assertFalse(ai.scheduler.running)
+
     def test_nonpositive_run_limit_does_not_execute(self):
         with tempfile.TemporaryDirectory() as tmp:
             scheduler = self.make_scheduler(tmp)

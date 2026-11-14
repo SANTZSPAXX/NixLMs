@@ -1,6 +1,7 @@
 """Importação, treinamento contrastivo e avaliação sem vazamento de dados."""
 import json
 import random
+from collections import Counter
 from pathlib import Path
 
 from .utils import save_json, load_json, normalize, tokenize, cosine
@@ -272,7 +273,129 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
-    def evaluate(self, threshold=0.25, ks=(1, 3, 5)):
+    @staticmethod
+    def _token_f1(expected, actual):
+        expected_tokens = tokenize(expected)
+        actual_tokens = tokenize(actual)
+        if not expected_tokens or not actual_tokens:
+            return 1.0 if expected_tokens == actual_tokens else 0.0
+        expected_counts = Counter(expected_tokens)
+        actual_counts = Counter(actual_tokens)
+        overlap = sum((expected_counts & actual_counts).values())
+        precision = overlap / len(actual_tokens)
+        recall_score = overlap / len(expected_tokens)
+        return (
+            2.0 * precision * recall_score / (precision + recall_score)
+            if precision + recall_score else 0.0
+        )
+
+    @staticmethod
+    def _is_question_echo(question, answer):
+        question_key, answer_key = normalize(question), normalize(answer)
+        if not question_key or not answer_key:
+            return False
+        if question_key == answer_key:
+            return True
+        question_tokens = set(tokenize(question))
+        answer_tokens = set(tokenize(answer))
+        return (
+            len(question_tokens) >= 3
+            and len(question_tokens & answer_tokens) / len(question_tokens) >= 0.85
+        )
+
+    def evaluate_cognition(self, qa_test, include_llm=False):
+        """Avalia respostas completas no split test sem persistir interações ou vazar consultas exatas."""
+        exact_questions = {normalize(row.get("question", "")) for row in qa_test}
+        original_knowledge = self.agent.memory.knowledge
+        original_episodes = self.agent.episodic.items
+        self.agent.memory.knowledge = [
+            item for item in original_knowledge
+            if normalize(item.get("question", "")) not in exact_questions
+        ]
+        self.agent.episodic.items = [
+            item for item in original_episodes
+            if normalize(item.get("user_input", "")) not in exact_questions
+        ]
+
+        cases = []
+        source_counts = {}
+        total_f1 = 0.0
+        exact_matches = 0
+        abstentions = 0
+        echoes = 0
+        lif_candidates = 0
+        lif_used = 0
+        lif_scores = []
+        try:
+            for row in qa_test:
+                question = str(row.get("question", "")).strip()
+                expected = str(row.get("answer", "")).strip()
+                answer = self.agent.respond(
+                    question, use_language=bool(include_llm), record=False
+                )
+                trace = dict(self.agent.last_trace)
+                source = str(trace.get("response_source", "unknown"))
+                exact = normalize(answer) == normalize(expected)
+                f1 = self._token_f1(expected, answer)
+                abstained = source in {"fallback", "entity_abstention"}
+                echoed = self._is_question_echo(question, answer)
+                candidate_count = int(trace.get("lif_retrieval_candidates", 0) or 0)
+                lif_score = trace.get("lif_retrieval_score")
+                source_counts[source] = source_counts.get(source, 0) + 1
+                total_f1 += f1
+                exact_matches += int(exact)
+                abstentions += int(abstained)
+                echoes += int(echoed)
+                lif_candidates += int(candidate_count > 0)
+                lif_used += int(source in {"lif_associative_readout", "lif_conditioned_llm"})
+                if lif_score is not None:
+                    lif_scores.append(float(lif_score))
+                cases.append({
+                    "question": question,
+                    "expected_answer": expected,
+                    "answer": answer,
+                    "response_source": source,
+                    "exact_match": exact,
+                    "token_f1": f1,
+                    "abstained": abstained,
+                    "question_echo": echoed,
+                    "lif_candidate_count": candidate_count,
+                    "lif_retrieval_score": lif_score,
+                })
+        finally:
+            self.agent.memory.knowledge = original_knowledge
+            self.agent.episodic.items = original_episodes
+
+        count = len(qa_test)
+        metrics = {
+            "exact_match": exact_matches / count if count else None,
+            "token_f1": total_f1 / count if count else None,
+            "abstention_rate": abstentions / count if count else None,
+            "question_echo_rate": echoes / count if count else None,
+            "lif_candidate_rate": lif_candidates / count if count else None,
+            "lif_used_rate": lif_used / count if count else None,
+            "mean_lif_retrieval_score": (
+                sum(lif_scores) / len(lif_scores) if lif_scores else None
+            ),
+            "source_distribution": source_counts,
+        }
+        return {
+            "samples": count,
+            "metrics": metrics,
+            "cases": cases,
+            "protocol": {
+                "llm_enabled": bool(include_llm),
+                "response_recording": False,
+                "exact_test_questions_excluded": True,
+                "test_data_used_for_training": False,
+                "quality_metric_note": (
+                    "Token F1 e exact match são proxies de correspondência textual; "
+                    "não comprovam factualidade nem compreensão geral."
+                ),
+            },
+        }
+
+    def evaluate(self, threshold=0.25, ks=(1, 3, 5), include_llm=False):
         """Benchmark reproduzível de recuperação e classificação contrastiva."""
         threshold = float(threshold)
         if not -1.0 <= threshold <= 1.0:
@@ -384,9 +507,12 @@ class LearningEngine:
             "mean_negative_similarity": sum(negative) / len(negative) if negative else None,
             "decision_threshold": threshold,
         }
+        cognition = self.evaluate_cognition(qa_test, include_llm=include_llm)
+
         return {
             "retrieval": retrieval,
             "contrastive": contrastive,
+            "cognition": cognition,
             "protocol": {
                 "test_qa_samples": len(qa_test),
                 "test_pair_samples": len(pair_test),

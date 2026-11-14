@@ -63,7 +63,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 ## Arquitetura atual
 
 - **Semantic Encoder:** embeddings treináveis de palavras e bigramas, inicialização determinística e aprendizado contrastivo.
-- **LIF/STDP:** rede recorrente experimental com telemetria de disparos e plasticidade somente durante aprendizado/feedback explícitos.
+- **LIF/STDP:** rede recorrente experimental com telemetria de disparos e plasticidade somente durante aprendizado explícito; avaliações de resposta não alteram pesos.
 - **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
 - **Attention:** memória de trabalho e priorização de contexto.
 - **Mental Map:** grafo associativo lexical.

@@ -101,6 +101,14 @@ class NeuralTextDecoderTests(unittest.TestCase):
             self.assertTrue(ai.last_trace["decoder_accepted"])
             self.assertGreater(ai.last_trace["decoder_token_count"], 0)
 
+    def test_lif_context_is_deterministic_for_same_question(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            first = ai._lif_forward("Pergunta de contexto determinístico")[0]
+            second = ai._lif_forward("Pergunta de contexto determinístico")[0]
+
+            self.assertEqual(first, second)
+
     def test_agent_persists_and_reloads_trained_decoder(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

@@ -38,6 +38,8 @@ A mudança proposta é local, reversível e não altera o formato persistido dos
 | [#22 — Recurrent LIF surrogate-gradient learning](https://github.com/SANTZSPAXX/NixLMs/pull/22) | merged | BPTT com surrogate gradients e objetivo contrastivo sobre representações ocultas. |
 | [#23 — Consent-gated Ollama setup](https://github.com/SANTZSPAXX/NixLMs/pull/23) | open, draft | Única PR aberta encontrada; análise de segurança na seção 7. |
 
+No instante da auditoria, a PR #23 era a única PR aberta. A PR #24 é esta PR documental, criada depois da inspeção; contém somente este plano e não altera código de produção.
+
 As PRs #3, #4 e #5 do agendador 0.6 estão fechadas sem merge; a implementação final foi integrada pela PR #6. Não reabrir nem editar essas PRs sem autorização.
 
 ### CI e testes

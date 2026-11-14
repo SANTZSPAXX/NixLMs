@@ -9,6 +9,14 @@ from nixlms_core.decoder import NeuralTextDecoder
 
 
 class NeuralTextDecoderTests(unittest.TestCase):
+    def test_initial_decoder_state_depends_on_lif_context(self):
+        decoder = NeuralTextDecoder(context_size=2, hidden_size=8, embedding_size=8, seed=17)
+
+        left = decoder._initial_hidden([1.0, 0.0])
+        right = decoder._initial_hidden([0.0, 1.0])
+
+        self.assertNotEqual(left, right)
+
     def test_teacher_forcing_training_reduces_sequence_loss(self):
         decoder = NeuralTextDecoder(
             context_size=4, hidden_size=12, embedding_size=12,

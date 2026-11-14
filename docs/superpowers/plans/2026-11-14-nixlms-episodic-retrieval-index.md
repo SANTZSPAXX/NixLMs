@@ -1,8 +1,8 @@
 # NixLMs — Plano técnico do ciclo 2026-11-14
 
 **Status:** planejamento para o ciclo da tarde; nenhuma alteração de código de produção foi feita neste ciclo.  
-**Base auditada:** \`main\` em \`135f480addc43dd270ea7a08b97da6496b651445\` (merge da PR #22).  
-**Branch deste documento:** \`docs/plan-2026-11-14-episodic-index\`.
+**Base auditada:** `main` em `135f480addc43dd270ea7a08b97da6496b651445` (merge da PR #22).  
+**Branch deste documento:** `docs/plan-2026-11-14-episodic-index`.
 
 ## 1. Resumo executivo
 
@@ -10,26 +10,26 @@ A evolução recente já adicionou memória episódica persistente, benchmark co
 
 A prioridade recomendada para a tarde é **otimizar a recuperação episódica para CPU por meio de cache de embeddings limitado e codificação em lote das entradas ausentes**.
 
-O motivo é concreto: \`EpisodicMemory.recall()\` percorre os episódios e, quando há encoder semântico, chama \`encode_passage()\` para cada episódio em toda consulta. O backend E5 implementa essa chamada com \`model.encode([um_texto], batch_size=1)\`. Com o limite atual de até 2.000 episódios, isso pode repetir milhares de inferências do encoder por mensagem. A memória QA já mantém cache de embeddings; a memória episódica ainda não.
+O motivo é concreto: `EpisodicMemory.recall()` percorre os episódios e, quando há encoder semântico, chama `encode_passage()` para cada episódio em toda consulta. O backend E5 implementa essa chamada com `model.encode([um_texto], batch_size=1)`. Com o limite atual de até 2.000 episódios, isso pode repetir milhares de inferências do encoder por mensagem. A memória QA já mantém cache de embeddings; a memória episódica ainda não.
 
-A mudança proposta é local, reversível e não altera o formato persistido dos episódios. O cache será apenas em memória, com limite explícito, chaveado por conteúdo e identidade/versão do encoder. O backend opcional poderá codificar faltas em pequenos lotes, mantendo prefixo \`passage:\`, CPU e carregamento exclusivamente local.
+A mudança proposta é local, reversível e não altera o formato persistido dos episódios. O cache será apenas em memória, com limite explícito, chaveado por conteúdo e identidade/versão do encoder. O backend opcional poderá codificar faltas em pequenos lotes, mantendo prefixo `passage:`, CPU e carregamento exclusivamente local.
 
 ## 2. Auditoria do repositório
 
 ### Estado GitHub
 
 - Repositório público: [SANTZSPAXX/NixLMs](https://github.com/SANTZSPAXX/NixLMs).
-- Branch padrão: \`main\`; HEAD auditado: \`135f480addc43dd270ea7a08b97da6496b651445\`.
-- A branch \`main\` aparece como não protegida na listagem de branches. Nenhuma configuração foi alterada.
+- Branch padrão: `main`; HEAD auditado: `135f480addc43dd270ea7a08b97da6496b651445`.
+- A branch `main` aparece como não protegida na listagem de branches. Nenhuma configuração foi alterada.
 - Há branches históricas de implementações já integradas e branches de PRs fechadas. Não foram excluídas nem atualizadas.
 - Não há issue aberta retornada pela consulta ao repositório.
-- Não existe plano versionado para 2026-11-14 no diretório \`docs/superpowers/plans\`; o plano anterior visível é o de 2026-11-13 para a evolução 0.5.
+- Não existe plano versionado para 2026-11-14 no diretório `docs/superpowers/plans`; o plano anterior visível é o de 2026-11-13 para a evolução 0.5.
 
 ### Pull requests relevantes
 
 | PR | Estado observado | Observação |
 |---|---|---|
-| [#6 — NixLMs 0.6 Persistent Cognitive Scheduler](https://github.com/SANTZSPAXX/NixLMs/pull/6) | merged | A evolução 0.6 está integrada em \`main\`; não está pendente. |
+| [#6 — NixLMs 0.6 Persistent Cognitive Scheduler](https://github.com/SANTZSPAXX/NixLMs/pull/6) | merged | A evolução 0.6 está integrada em `main`; não está pendente. |
 | [#7 — NixLMs 0.7 memória episódica](https://github.com/SANTZSPAXX/NixLMs/pull/7) | merged | Memória episódica estruturada e recuperação híbrida integradas. |
 | [#16 — Integrated cognitive response benchmark](https://github.com/SANTZSPAXX/NixLMs/pull/16) | merged | Benchmark end-to-end e modo sem persistência durante avaliação. |
 | [#19 — Autoregressive neural decoder](https://github.com/SANTZSPAXX/NixLMs/pull/19) | merged | Decoder RNN condicionado pela saída LIF. |
@@ -42,10 +42,10 @@ As PRs #3, #4 e #5 do agendador 0.6 estão fechadas sem merge; a implementação
 
 ### CI e testes
 
-- Workflow: \`.github/workflows/tests.yml\`.
+- Workflow: `.github/workflows/tests.yml`.
 - Matriz configurada: Ubuntu com Python 3.10, 3.11 e 3.12; Windows com Python 3.12.
-- No HEAD de \`main\`, o endpoint de check-runs retornou 8 verificações concluídas com sucesso, correspondentes a dois conjuntos de 4 jobs. Run mais recente observado para esse HEAD: [43579135998](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43579135998).
-- Na PR #23, o último run observado para o HEAD \`63b34cbd6433270cbb1cc2d0ea4a935ec49a7625\` concluiu 4/4 jobs com sucesso: [43579532053](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43579532053).
+- No HEAD de `main`, o endpoint de check-runs retornou 8 verificações concluídas com sucesso, correspondentes a dois conjuntos de 4 jobs. Run mais recente observado para esse HEAD: [43579135998](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43579135998).
+- Na PR #23, o último run observado para o HEAD `63b34cbd6433270cbb1cc2d0ea4a935ec49a7625` concluiu 4/4 jobs com sucesso: [43579532053](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43579532053).
 - A PR #23 teve execuções anteriores com falha em commits intermediários; o HEAD atual observado está verde.
 - Não foram executados testes locais neste ciclo. A leitura dos arquivos de teste não equivale à execução da suíte.
 - A CI não cobre Linux ARM64; a compatibilidade ARM64 permanece sem evidência automatizada neste workflow.
@@ -67,7 +67,7 @@ Essas divergências devem ser corrigidas em uma tarefa documental própria, sem 
 - A memória episódica é persistente, estruturada, recuperável e recebe feedback explícito.
 - A recuperação combina relevância lexical/semântica, recência, importância e feedback.
 - Ainda não existe consolidação/reflexão de experiências em representações derivadas de nível superior.
-- \`prune()\` apenas mantém os últimos \`max_items\`; não prioriza episódios antigos com importância ou feedback positivo. O housekeeping atual também não consolida experiências.
+- `prune()` apenas mantém os últimos `max_items`; não prioriza episódios antigos com importância ou feedback positivo. O housekeeping atual também não consolida experiências.
 - A recuperação semântica de episódios recalcula embeddings de passagens a cada consulta, diferentemente da memória QA, que já possui cache.
 
 ### Representação semântica
@@ -79,13 +79,13 @@ Essas divergências devem ser corrigidas em uma tarefa documental própria, sem 
 
 ### Avaliação em português brasileiro
 
-O arquivo \`datasets/starter_ptbr.jsonl\` é pequeno: 9 exemplos QA de treino, 7 de validação e 4 de teste, além de 4 pares contrastivos de treino e 2 de teste. O split de teste atual não sustenta conclusões estatísticas fortes.
+O arquivo `datasets/starter_ptbr.jsonl` é pequeno: 9 exemplos QA de treino, 7 de validação e 4 de teste, além de 4 pares contrastivos de treino e 2 de teste. O split de teste atual não sustenta conclusões estatísticas fortes.
 
-ASSIN 2 é uma referência útil para similaridade textual e inferência textual em português, mas não substitui um benchmark de memória conversacional. O dataset \`nilc-nlp/assin2\` exibe licença “unknown” no Hugging Face; não copiar nem redistribuir seus dados no repositório antes de confirmar os termos aplicáveis. LongMemEval oferece uma taxonomia mais completa de memória de longo prazo, mas é um benchmark de conversas em inglês e com históricos extensos; deve servir como referência de desenho, não como substituto direto do teste PT-BR.
+ASSIN 2 é uma referência útil para similaridade textual e inferência textual em português, mas não substitui um benchmark de memória conversacional. O dataset `nilc-nlp/assin2` exibe licença “unknown” no Hugging Face; não copiar nem redistribuir seus dados no repositório antes de confirmar os termos aplicáveis. LongMemEval oferece uma taxonomia mais completa de memória de longo prazo, mas é um benchmark de conversas em inglês e com históricos extensos; deve servir como referência de desenho, não como substituto direto do teste PT-BR.
 
 ### Planejamento e metacognição
 
-- \`GoalManager\` persiste objetivos, etapas, dependências e próximas ações.
+- `GoalManager` persiste objetivos, etapas, dependências e próximas ações.
 - Não há decomposição hierárquica mais rica, estimativa de custo/risco ou replanning baseado em resultados observados.
 - O runtime já expõe traces, métricas, calibração do readout LIF e do decoder.
 - Ainda não há estimativa global e calibrada de incerteza que combine recuperação, fatos, episódios, decoder e abstenção. Os limiares existentes são específicos de módulos/tarefas.
@@ -110,11 +110,11 @@ ASSIN 2 é uma referência útil para similaridade textual e inferência textual
 Alternativas consideradas:
 
 1. **Recalcular tudo a cada pergunta:** simples e sem estado auxiliar, mas desperdiça inferência do encoder.
-2. **Codificar todos os episódios em lote a cada pergunta:** reduz overhead de chamadas e aproveita \`batch_size\`, mas continua repetindo o trabalho em cada turno.
+2. **Codificar todos os episódios em lote a cada pergunta:** reduz overhead de chamadas e aproveita `batch_size`, mas continua repetindo o trabalho em cada turno.
 3. **Persistir embeddings em SQLite:** reduz trabalho após reinício, mas adiciona esquema, migração, invalidação persistente e risco de cache obsoleto; é desnecessário para a primeira melhoria.
 4. **Cache em memória, limitado e com fingerprint, mais lote somente para misses:** mantém a fonte de verdade atual, não cria migração e evita reprocessar passagens já vistas. **Alternativa escolhida.**
 
-A documentação oficial do [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/model.html) aceita listas de textos em \`encode()\` e afirma que ajustar \`batch_size\` pode melhorar significativamente a velocidade, devendo ser medido para o hardware/modelo. O [model card do multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) especifica os prefixos \`query:\` e \`passage:\`, 12 camadas, dimensão 384, 94 idiomas e licença MIT.
+A documentação oficial do [Sentence Transformers](https://sbert.net/docs/package_reference/sentence_transformer/model.html) aceita listas de textos em `encode()` e afirma que ajustar `batch_size` pode melhorar significativamente a velocidade, devendo ser medido para o hardware/modelo. O [model card do multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) especifica os prefixos `query:` e `passage:`, 12 camadas, dimensão 384, 94 idiomas e licença MIT.
 
 ### Benchmark PT-BR
 
@@ -128,7 +128,7 @@ A documentação oficial do [Sentence Transformers](https://sbert.net/docs/packa
 
 ### Problema
 
-Com o backend E5 habilitado, cada chamada a \`EpisodicMemory.recall()\` codifica novamente cada passagem de cada episódio. O limite atual é de 2.000 itens. O caminho de recuperação episódica é executado em respostas normais, então a latência cresce com o tamanho da memória e o número de inferências do encoder por turno.
+Com o backend E5 habilitado, cada chamada a `EpisodicMemory.recall()` codifica novamente cada passagem de cada episódio. O limite atual é de 2.000 itens. O caminho de recuperação episódica é executado em respostas normais, então a latência cresce com o tamanho da memória e o número de inferências do encoder por turno.
 
 ### Hipótese
 
@@ -136,25 +136,25 @@ Se cada embedding de passagem for calculado uma vez por conteúdo/versão do enc
 
 ### Desenho proposto
 
-1. Adicionar à \`EpisodicMemory\` um cache LRU em memória, limitado por \`max_items\` ou por um limite configurável. Não persistir embeddings no JSON.
+1. Adicionar à `EpisodicMemory` um cache LRU em memória, limitado por `max_items` ou por um limite configurável. Não persistir embeddings no JSON.
 2. Chavear cada entrada por ID estável do episódio (ou hash de conteúdo para registros legados), fingerprint do texto efetivamente codificado e fingerprint do encoder.
-3. O fingerprint do encoder deve distinguir pelo menos tipo/dimensões, versão de atualização nativa e configuração do backend pré-treinado (caminho local, comprimento máximo e identidade da instância/modelo carregado). Não depender apenas de \`updates=0\` para distinguir encoders diferentes.
-4. Guardar vetores compactos (preferencialmente \`array('f')\` quando compatível com \`cosine()\`) para limitar RAM. Com 2.000 vetores de 384 dimensões float32, o payload bruto fica em aproximadamente 2,93 MiB, sem contar metadados.
-5. Adicionar \`encode_passages(texts, batch_size=...)\` ao backend E5 opcional. Usar o prefixo \`passage: \`, normalização e CPU já existentes. Processar misses em chunks pequenos; começar com batch conservador 8 e medir 8/16/32 no benchmark manual.
-6. Encoders sem API de lote devem continuar funcionando com fallback para \`encode_passage()\`, mas seus resultados também devem ser cacheados.
-7. A consulta continua sendo codificada a cada chamada com \`encode_query()\`. Feedback, recência e importância continuam fazendo parte do score em tempo de consulta e não devem forçar re-encoding do texto.
+3. O fingerprint do encoder deve distinguir pelo menos tipo/dimensões, versão de atualização nativa e configuração do backend pré-treinado (caminho local, comprimento máximo e identidade da instância/modelo carregado). Não depender apenas de `updates=0` para distinguir encoders diferentes.
+4. Guardar vetores compactos (preferencialmente `array('f')` quando compatível com `cosine()`) para limitar RAM. Com 2.000 vetores de 384 dimensões float32, o payload bruto fica em aproximadamente 2,93 MiB, sem contar metadados.
+5. Adicionar `encode_passages(texts, batch_size=...)` ao backend E5 opcional. Usar o prefixo `passage: `, normalização e CPU já existentes. Processar misses em chunks pequenos; começar com batch conservador 8 e medir 8/16/32 no benchmark manual.
+6. Encoders sem API de lote devem continuar funcionando com fallback para `encode_passage()`, mas seus resultados também devem ser cacheados.
+7. A consulta continua sendo codificada a cada chamada com `encode_query()`. Feedback, recência e importância continuam fazendo parte do score em tempo de consulta e não devem forçar re-encoding do texto.
 8. Conteúdo alterado, encoder alterado ou versão de pesos alterada deve invalidar somente as entradas afetadas. Evicção e remoção de episódios devem liberar entradas correspondentes.
-9. Expor contadores simples de hits, misses, evictions e passagens codificadas em \`stats()\`/diagnóstico, sem gravar telemetria sensível no disco.
+9. Expor contadores simples de hits, misses, evictions e passagens codificadas em `stats()`/diagnóstico, sem gravar telemetria sensível no disco.
 
 ### Arquivos prováveis
 
-- Modificar: \`nixlms_core/episodic.py\`
-- Modificar: \`nixlms_core/pretrained_encoder.py\`
-- Modificar: \`tests/test_episodic_memory.py\`
-- Modificar ou criar testes em: \`tests/test_evolution.py\`
-- Atualizar: \`README.md\` e \`CHANGELOG.md\` somente para documentar o comportamento entregue.
+- Modificar: `nixlms_core/episodic.py`
+- Modificar: `nixlms_core/pretrained_encoder.py`
+- Modificar: `tests/test_episodic_memory.py`
+- Modificar ou criar testes em: `tests/test_evolution.py`
+- Atualizar: `README.md` e `CHANGELOG.md` somente para documentar o comportamento entregue.
 
-Não modificar \`main\`; implementar em branch nova derivada do HEAD mais recente no início do ciclo da tarde. Não reaproveitar a branch deste documento para código de produção se ela já tiver sido usada para outro trabalho.
+Não modificar `main`; implementar em branch nova derivada do HEAD mais recente no início do ciclo da tarde. Não reaproveitar a branch deste documento para código de produção se ela já tiver sido usada para outro trabalho.
 
 ### Critérios de aceitação
 
@@ -180,7 +180,7 @@ Não modificar \`main\`; implementar em branch nova derivada do HEAD mais recent
 
 ### Rollback
 
-O cache é volátil e não altera \`episodic_memory.json\`, pesos, datasets ou checkpoints. Se houver regressão, reverter o commit da branch/PR draft e retornar ao caminho atual sem migração de dados. Não promover alterações automaticamente.
+O cache é volátil e não altera `episodic_memory.json`, pesos, datasets ou checkpoints. Se houver regressão, reverter o commit da branch/PR draft e retornar ao caminho atual sem migração de dados. Não promover alterações automaticamente.
 
 ## 6. Backlog técnico após esta prioridade
 
@@ -193,24 +193,24 @@ O cache é volátil e não altera \`episodic_memory.json\`, pesos, datasets ou c
 
 ## 7. Observações da PR #23 (sem alteração da PR existente)
 
-A PR [#23](https://github.com/SANTZSPAXX/NixLMs/pull/23) está aberta em draft, base \`main\`, com 9 arquivos alterados, 20 commits e 518 adições/43 remoções. O HEAD observado é \`63b34cbd6433270cbb1cc2d0ea4a935ec49a7625\`; o CI mais recente observado passou em 4/4 jobs. Não havia reviews nem comentários retornados.
+A PR [#23](https://github.com/SANTZSPAXX/NixLMs/pull/23) está aberta em draft, base `main`, com 9 arquivos alterados, 20 commits e 518 adições/43 remoções. O HEAD observado é `63b34cbd6433270cbb1cc2d0ea4a935ec49a7625`; o CI mais recente observado passou em 4/4 jobs. Não havia reviews nem comentários retornados.
 
-**Ponto de segurança que merece correção/revisão antes de remover o draft:** \`OllamaManager.start_service()\` verifica que o endpoint usado pelo cliente é loopback, mas inicia \`ollama serve\` herdando o ambiente do processo. A documentação oficial do Ollama informa que \`OLLAMA_HOST\` controla o endereço de bind do servidor e pode ser configurado como \`0.0.0.0\`. Assim, um ambiente com \`OLLAMA_HOST=0.0.0.0:11434\` pode fazer o serviço escutar em todas as interfaces enquanto o cliente NixLMs continua consultando \`127.0.0.1\`. O mesmo risco existe quando a PR encontra um serviço já ativo: a conectividade local não prova que o bind é local.
+**Ponto de segurança que merece correção/revisão antes de remover o draft:** `OllamaManager.start_service()` verifica que o endpoint usado pelo cliente é loopback, mas inicia `ollama serve` herdando o ambiente do processo. A documentação oficial do Ollama informa que `OLLAMA_HOST` controla o endereço de bind do servidor e pode ser configurado como `0.0.0.0`. Assim, um ambiente com `OLLAMA_HOST=0.0.0.0:11434` pode fazer o serviço escutar em todas as interfaces enquanto o cliente NixLMs continua consultando `127.0.0.1`. O mesmo risco existe quando a PR encontra um serviço já ativo: a conectividade local não prova que o bind é local.
 
-Antes de afirmar “loopback-only”, o fluxo gerenciado deve forçar/validar o bind \`127.0.0.1:11434\` e testar o caso de ambiente herdado com \`OLLAMA_HOST\` não local. Para um serviço preexistente cujo bind não possa ser verificado de forma portátil, o diagnóstico deve dizer “endpoint local acessível; bind do servidor não verificado”, não afirmar isolamento de rede. Referência: [FAQ oficial do Ollama](https://github.com/ollama/ollama/blob/main/docs/faq.md).
+Antes de afirmar “loopback-only”, o fluxo gerenciado deve forçar/validar o bind `127.0.0.1:11434` e testar o caso de ambiente herdado com `OLLAMA_HOST` não local. Para um serviço preexistente cujo bind não possa ser verificado de forma portátil, o diagnóstico deve dizer “endpoint local acessível; bind do servidor não verificado”, não afirmar isolamento de rede. Referência: [FAQ oficial do Ollama](https://github.com/ollama/ollama/blob/main/docs/faq.md).
 
-Observação secundária: no Linux, a instalação do Ollama pode executar \`apt-get update\` e instalar \`zstd\` como pré-requisito. Essa alteração de pacote de sistema deve ficar explícita no resumo de consentimento ou receber confirmação própria. Nenhuma dessas observações foi publicada como comentário nem aplicada à PR #23.
+Observação secundária: no Linux, a instalação do Ollama pode executar `apt-get update` e instalar `zstd` como pré-requisito. Essa alteração de pacote de sistema deve ficar explícita no resumo de consentimento ou receber confirmação própria. Nenhuma dessas observações foi publicada como comentário nem aplicada à PR #23.
 
 ## 8. Próxima ação
 
-O ciclo da tarde deve começar confirmando novamente o HEAD de \`main\`, branches e PRs; criar uma branch exclusiva de implementação a partir do SHA atual; executar testes primeiro; implementar somente o cache/batching episódico; revisar diff e compatibilidade; aguardar CI real; abrir PR draft. Não fazer merge, release, deploy, alteração de configurações ou modificação de PR existente.
+O ciclo da tarde deve começar confirmando novamente o HEAD de `main`, branches e PRs; criar uma branch exclusiva de implementação a partir do SHA atual; executar testes primeiro; implementar somente o cache/batching episódico; revisar diff e compatibilidade; aguardar CI real; abrir PR draft. Não fazer merge, release, deploy, alteração de configurações ou modificação de PR existente.
 
 ## Referências externas
 
 - Park et al., *Generative Agents: Interactive Simulacra of Human Behavior*: https://arxiv.org/abs/2304.03442
 - Wu et al., *LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory*: https://arxiv.org/abs/2410.10813
-- Sentence Transformers — API \`encode()\` e parâmetro \`batch_size\`: https://sbert.net/docs/package_reference/sentence_transformer/model.html
+- Sentence Transformers — API `encode()` e parâmetro `batch_size`: https://sbert.net/docs/package_reference/sentence_transformer/model.html
 - intfloat/multilingual-e5-small — model card, idioma, dimensão, licença e prefixos: https://huggingface.co/intfloat/multilingual-e5-small
 - ASSIN 2 — proceedings da shared task: https://ceur-ws.org/Vol-2583/
 - ASSIN 2 — dataset card; licença reportada como desconhecida: https://huggingface.co/datasets/nilc-nlp/assin2
-- Ollama — FAQ oficial sobre bind e \`OLLAMA_HOST\`: https://github.com/ollama/ollama/blob/main/docs/faq.md
+- Ollama — FAQ oficial sobre bind e `OLLAMA_HOST`: https://github.com/ollama/ollama/blob/main/docs/faq.md

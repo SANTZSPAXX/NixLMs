@@ -269,7 +269,7 @@ class NixLMsNeuralCore:
             return f"Hoje é {date_text}."
         return f"Agora são {time_text}."
 
-    def respond(self, message, use_language=True):
+    def respond(self, message, use_language=True, record=True):
         text = str(message).strip()
         if not text:
             return "Digite uma mensagem para começarmos."
@@ -285,7 +285,8 @@ class NixLMsNeuralCore:
         )
         lif_ranked = self._lif_recall(output, limit=3)
 
-        self.mental_map.observe(text)
+        if record:
+            self.mental_map.observe(text)
         ranked = self._recall(text, limit=8)
         candidates = [
             {"question": item.get("question", ""), "answer": item.get("answer", ""),
@@ -395,8 +396,9 @@ class NixLMsNeuralCore:
                       "com /ensinar pergunta => resposta ou treinar pares semânticos.")
             source = 'fallback'
 
-        self.attention.attend_message("user", text, priority=attention_state["priority"])
-        self.attention.attend_message("assistant", answer, priority=attention_state["priority"])
+        if record:
+            self.attention.attend_message("user", text, priority=attention_state["priority"])
+            self.attention.attend_message("assistant", answer, priority=attention_state["priority"])
         self.last_question = text
         self.last_trace = {
             "eeg_bands": energies, "eeg_state": eeg_state,
@@ -426,15 +428,17 @@ class NixLMsNeuralCore:
             "episodic_experiences_recalled": len(episodic_context),
             "encoder": "trainable_word_bigram_contrastive"
         }
-        self.memory.add_episode("user", text)
-        self.memory.add_episode("assistant", answer)
-        self.episodic.record(
-            text, answer,
-            context={"response_source": source, "confidence": confidence,
-                     "world_fact_sources": self.last_trace["world_fact_sources"]},
-            outcome="response_generated", source=source,
-            importance=max(0.0, min(1.0, float(confidence))),
-        )
+        if record:
+            self.memory.add_episode("user", text)
+            self.memory.add_episode("assistant", answer)
+            self.episodic.record(
+                text, answer,
+                context={"response_source": source, "confidence": confidence,
+                         "world_fact_sources": self.last_trace["world_fact_sources"]},
+                outcome="response_generated", source=source,
+                importance=max(0.0, min(1.0, float(confidence))),
+            )
+    
         return answer
 
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,

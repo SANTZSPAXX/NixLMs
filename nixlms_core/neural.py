@@ -432,16 +432,33 @@ class LIFNetwork:
             matrices = [wi, wr, wo]
             if any(not math.isfinite(float(v)) for matrix in matrices for row in matrix for v in row):
                 return False
+            output_updates = max(0, int(state.get("output_updates", 0)))
+            recurrent_updates = max(0, int(state.get("recurrent_updates", 0)))
+
+            ei, er = state.get("eligibility_in"), state.get("eligibility_rec")
+            new_ei = self.eligibility_in
+            new_er = self.eligibility_rec
+            if ei is not None and len(ei) == self.hidden_size and all(
+                len(r) == self.input_size for r in ei
+            ):
+                new_ei = [[float(v) for v in row] for row in ei]
+                if any(not math.isfinite(v) for row in new_ei for v in row):
+                    return False
+            if er is not None and len(er) == self.hidden_size and all(
+                len(r) == self.hidden_size for r in er
+            ):
+                new_er = [[float(v) for v in row] for row in er]
+                if any(not math.isfinite(v) for row in new_er for v in row):
+                    return False
+
             self.w_in = [[float(v) for v in row] for row in wi]
             self.w_rec = [[float(v) for v in row] for row in wr]
             self.w_out = [[float(v) for v in row] for row in wo]
-            self.output_updates = max(0, int(state.get("output_updates", 0)))
-            self.recurrent_updates = max(0, int(state.get("recurrent_updates", 0)))
-            ei, er = state.get("eligibility_in"), state.get("eligibility_rec")
-            if ei is not None and len(ei) == self.hidden_size and all(len(r) == self.input_size for r in ei):
-                self.eligibility_in = [[float(v) for v in row] for row in ei]
-            if er is not None and len(er) == self.hidden_size and all(len(r) == self.hidden_size for r in er):
-                self.eligibility_rec = [[float(v) for v in row] for row in er]
+            self.output_updates = output_updates
+            self.recurrent_updates = recurrent_updates
+            self.eligibility_in = new_ei
+            self.eligibility_rec = new_er
             return True
         except (KeyError, TypeError, ValueError, OverflowError):
             return False
+

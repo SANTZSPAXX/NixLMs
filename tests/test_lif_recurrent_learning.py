@@ -81,6 +81,30 @@ class LIFRecurrentLearningTests(unittest.TestCase):
         self.assertTrue(legacy_restored.load_state_dict(legacy))
         self.assertEqual(legacy_restored.recurrent_updates, 0)
 
+    def test_lif_validation_benchmark_uses_validation_pairs_only_without_updates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            ai.learning.dataset.add_pair(
+                "estou feliz", "estou contente", 1, "validation"
+            )
+            ai.learning.dataset.add_pair(
+                "o céu é azul", "um número é par", 0, "validation"
+            )
+            ai.learning.dataset.add_pair(
+                "teste positivo", "teste semelhante", 1, "test"
+            )
+            before = ai.network.state_dict()
+
+            report = ai.learning.evaluate_lif_representations()
+
+            self.assertEqual(report["samples"], 2)
+            self.assertEqual(report["positive_samples"], 1)
+            self.assertEqual(report["negative_samples"], 1)
+            self.assertTrue(report["protocol"]["validation_split_used"])
+            self.assertFalse(report["protocol"]["test_split_used"])
+            self.assertFalse(report["protocol"]["weights_updated"])
+            self.assertEqual(ai.network.state_dict(), before)
+
     def test_learning_engine_trains_lif_recurrence_from_qa_and_contrastive_pairs(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

@@ -68,11 +68,38 @@ def _objective_command(ai, message):
         print("Falha no objetivo:", exc)
 
 
+def _scheduler_command(ai, message):
+    parts = message.split()
+    if len(parts) < 2:
+        print("Use /agenda listar|criar|uma-vez|cancelar|executar ...")
+        return
+    action = parts[1].lower()
+    try:
+        if action == "listar":
+            print(ai.scheduler.list_jobs())
+        elif action == "criar" and len(parts) == 4:
+            job_id = ai.scheduler.schedule_interval(parts[2], float(parts[3]))
+            print("Tarefa recorrente criada:", job_id)
+        elif action == "uma-vez" and len(parts) == 4:
+            job_id = ai.scheduler.schedule_once(parts[2], delay_seconds=float(parts[3]))
+            print("Tarefa única criada:", job_id)
+        elif action == "cancelar" and len(parts) == 3:
+            print("Cancelada." if ai.scheduler.cancel(parts[2]) else
+                  "Tarefa não encontrada, já iniciada ou não está pendente.")
+        elif action == "executar" and len(parts) == 2:
+            print("Tarefas processadas:", ai.scheduler.run_due())
+        else:
+            print("Uso: /agenda listar | criar HANDLER SEGUNDOS | uma-vez HANDLER SEGUNDOS | cancelar ID | executar")
+    except (ValueError, TypeError) as exc:
+        print("Falha no agendamento:", exc)
+
+
 def main():
     ai = NixLMsNeuralCore()
     print("NixLMs Neural Core 0.5.0 | Balanced Cognitive Evolution")
     print("LLM local:", "disponível" if ai.language.available() else "não detectado; fallback para memória")
     print("Digite /ajuda para comandos.")
+    ai.scheduler.start()
     while True:
         try:
             msg = input("Você: ").strip()
@@ -112,6 +139,9 @@ def main():
                 ))
             except ValueError as exc:
                 print("Falha ao registrar fato:", exc)
+            continue
+        if low.startswith("/agenda"):
+            _scheduler_command(ai, msg)
             continue
         if low.startswith("/objetivo"):
             _objective_command(ai, msg)
@@ -170,6 +200,7 @@ def main():
                 print(exc)
             continue
         print("NixLMs:", ai.respond(msg))
+    ai.scheduler.stop()
 
 
 if __name__ == "__main__":

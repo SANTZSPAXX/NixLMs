@@ -12,3 +12,5 @@ class CoreConfig:
     seed: int = 42
     max_memory_items: int = 2000
     confidence_threshold: float = 0.12
+    lif_output_learning_rate: float = 0.025
+    lif_retrieval_threshold: float = 0.45

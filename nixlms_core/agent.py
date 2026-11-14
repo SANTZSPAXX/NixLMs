@@ -95,6 +95,52 @@ class NixLMsNeuralCore:
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
 
+    def _compress_neural_target(self, vector):
+        """Projeta o embedding semântico para a dimensão da leitura de saída LIF."""
+        size = self.network.output_size
+        buckets = [[] for _ in range(size)]
+        for index, value in enumerate(vector):
+            buckets[index % size].append(float(value))
+        compressed = [
+            sum(bucket) / len(bucket) if bucket else 0.0
+            for bucket in buckets
+        ]
+        magnitude = sum(value * value for value in compressed) ** .5
+        return [value / magnitude for value in compressed] if magnitude else compressed
+
+    @staticmethod
+    def _cosine_similarity(left, right):
+        if len(left) != len(right):
+            return 0.0
+        dot = sum(float(a) * float(b) for a, b in zip(left, right))
+        left_norm = sum(float(a) ** 2 for a in left) ** .5
+        right_norm = sum(float(b) ** 2 for b in right) ** .5
+        return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
+
+    def _lif_recall(self, neural_output, limit=3):
+        """Recupera respostas pela representação produzida pela rede LIF treinada."""
+        if self.network.output_updates <= 0:
+            return []
+        ranked = []
+        seen = set()
+        for item in self.memory.knowledge:
+            answer = str(item.get("answer", "")).strip()
+            key = normalize(answer)
+            if not answer or not key or key in seen:
+                continue
+            seen.add(key)
+            target = self._compress_neural_target(self.encoder.encode(answer))
+            score = self._cosine_similarity(neural_output, target)
+            ranked.append((score, item))
+        ranked.sort(key=lambda pair: pair[0], reverse=True)
+        threshold = float(self.config.lif_retrieval_threshold)
+        return [
+            {"question": item.get("question", ""), "answer": item.get("answer", ""),
+             "score": float(score), "source": "lif_associative_readout"}
+            for score, item in ranked[:max(0, int(limit))]
+            if score >= threshold
+        ]
+
     def _active_retrieval_encoder(self):
         if self.retrieval_encoder is self.encoder:
             return self.encoder
@@ -237,6 +283,7 @@ class NixLMsNeuralCore:
         output, hidden = self.network.forward(
             vector, modulation=.8 + eeg_state["focus"] * .4
         )
+        lif_ranked = self._lif_recall(output, limit=3)
 
         self.mental_map.observe(text)
         ranked = self._recall(text, limit=8)
@@ -275,6 +322,13 @@ class NixLMsNeuralCore:
             {"question": item.get("question"), "answer": item.get("answer")}
             for _, item in relevant_ranked[:3]
         ]
+        if lif_ranked:
+            memory_context.insert(0, {
+                "question": "Candidato de resposta recuperado pela leitura associativa LIF",
+                "answer": lif_ranked[0]["answer"],
+                "score": lif_ranked[0]["score"],
+                "source": "lif_associative_readout",
+            })
         episodic_encoder = self._active_retrieval_encoder()
         episodic_context = self.episodic.recall(text, episodic_encoder, limit=3)
         for _, episode in episodic_context:
@@ -294,7 +348,13 @@ class NixLMsNeuralCore:
         llm_attempted = (use_language and temporal_answer is None and user_name_answer is None and greeting_answer is None)
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
-            world_facts=world_facts, goals=goal_context
+            world_facts=world_facts, goals=goal_context,
+            neural_state={
+                "retrieved_responses": lif_ranked,
+                "output_updates": self.network.output_updates,
+                "output_norm": sum(value * value for value in output) ** .5,
+                "readout_trained": self.network.output_updates > 0,
+            }
         ) if llm_attempted else None
         llm_rejection_reason = None
         if llm_answer:
@@ -312,7 +372,10 @@ class NixLMsNeuralCore:
             answer, source = greeting_answer, 'greeting_rule'
             confidence = 1.0
         elif llm_answer:
-            answer, source = llm_answer, 'local_llm'
+            answer, source = llm_answer, 'lif_conditioned_llm' if lif_ranked else 'local_llm'
+        elif lif_ranked:
+            answer, source = lif_ranked[0]["answer"], "lif_associative_readout"
+            confidence = max(confidence, lif_ranked[0]["score"])
         elif selected:
             answer, source = selected.get("answer", ""), "semantic_memory"
         elif world_facts:
@@ -343,6 +406,15 @@ class NixLMsNeuralCore:
             "spike_activity": sum(self.network.last_spike_counts),
             "active_neurons": sum(1 for count in self.network.last_spike_counts if count > 0),
             "network_output_norm": sum(x * x for x in output) ** .5,
+            "lif_output_updates": self.network.output_updates,
+            "lif_retrieval_candidates": len(lif_ranked),
+            "lif_retrieval_score": lif_ranked[0]["score"] if lif_ranked else None,
+            "lif_candidate_conditioned_generation": bool(lif_ranked and llm_answer),
+            "neural_generation_path": (
+                "lif_conditioned_llm" if lif_ranked and llm_answer else
+                "lif_associative_readout" if lif_ranked else
+                "llm_without_trained_lif_readout" if llm_answer else "no_trained_lif_readout"
+            ),
             "response_source": source, "concepts": concepts,
             "llm_error": self.language.last_error if llm_attempted else None,
             "llm_rejection_reason": llm_rejection_reason,
@@ -376,6 +448,10 @@ class NixLMsNeuralCore:
         if reinforce:
             vector = self.encoder.encode(question)
             _, hidden = self.network.forward(vector, track_plasticity=True)
+            target = self._compress_neural_target(self.encoder.encode(answer))
+            self.network.train_output(
+                hidden, target, learning_rate=self.config.lif_output_learning_rate
+            )
             self.learner.reinforce(vector, hidden, reward)
             save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
         self.mental_map.observe(question, weight=1.2)

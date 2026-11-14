@@ -28,6 +28,34 @@ class LIFNetwork:
         self.last_spike_history = []
         self.eligibility_in = [[0.0] * self.input_size for _ in range(self.hidden_size)]
         self.eligibility_rec = [[0.0] * self.hidden_size for _ in range(self.hidden_size)]
+        self.output_updates = 0
+
+    def train_output(self, hidden, target, learning_rate=0.025):
+        """Treina a leitura supervisionada LIF -> representação semântica da resposta."""
+        if len(hidden) != self.hidden_size or len(target) != self.output_size:
+            raise ValueError("Dimensões incompatíveis para treinar a leitura de saída.")
+        values = [float(value) for value in list(hidden) + list(target)]
+        rate = float(learning_rate)
+        if not math.isfinite(rate) or rate <= 0:
+            raise ValueError("learning_rate deve ser finito e positivo.")
+        if any(not math.isfinite(value) for value in values):
+            raise ValueError("A leitura LIF recebeu valores não finitos.")
+        if any(abs(value) > 1.0 for value in target):
+            raise ValueError("O alvo da leitura LIF deve estar no intervalo [-1, 1].")
+        prediction = [
+            math.tanh(sum(w * h for w, h in zip(row, hidden)))
+            for row in self.w_out
+        ]
+        loss = sum((pred - float(expected)) ** 2
+                   for pred, expected in zip(prediction, target)) / self.output_size
+        for index, row in enumerate(self.w_out):
+            pred = prediction[index]
+            gradient = (2.0 * (pred - float(target[index])) *
+                        (1.0 - pred * pred) / self.output_size)
+            for j, activation in enumerate(hidden):
+                row[j] = max(-1.5, min(1.5, row[j] - rate * gradient * float(activation)))
+        self.output_updates += 1
+        return loss
 
     def forward(self, vector, modulation=1.0, state=None, track_plasticity=False):
         if len(vector) != self.input_size:
@@ -120,7 +148,8 @@ class LIFNetwork:
         return {
             "w_in": self.w_in, "w_rec": self.w_rec, "w_out": self.w_out,
             "eligibility_in": self.eligibility_in,
-            "eligibility_rec": self.eligibility_rec
+            "eligibility_rec": self.eligibility_rec,
+            "output_updates": self.output_updates
         }
 
     def load_state_dict(self, state):
@@ -139,6 +168,7 @@ class LIFNetwork:
             self.w_in = [[float(v) for v in row] for row in wi]
             self.w_rec = [[float(v) for v in row] for row in wr]
             self.w_out = [[float(v) for v in row] for row in wo]
+            self.output_updates = max(0, int(state.get("output_updates", 0)))
             ei, er = state.get("eligibility_in"), state.get("eligibility_rec")
             if ei is not None and len(ei) == self.hidden_size and all(len(r) == self.input_size for r in ei):
                 self.eligibility_in = [[float(v) for v in row] for row in ei]

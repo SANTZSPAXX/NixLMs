@@ -71,6 +71,28 @@ class OllamaDiagnosticsTests(unittest.TestCase):
         self.assertIn('"truncated": true', user_prompt)
         self.assertLess(len(user_prompt), 6000)
 
+    def test_lif_readout_is_passed_as_primary_language_conditioning(self):
+        engine = LanguageEngine()
+        responses = [
+            FakeResponse({"models": [{"name": "qwen2.5:0.5b"}]}),
+            FakeResponse({"message": {"content": "Resposta orientada pela leitura neural."}}),
+        ]
+        neural_state = {
+            "readout_trained": True, "output_updates": 12,
+            "retrieved_responses": [{
+                "answer": "A água reflete a luz.",
+                "score": 0.91, "source": "lif_associative_readout",
+            }],
+        }
+        with patch("nixlms_core.language.urlopen", side_effect=responses) as mocked:
+            answer = engine.generate("O que a água faz?", neural_state=neural_state)
+        self.assertIn("leitura neural", answer)
+        payload = json.loads(mocked.call_args_list[1].args[0].data.decode("utf-8"))
+        context = payload["messages"][1]["content"]
+        self.assertIn('"leitura_associativa_lif"', context)
+        self.assertIn("A água reflete a luz.", context)
+        self.assertIn("lif_associative_readout", context)
+
     def test_empty_model_list_still_reports_service_reachable(self):
         engine = LanguageEngine()
         with patch("nixlms_core.language.urlopen", return_value=FakeResponse({"models": []})):

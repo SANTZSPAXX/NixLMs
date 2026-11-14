@@ -221,6 +221,7 @@ class LearningEngine:
         rng = random.Random(seed)
         losses = []
         updates = 0
+        lif_losses = []
         for _ in range(epochs):
             batch = list(pairs)
             rng.shuffle(batch)
@@ -230,14 +231,33 @@ class LearningEngine:
                 )
                 losses.append(result["loss"])
                 updates += int(result["updated"])
+            # Treina a leitura depois da atualização contrastiva do encoder,
+            # mantendo os alvos semânticos alinhados aos embeddings atuais.
+            qa_batch = list(qa_rows)
+            rng.shuffle(qa_batch)
+            for row in qa_batch:
+                input_vector = self.agent.encoder.encode(row["question"])
+                _, hidden = self.agent.network.forward(input_vector)
+                target = self.agent._compress_neural_target(
+                    self.agent.encoder.encode(row["answer"])
+                )
+                lif_losses.append(self.agent.network.train_output(
+                    hidden, target,
+                    learning_rate=self.agent.config.lif_output_learning_rate
+                ))
 
         self.agent._save_encoder()
+        save_json(self.agent.data_dir / "neural_weights.json",
+                  self.agent.network.state_dict())
         self.last_training = {
             "qa_memories_upserted": len(qa_rows),
             "contrastive_pairs": len(pairs),
             "contrastive_updates": updates,
             "epochs": epochs,
             "mean_contrastive_loss": sum(losses) / len(losses) if losses else None,
+            "lif_output_updates": self.agent.network.output_updates,
+            "lif_qa_examples_trained": len(qa_rows),
+            "mean_lif_readout_loss": sum(lif_losses) / len(lif_losses) if lif_losses else None,
             "vocabulary_size": len(self.agent.encoder.vocab),
         }
         return dict(self.last_training)

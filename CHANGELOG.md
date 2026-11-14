@@ -1,5 +1,14 @@
 # Changelog
 
+## LIF-conditioned language generation
+
+- Added a supervised LIF output readout trained from QA question-to-answer examples.
+- Uses the recurrent network output to retrieve answer representations and condition the local language model with a primary neural candidate.
+- Uses the trained LIF associative readout as a confidence-gated fallback when no valid local LLM response is available.
+- Persists backward-compatible output-readout update counts in neural weights and exposes readout diagnostics in the response trace.
+- Keeps token-by-token generation in the local LLM; the LIF readout is an explicit semantic selection/conditioning mechanism, not an autoregressive language model.
+- Added tests for supervised readout learning and LIF conditioning in the Ollama prompt.
+
 ## Conversational routing and Colab runtime fixes
 
 - Added deterministic handling for greetings, unknown user-name questions, and local date/time queries.

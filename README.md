@@ -63,7 +63,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 ## Arquitetura atual
 
 - **Semantic Encoder:** embeddings treináveis de palavras e bigramas, inicialização determinística e aprendizado contrastivo.
-- **LIF/STDP:** rede recorrente experimental com telemetria de disparos e plasticidade somente durante aprendizado explícito; avaliações de resposta não alteram pesos.
+- **LIF/STDP + Readout supervisionado:** a rede recorrente produz uma representação de saída treinada com pares pergunta→resposta. Essa leitura recupera candidatos semânticos e condiciona o LLM local; sem LLM, pode fornecer diretamente a resposta associativa acima do limiar configurado.
 - **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
 - **Attention:** memória de trabalho e priorização de contexto.
 - **Mental Map:** grafo associativo lexical.
@@ -74,6 +74,8 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm usar NOME_EXATO` para selecionar um modelo já instalado. Se o Ollama estiver ativo, mas não houver modelo, instale um manualmente (por exemplo, `ollama pull qwen2.5:0.5b`). A NixLMs não baixa modelos automaticamente. Saudações e perguntas simples de data/hora são tratadas por regras determinísticas; perguntas sobre o nome do usuário não inventam um perfil ausente. A recuperação QA exige relevância mínima antes de usar uma lembrança como resposta. Respostas do LLM que apenas repetem a pergunta, desviam para uma saudação ou omitem a pessoa perguntada são recusadas. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
 
 ## Limitações importantes
+
+A leitura de saída LIF é um decodificador associativo supervisionado, não um gerador autoregressivo de tokens. Ela aprende a mapear estados ocultos recorrentes para representações comprimidas das respostas do dataset; na inferência, recupera respostas candidatas e as fornece como condicionamento semântico primário ao Ollama. Sem Ollama, uma resposta LIF pode ser retornada diretamente quando supera o limiar de similaridade. A qualidade depende da cobertura e da qualidade dos exemplos QA, e o limiar precisa ser calibrado por benchmark.
 
 O encoder nativo não é um Transformer pré-treinado. Ele aprende a partir dos pares fornecidos e não possui semântica geral garantida. O backend E5 opcional melhora a qualidade inicial da recuperação semântica, mas não treina automaticamente o encoder nativo nem prova raciocínio geral.
 
@@ -148,6 +150,8 @@ No terminal:
 /avaliar
 ```
 
+O treinamento QA também ajusta a leitura de saída LIF para associar a representação recorrente da pergunta à representação semântica da resposta.
+
 A auditoria pode ser consultada pela API:
 
 ```python
@@ -188,7 +192,7 @@ Os arquivos em `data/` incluem:
 - `mental_map.json`: grafo associativo.
 - `world_model.json`: fatos tipados e proveniência.
 - `goals.json`: objetivos e etapas.
-- `neural_weights.json`: pesos LIF e elegibilidade.
+- `neural_weights.json`: pesos LIF, elegibilidade e contador de atualizações do readout supervisionado.
 - `dataset.json`: exemplos locais de treinamento.
 
 Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso. Os novos módulos criam seus próprios arquivos sem sobrescrever os arquivos anteriores.

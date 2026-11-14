@@ -453,13 +453,21 @@ class NixLMsNeuralCore:
         temporal_answer = self._temporal_response(text)
         user_name_answer = self._user_name_response(text)
         greeting_answer = 'Olá! Sou a NixLMs. Como posso ajudar?' if self._is_greeting(text) else None
-        decoder_result = self.decoder.generate(
-            output, max_tokens=self.config.decoder_max_tokens
+        deterministic_answer = bool(temporal_answer or user_name_answer or greeting_answer)
+        decoder_result = (
+            self.decoder.generate(output, max_tokens=self.config.decoder_max_tokens)
+            if not deterministic_answer else {
+                "text": "", "tokens": [], "token_count": 0,
+                "confidence": 0.0, "terminated": False,
+                "reason": "deterministic_rule",
+            }
         )
         decoder_answer = str(decoder_result.get("text", "")).strip()
         decoder_rejection_reason = None
         decoder_accepted = False
-        if self.decoder.trained_steps <= 0:
+        if deterministic_answer:
+            decoder_rejection_reason = "deterministic_rule"
+        elif self.decoder.trained_steps <= 0:
             decoder_rejection_reason = "decoder_untrained"
         elif decoder_result.get("token_count", 0) < 2 or not decoder_answer:
             decoder_rejection_reason = "too_few_tokens"

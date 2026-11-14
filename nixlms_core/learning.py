@@ -225,7 +225,7 @@ class LearningEngine:
     @staticmethod
     def _state_fingerprint(state):
         payload = json.dumps(
-            state, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            state, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -253,7 +253,7 @@ class LearningEngine:
         for row in rows:
             question = str(row.get("question", "")).strip()
             answer = str(row.get("answer", "")).strip()
-            context, hidden, _, _ = self.agent._lif_forward(question)
+            context, _, _, _ = self.agent._lif_forward(question)
             decoder_score = self.agent.decoder.score(context, answer)
             if decoder_score.get("loss") is not None:
                 decoder_losses.append(float(decoder_score["loss"]))
@@ -271,9 +271,7 @@ class LearningEngine:
             target = self.agent._compress_neural_target(
                 self.agent.encoder.encode(answer)
             )
-            prediction = self.agent.network.forward(
-                self.agent.encoder.encode(question)
-            )[0]
+            prediction = context
             lif_losses.append(
                 sum((float(left) - float(right)) ** 2
                     for left, right in zip(prediction, target))
@@ -621,6 +619,17 @@ class LearningEngine:
                 }
 
             candidate_state = candidate.learning._live_model_state()
+            try:
+                candidate_state_fingerprint = self._state_fingerprint(candidate_state)
+            except (TypeError, ValueError):
+                manifest["status"] = "rejected"
+                manifest["reason"] = "candidate_state_invalid"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+            manifest["candidate_state_fingerprint"] = candidate_state_fingerprint
             try:
                 with tempfile.TemporaryDirectory(
                     prefix=".nixlms-candidate-", dir=str(self.agent.data_dir)

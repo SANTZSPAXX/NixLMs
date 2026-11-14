@@ -438,7 +438,6 @@ class NixLMsNeuralCore:
                 outcome="response_generated", source=source,
                 importance=max(0.0, min(1.0, float(confidence))),
             )
-    
         return answer
 
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,

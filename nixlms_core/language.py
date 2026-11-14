@@ -30,6 +30,8 @@ class LanguageEngine:
         self.installed_models = []
         self.last_check = None
         self.reachable = False
+        self.last_used_model = None
+        self.last_generation = None
 
     def _get_tags(self):
         if not self.local_host:
@@ -94,6 +96,8 @@ class LanguageEngine:
 
     def generate(self, message, memories=None, concepts=None, history=None,
                  world_facts=None, goals=None, neural_state=None):
+        self.last_used_model = None
+        self.last_generation = None
         if not self.enabled:
             self.last_error = "Integração Ollama desativada."
             return None
@@ -156,10 +160,20 @@ class LanguageEngine:
                 result = json.loads(response.read().decode("utf-8"))
             if not isinstance(result, dict) or not isinstance(result.get("message"), dict):
                 raise ValueError("Resposta inválida de /api/chat.")
+            returned_model = str(result.get("model", "")).strip()
+            if returned_model != self.model:
+                raise ValueError(
+                    "Modelo não confirmado: /api/chat retornou "
+                    f"{returned_model or 'campo model ausente'}, esperado {self.model}."
+                )
+            if result.get("done") is not True:
+                raise ValueError("Geração não confirmada: a resposta de /api/chat não informou done=true.")
             answer = str(result["message"].get("content", "")).strip()
             if not answer:
                 self.last_error = "Ollama respondeu sem conteúdo."
                 return None
+            self.last_used_model = returned_model
+            self.last_generation = datetime.now().astimezone().isoformat()
             self.last_error = None
             return answer
         except (URLError, HTTPError, TimeoutError, ValueError, OSError) as exc:

@@ -1,12 +1,16 @@
+import os
 from pathlib import Path
 from .config import CoreConfig
 from .eeg import EEGInspiredEngine
 from .neural import LIFNetwork
 from .encoding import SemanticEncoder
+from .pretrained_encoder import TransformersSentenceEncoder
 from .memory import MemorySystem
 from .cognition import CognitiveEngine
 from .learner import FeedbackLearner
 from .mental_map import MentalMap
+from .world_model import WorldModel
+from .planning import GoalManager
 from .attention import AttentionSystem
 from .language import LanguageEngine
 from .learning import LearningEngine
@@ -33,6 +37,15 @@ class NixLMsNeuralCore:
         if encoder_state:
             self.encoder.load_state_dict(encoder_state)
 
+        # O encoder nativo continua responsável pelo vetor de entrada LIF e pelo
+        # aprendizado contrastivo. O backend pré-treinado é apenas para recuperação.
+        model_path = os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
+        self.retrieval_encoder = (
+            TransformersSentenceEncoder(model_path, device="cpu", local_files_only=True)
+            if model_path else self.encoder
+        )
+        self._retrieval_encoder_error = None
+
         self.network = LIFNetwork(
             self.config.input_size, self.config.hidden_size, self.config.output_size,
             self.config.steps, self.config.threshold, self.config.leak,
@@ -47,6 +60,8 @@ class NixLMsNeuralCore:
         self.cognition = CognitiveEngine(self.config.confidence_threshold)
         self.learner = FeedbackLearner(self.network)
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
+        self.world_model = WorldModel(self.data_dir / "world_model.json")
+        self.goals = GoalManager(self.data_dir / "goals.json")
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
@@ -55,7 +70,6 @@ class NixLMsNeuralCore:
             self.memory.knowledge.extend(DEFAULTS)
             save_json(self.memory.knowledge_path, self.memory.knowledge)
 
-        # Migra a memória existente para o vocabulário treinável sem descartar dados.
         corpus = []
         for item in self.memory.knowledge:
             corpus.extend([item.get("question", ""), item.get("answer", "")])
@@ -70,6 +84,16 @@ class NixLMsNeuralCore:
 
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
+
+    def _recall(self, text, limit=8):
+        try:
+            return self.memory.recall(text, self.retrieval_encoder, limit=limit)
+        except (ImportError, OSError, RuntimeError) as exc:
+            if self.retrieval_encoder is self.encoder:
+                raise
+            self._retrieval_encoder_error = f"{type(exc).__name__}: {exc}"
+            self.retrieval_encoder = self.encoder
+            return self.memory.recall(text, self.encoder, limit=limit)
 
     def respond(self, message, use_language=True):
         text = str(message).strip()
@@ -87,7 +111,7 @@ class NixLMsNeuralCore:
         )
 
         self.mental_map.observe(text)
-        ranked = self.memory.recall(text, self.encoder, limit=8)
+        ranked = self._recall(text, limit=8)
         candidates = [
             {"question": item.get("question", ""), "answer": item.get("answer", ""),
              "priority": score}
@@ -106,9 +130,12 @@ class NixLMsNeuralCore:
             for _, item in ranked[:3]
         ]
         concepts = self.mental_map.associate(text, limit=8)
+        world_facts = self.world_model.search(text, limit=5)
+        goal_context = self.goals.active_context(limit=5)
         history = self.attention.working.context(limit=6)
         llm_answer = self.language.generate(
-            text, memory_context, concepts, history
+            text, memory_context, concepts, history,
+            world_facts=world_facts, goals=goal_context
         ) if use_language else None
 
         if llm_answer:
@@ -130,6 +157,8 @@ class NixLMsNeuralCore:
             "active_neurons": sum(1 for count in self.network.last_spike_counts if count > 0),
             "network_output_norm": sum(x * x for x in output) ** .5,
             "response_source": source, "concepts": concepts,
+            "world_facts_considered": len(world_facts),
+            "active_goals_considered": len(goal_context),
             "encoder": "trainable_word_bigram_contrastive"
         }
         self.memory.add_episode("user", text)
@@ -163,14 +192,24 @@ class NixLMsNeuralCore:
         save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
 
     def status(self):
+        retrieval_status = (
+            self.retrieval_encoder.status()
+            if hasattr(self.retrieval_encoder, "status")
+            else {"type": "native_semantic_encoder",
+                  "dimensions": self.encoder.dimensions, "loaded": True}
+        )
         return {
             **self.memory.stats(), **self.mental_map.stats(), **self.learner.stats(),
-            "architecture": "semantic_contrastive_recurrent_lif_memory_local_llm",
+            "world_model": self.world_model.stats(),
+            "planning": self.goals.stats(),
+            "architecture": "semantic_contrastive_recurrent_lif_memory_world_model_goal_manager",
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,
                 "vocabulary_size": len(self.encoder.vocab),
                 "contrastive_updates": self.encoder.updates
             },
+            "retrieval_encoder": retrieval_status,
+            "retrieval_encoder_error": self._retrieval_encoder_error,
             "llm": self.language.status(), "last_trace": self.last_trace,
             "config": self.config.__dict__
         }

@@ -92,7 +92,7 @@ class NeuralTextDecoderTests(unittest.TestCase):
             question = "Explique a água"
             answer = "A água reflete a luz."
             ai.learning.dataset.add(question, answer, "train")
-            ai.learning.train(epochs=180)
+            ai.learning.train(epochs=100)
 
             with patch.object(ai.language, "generate", side_effect=AssertionError("LLM não deveria ser chamado")):
                 ai.respond(question, use_language=True)

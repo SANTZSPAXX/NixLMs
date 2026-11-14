@@ -1,5 +1,6 @@
 import os
 import math
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from .config import CoreConfig
@@ -138,11 +139,20 @@ class NixLMsNeuralCore:
 
     def _lif_forward(self, text, signal=None):
         if signal is None:
-            signal = self.eeg.synthesize(profile={
+            digest = hashlib.blake2b(
+                normalize(text).encode("utf-8"), digest_size=8
+            ).digest()
+            stable_seed = (
+                self.config.seed ^ int.from_bytes(digest, "little")
+            ) & 0xFFFFFFFF
+            eeg_engine = EEGInspiredEngine(stable_seed)
+            signal = eeg_engine.synthesize(profile={
                 "delta": .12, "theta": .24, "alpha": .32, "beta": .25, "gamma": .07
             })
-        energies = self.eeg.band_energy(signal)
-        eeg_state = self.eeg.cognitive_state(energies)
+        else:
+            eeg_engine = self.eeg
+        energies = eeg_engine.band_energy(signal)
+        eeg_state = eeg_engine.cognitive_state(energies)
         vector = self.encoder.encode(text)
         output, hidden = self.network.forward(
             vector, modulation=.8 + eeg_state["focus"] * .4

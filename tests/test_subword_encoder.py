@@ -30,8 +30,17 @@ class SubwordEncoderTests(unittest.TestCase):
         before = len(encoder.vocab)
 
         encoder.encode("neurocomputação desconhecida")
+        coverage = encoder.feature_coverage("neurocomputação desconhecida")
 
         self.assertEqual(len(encoder.vocab), before)
+        self.assertGreater(coverage["total_subword_features"], 0)
+        self.assertGreater(coverage["subword_feature_coverage"], 0.0)
+
+    def test_feature_expansion_is_bounded_for_long_inputs(self):
+        encoder = SemanticEncoder(dimensions=16, seed=5)
+        features = encoder._features(" ".join(["extraordinarytoken" * 5] * 300))
+
+        self.assertLessEqual(len(features), 128 * 86 + 127)
 
     def test_contrastive_training_updates_character_subword_embeddings(self):
         encoder = SemanticEncoder(dimensions=32, seed=11)
@@ -75,8 +84,11 @@ class SubwordEncoderTests(unittest.TestCase):
                 ai.learning.dataset.add(question, answer, "validation")
             ai.encoder.fit_vocabulary([text for row in train for text in row])
 
+            vocab_before = len(ai.encoder.vocab)
             report = ai.learning.evaluate()
             metrics = report["representations"]["metrics"]
+
+            self.assertEqual(len(ai.encoder.vocab), vocab_before)
 
             self.assertEqual(report["representations"]["samples"], 3)
             self.assertGreater(metrics["positive_similarity"], metrics["negative_similarity"])

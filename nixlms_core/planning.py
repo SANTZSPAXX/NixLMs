@@ -76,16 +76,22 @@ class GoalManager:
         if status not in self.VALID_STEP_STATUSES:
             raise ValueError("Status inválido para etapa.")
         goal = self._find_goal(goal_id)
-        step = next((item for item in goal.get("steps", [])
-                     if item.get("id") == step_id), None)
+        steps = goal.get("steps", [])
+        step = next((item for item in steps if item.get("id") == step_id), None)
         if step is None:
             raise ValueError("Etapa não encontrada.")
         if status in {"in_progress", "completed"}:
             dependencies = set(step.get("depends_on", []))
-            completed = {item.get("id") for item in goal.get("steps", [])
+            completed = {item.get("id") for item in steps
                          if item.get("status") == "completed"}
             if not dependencies.issubset(completed):
                 raise ValueError("A etapa possui dependências ainda não concluídas.")
+        if status in {"pending", "cancelled"}:
+            dependents = [item for item in steps
+                          if step_id in item.get("depends_on", [])
+                          and item.get("status") in {"in_progress", "completed"}]
+            if dependents:
+                raise ValueError("Não é possível reabrir/cancelar uma etapa usada por dependentes ativos.")
         step["status"] = status
         step["updated_at"] = self._now()
         goal["updated_at"] = self._now()
@@ -114,6 +120,9 @@ class GoalManager:
         return [deepcopy(step) for step in ready]
 
     def active_context(self, limit=5):
+        limit = max(0, int(limit))
+        if not limit:
+            return []
         result = []
         for goal in self.goals:
             if goal.get("status") != "active":
@@ -121,7 +130,7 @@ class GoalManager:
             result.append({"id": goal.get("id"), "title": goal.get("title"),
                            "next_steps": [step.get("title") for step in
                                           self.next_actions(goal.get("id"))[:3]]})
-            if len(result) >= max(0, int(limit)):
+            if len(result) >= limit:
                 break
         return result
 

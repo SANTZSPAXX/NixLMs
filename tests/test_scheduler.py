@@ -44,8 +44,12 @@ class TaskSchedulerTests(unittest.TestCase):
             calls = []
             scheduler.register_handler("tick", lambda payload: calls.append("tick") or len(calls))
             job_id = scheduler.schedule_interval("tick", 60, first_delay_seconds=60)
-            with sqlite3.connect(scheduler.path) as db:
+            db = sqlite3.connect(scheduler.path)
+            try:
                 db.execute("UPDATE scheduled_jobs SET run_at=? WHERE id=?", (time.time() - 1, job_id))
+                db.commit()
+            finally:
+                db.close()
             self.assertTrue(scheduler.run_once())
             job = scheduler.list_jobs()[0]
             self.assertEqual(job["status"], "pending")

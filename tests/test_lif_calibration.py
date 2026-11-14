@@ -136,6 +136,7 @@ class LIFCalibrationTests(unittest.TestCase):
                 "threshold": 0.80,
                 "readout_updates": 12,
                 "encoder_updates": 7,
+                "encoder_vocab_size": len(ai.encoder.vocab),
             })
 
             restored = NixLMsNeuralCore(data_dir)
@@ -157,6 +158,7 @@ class LIFCalibrationTests(unittest.TestCase):
                 "threshold": 0.82,
                 "readout_updates": 0,
                 "encoder_updates": 0,
+                "encoder_vocab_size": len(ai.encoder.vocab),
             })
 
             ai.learning.train(epochs=1)

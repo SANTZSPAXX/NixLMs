@@ -178,6 +178,8 @@ class NixLMsNeuralCore:
             return False
         if encoder_updates != self.encoder.updates or vocab_size != len(self.encoder.vocab):
             return False
+        if state.get("validation_fingerprint") != self.learning.validation_fingerprint():
+            return False
         self.config.lif_retrieval_threshold = threshold
         return True
 

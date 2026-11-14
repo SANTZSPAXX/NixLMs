@@ -159,6 +159,8 @@ Durante `/treinar`, a rede LIF também atualiza `w_in` e `w_rec` por BPTT com gr
 
 Depois de um treino aceito, use `/calibrar-lif` para calibrar o limiar do readout LIF e `/calibrar-decoder` para calibrar a confiança média do decoder. A calibração do decoder usa token-F1 como proxy textual, não verificação factual, e exige pelo menos quatro exemplos pontuados, dois positivos e dois negativos. Calibrações são invalidadas quando os pesos ou os dados relevantes mudam.
 
+O `/avaliar` também retorna `lif_representations`, medindo similaridade positiva/negativa, margem e acurácia pairwise das representações ocultas LIF no split `test`. Esse resultado é um benchmark final; somente `validation` é usado pelo gate de promoção do treino incremental.
+
 A auditoria pode ser consultada pela API:
 
 ```python

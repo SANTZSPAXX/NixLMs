@@ -2,10 +2,13 @@
 import json
 import random
 from pathlib import Path
+
 from .utils import save_json, load_json, normalize, tokenize, cosine
 
 
 class DatasetStore:
+    VALID_SPLITS = {"train", "test"}
+
     def __init__(self, path):
         self.path = Path(path)
 
@@ -13,59 +16,115 @@ class DatasetStore:
         rows = load_json(self.path, [])
         return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
-    def add(self, question, answer, split="train"):
+    @staticmethod
+    def _input_texts(row):
+        if row.get("type", "qa") == "pair":
+            return [row.get("text_a", ""), row.get("text_b", "")]
+        return [row.get("question", "")]
+
+    @staticmethod
+    def _validate_split(split):
+        if split not in DatasetStore.VALID_SPLITS:
+            raise ValueError("split deve ser train ou test.")
+
+    @classmethod
+    def _insert_qa(cls, rows, question, answer, split):
         question, answer = str(question).strip(), str(answer).strip()
         if not question or not answer:
             raise ValueError("question e answer são obrigatórios.")
-        if split not in {"train", "test"}:
-            raise ValueError("split deve ser train ou test.")
-        rows = self.load()
+        cls._validate_split(split)
         key = normalize(question)
         for row in rows:
+            existing_split = row.get("split", "train")
+            if existing_split != split and any(
+                normalize(text) == key for text in cls._input_texts(row)
+            ):
+                raise ValueError("Texto de entrada repetido entre train e test.")
             if row.get("type", "qa") == "qa" and normalize(row.get("question", "")) == key:
-                if row.get("split", "train") != split:
+                if existing_split != split:
                     raise ValueError("A mesma pergunta não pode aparecer em train e test.")
                 row.update({"question": question, "answer": answer, "split": split})
-                save_json(self.path, rows)
                 return len(rows)
         rows.append({"type": "qa", "question": question, "answer": answer, "split": split})
-        save_json(self.path, rows)
         return len(rows)
 
-    def add_pair(self, text_a, text_b, label=1, split="train"):
+    @classmethod
+    def _insert_pair(cls, rows, text_a, text_b, label, split):
         text_a, text_b = str(text_a).strip(), str(text_b).strip()
         if not text_a or not text_b:
             raise ValueError("text_a e text_b são obrigatórios.")
-        if split not in {"train", "test"}:
-            raise ValueError("split deve ser train ou test.")
+        cls._validate_split(split)
         numeric_label = float(label)
         if numeric_label not in (0.0, 1.0):
             raise ValueError("label deve ser 0 ou 1.")
         label = int(numeric_label)
-        if label not in (0, 1):
-            raise ValueError("label deve ser 0 ou 1.")
-        rows = self.load()
-        pair_key = tuple(sorted((normalize(text_a), normalize(text_b))))
-        for existing in rows:
-            if existing.get("type") != "pair":
+        keys = {normalize(text_a), normalize(text_b)}
+        for row in rows:
+            existing_split = row.get("split", "train")
+            if existing_split != split and keys.intersection(
+                normalize(text) for text in cls._input_texts(row)
+            ):
+                raise ValueError("Texto de entrada repetido entre train e test.")
+            if row.get("type") != "pair":
                 continue
-            existing_key = tuple(sorted((normalize(existing.get("text_a", "")),
-                                         normalize(existing.get("text_b", "")))))
+            existing_key = tuple(sorted((normalize(row.get("text_a", "")),
+                                         normalize(row.get("text_b", "")))))
+            pair_key = tuple(sorted((normalize(text_a), normalize(text_b))))
             if existing_key == pair_key:
-                if int(existing.get("label", 1)) != label:
+                if int(row.get("label", 1)) != label:
                     raise ValueError("Par contrastivo já cadastrado com rótulo conflitante.")
-                if existing.get("split", "train") != split:
+                if existing_split != split:
                     raise ValueError("O mesmo par não pode aparecer em train e test.")
-                existing.update({"text_a": text_a, "text_b": text_b,
-                                 "label": label, "split": split})
-                save_json(self.path, rows)
+                row.update({"text_a": text_a, "text_b": text_b,
+                            "label": label, "split": split})
                 return len(rows)
         rows.append({"type": "pair", "text_a": text_a, "text_b": text_b,
                      "label": label, "split": split})
-        save_json(self.path, rows)
         return len(rows)
 
+    def add(self, question, answer, split="train"):
+        rows = self.load()
+        result = self._insert_qa(rows, question, answer, split)
+        save_json(self.path, rows)
+        return result
+
+    def add_pair(self, text_a, text_b, label=1, split="train"):
+        rows = self.load()
+        result = self._insert_pair(rows, text_a, text_b, label, split)
+        save_json(self.path, rows)
+        return result
+
+    def audit_splits(self):
+        rows = self.load()
+        counts = {"qa_train": 0, "qa_test": 0, "pair_train": 0, "pair_test": 0}
+        seen = {}
+        violations = []
+        for index, row in enumerate(rows):
+            kind = "pair" if row.get("type") == "pair" else "qa"
+            split = row.get("split", "train")
+            if split not in self.VALID_SPLITS:
+                violations.append({"type": "invalid_split", "row": index, "split": split})
+                continue
+            counts[f"{kind}_{split}"] += 1
+            for text in self._input_texts(row):
+                key = normalize(text)
+                if not key:
+                    continue
+                previous = seen.get(key)
+                if previous and previous["split"] != split:
+                    violations.append({
+                        "type": "cross_split_text_overlap", "text": text,
+                        "first_row": previous["row"], "second_row": index,
+                        "first_split": previous["split"], "second_split": split,
+                    })
+                else:
+                    seen.setdefault(key, {"row": index, "split": split})
+        return {"valid": not violations, "counts": counts, "violations": violations}
+
     def import_jsonl(self, source):
+        # Importação transacional: nenhuma gravação ocorre até todas as linhas
+        # serem analisadas e validadas contra o dataset existente.
+        rows = self.load()
         added = 0
         with Path(source).expanduser().open("r", encoding="utf-8") as handle:
             for line_no, line in enumerate(handle, 1):
@@ -76,19 +135,49 @@ class DatasetStore:
                     if not isinstance(row, dict):
                         raise ValueError("cada linha deve conter um objeto JSON")
                     split = row.get("split", "train")
-                    if split not in {"train", "test"}:
-                        raise ValueError("split inválido")
                     if row.get("type") == "pair" or ("text_a" in row and "text_b" in row):
-                        self.add_pair(row.get("text_a", ""), row.get("text_b", ""),
-                                      row.get("label", 1), split)
+                        self._insert_pair(rows, row.get("text_a", ""), row.get("text_b", ""),
+                                          row.get("label", 1), split)
                     elif row.get("question") and row.get("answer"):
-                        self.add(row["question"], row["answer"], split)
+                        self._insert_qa(rows, row["question"], row["answer"], split)
                     else:
                         raise ValueError("registro sem campos question/answer ou text_a/text_b")
                     added += 1
                 except (json.JSONDecodeError, TypeError, ValueError) as exc:
                     raise ValueError(f"JSONL linha {line_no}: {exc}") from exc
+        audit = self.audit_rows(rows)
+        if not audit["valid"]:
+            raise ValueError("Dataset contém vazamento entre train e test.")
+        save_json(self.path, rows)
         return added
+
+    @classmethod
+    def audit_rows(cls, rows):
+        # Compartilha a mesma auditoria para importações ainda não persistidas.
+        seen = {}
+        violations = []
+        counts = {"qa_train": 0, "qa_test": 0, "pair_train": 0, "pair_test": 0}
+        for index, row in enumerate(rows):
+            kind = "pair" if row.get("type") == "pair" else "qa"
+            split = row.get("split", "train")
+            if split not in cls.VALID_SPLITS:
+                violations.append({"type": "invalid_split", "row": index, "split": split})
+                continue
+            counts[f"{kind}_{split}"] += 1
+            for text in cls._input_texts(row):
+                key = normalize(text)
+                if not key:
+                    continue
+                previous = seen.get(key)
+                if previous and previous["split"] != split:
+                    violations.append({
+                        "type": "cross_split_text_overlap", "text": text,
+                        "first_row": previous["row"], "second_row": index,
+                        "first_split": previous["split"], "second_split": split,
+                    })
+                else:
+                    seen.setdefault(key, {"row": index, "split": split})
+        return {"valid": not violations, "counts": counts, "violations": violations}
 
 
 class LearningEngine:
@@ -97,10 +186,20 @@ class LearningEngine:
         self.dataset = DatasetStore(dataset_path)
         self.last_training = {}
 
+    def _require_clean_splits(self):
+        audit = self.dataset.audit_splits()
+        if not audit["valid"]:
+            raise ValueError(
+                "Dataset contém vazamento entre train e test; execute audit_splits() "
+                "e corrija as sobreposições antes de treinar ou avaliar."
+            )
+        return audit
+
     def train(self, epochs=1, seed=42):
         epochs = int(epochs)
         if epochs < 1 or epochs > 100:
             raise ValueError("epochs deve estar entre 1 e 100.")
+        self._require_clean_splits()
         rows = self.dataset.load()
         qa_rows = [r for r in rows if r.get("type", "qa") == "qa" and r.get("split", "train") == "train"]
         pairs = [r for r in rows if r.get("type") == "pair" and r.get("split", "train") == "train"]
@@ -108,8 +207,6 @@ class LearningEngine:
             return {"trained": 0, "epochs": 0,
                     "message": "Dataset vazio. Adicione exemplos ou pares contrastivos."}
 
-        # QA adiciona conhecimento uma vez por treinamento; remember() é upsert,
-        # portanto repetir épocas não multiplica a mesma memória.
         for row in qa_rows:
             self.agent.learn(row["question"], row["answer"],
                              remember=True, reinforce=False, add_to_dataset=False)
@@ -145,50 +242,60 @@ class LearningEngine:
         }
         return dict(self.last_training)
 
-    def evaluate(self, threshold=0.25, ks=(1, 3, 5)):
-        """Benchmark reproduzível de recuperação e classificação contrastiva.
+    @staticmethod
+    def _encode_query(encoder, text):
+        method = getattr(encoder, "encode_query", None)
+        return method(text) if callable(method) else encoder.encode(text)
 
-        A avaliação usa somente registros marcados como test. Os canais lexical,
-        semântico e híbrido são reportados separadamente para tornar comparações
-        futuras do encoder verificáveis.
-        """
+    @staticmethod
+    def _encode_passage(encoder, text):
+        method = getattr(encoder, "encode_passage", None)
+        return method(text) if callable(method) else encoder.encode(text)
+
+    def evaluate(self, threshold=0.25, ks=(1, 3, 5)):
+        """Benchmark reproduzível de recuperação e classificação contrastiva."""
         threshold = float(threshold)
         if not -1.0 <= threshold <= 1.0:
             raise ValueError("threshold deve estar entre -1 e 1.")
         ks = tuple(sorted({int(k) for k in ks}))
         if not ks or ks[0] < 1:
             raise ValueError("ks deve conter inteiros positivos.")
+        self._require_clean_splits()
 
         rows = self.dataset.load()
         qa_test = [r for r in rows if r.get("type", "qa") == "qa" and r.get("split") == "test"]
         pair_test = [r for r in rows if r.get("type") == "pair" and r.get("split") == "test"]
-
-        # Avalia os mesmos candidatos com três estratégias, sem alterar memória.
         candidates = list(self.agent.memory.knowledge)
+        retrieval_encoder = getattr(self.agent, "retrieval_encoder", self.agent.encoder)
         retrieval = {"samples": len(qa_test), "candidate_count": len(candidates), "metrics": {}}
         channels = ("lexical", "semantic", "hybrid")
         reciprocal = {name: 0.0 for name in channels}
         hits = {name: {k: 0 for k in ks} for name in channels}
+        excluded_exact_queries = 0
+        semantic_weight = .35 + .50 * min(
+            1.0, getattr(retrieval_encoder, "updates", 0) / 30.0
+        )
         for row in qa_test:
             query = row["question"]
+            query_key = normalize(query)
             q_tokens = set(tokenize(query))
-            q_vector = self.agent.encoder.encode(query)
+            q_vector = self._encode_query(retrieval_encoder, query)
             scored = {name: [] for name in channels}
             for item in candidates:
                 candidate_text = str(item.get("question", ""))
+                if normalize(candidate_text) == query_key:
+                    excluded_exact_queries += 1
+                    continue
                 c_tokens = set(tokenize(candidate_text))
                 union = q_tokens | c_tokens
                 lexical = len(q_tokens & c_tokens) / len(union) if union else 0.0
-                semantic = max(-1.0, min(1.0, cosine(
-                    q_vector, self.agent.encoder.encode(candidate_text)
+                semantic = max(0.0, min(1.0, cosine(
+                    q_vector, self._encode_passage(retrieval_encoder, candidate_text)
                 )))
-                weight = 0.35 + 0.50 * min(
-                    1.0, getattr(self.agent.encoder, "updates", 0) / 30.0
-                )
                 values = {
                     "lexical": lexical,
                     "semantic": semantic,
-                    "hybrid": weight * semantic + (1.0 - weight) * lexical,
+                    "hybrid": semantic_weight * semantic + (1.0 - semantic_weight) * lexical,
                 }
                 for name, score in values.items():
                     scored[name].append((score, item))
@@ -214,17 +321,16 @@ class LearningEngine:
                 for name in channels
             }
 
-        similarities = []
+        native_encoder = self.agent.encoder
         tp = fp = tn = fn = 0
         positive, negative = [], []
         for pair in pair_test:
             similarity = cosine(
-                self.agent.encoder.encode(pair["text_a"]),
-                self.agent.encoder.encode(pair["text_b"])
+                native_encoder.encode(pair["text_a"]),
+                native_encoder.encode(pair["text_b"])
             )
             label = int(pair.get("label", 1))
             predicted = int(similarity >= threshold)
-            similarities.append(similarity)
             (positive if label == 1 else negative).append(similarity)
             if predicted and label:
                 tp += 1
@@ -259,11 +365,13 @@ class LearningEngine:
             "protocol": {
                 "test_qa_samples": len(qa_test),
                 "test_pair_samples": len(pair_test),
-                "candidate_source": "memory.knowledge",
+                "candidate_source": "memory.knowledge excluding exact test questions",
+                "excluded_exact_query_candidates": excluded_exact_queries,
                 "channels": list(channels),
                 "ks": list(ks),
                 "threshold": threshold,
                 "test_data_used_for_training": False,
+                "split_audit": "passed",
             },
             "note": "Métricas de recuperação e classificação são separadas; "
                     "o benchmark não prova compreensão semântica geral.",

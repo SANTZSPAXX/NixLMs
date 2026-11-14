@@ -392,6 +392,7 @@ class LearningEngine:
             "threshold": threshold,
             "readout_updates": int(self.agent.network.output_updates),
             "encoder_updates": int(self.agent.encoder.updates),
+            "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_samples": len(rows),
             "scored_samples": len(cases),
             "metrics": metrics,

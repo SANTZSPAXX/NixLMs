@@ -667,6 +667,7 @@ class NixLMsNeuralCore:
                 "vocabulary_size": len(self.decoder.vocab),
                 "trained_steps": self.decoder.trained_steps,
                 "trained_tokens": self.decoder.trained_tokens,
+                "persistence_enabled": self.decoder_persistence_enabled,
                 "load_error": self.decoder_load_error,
             },
             "llm": self.language.status(), "last_trace": self.last_trace,

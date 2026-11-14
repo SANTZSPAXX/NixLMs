@@ -36,6 +36,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
             question = "Qual o código do projeto sigiloso ZX-917?"
             leaked_answer = "O código sigiloso é ZX-917."
             ai.memory.remember(question, leaked_answer)
+            ai.episodic.record(question, leaked_answer, source="test-fixture")
             ai.learning.dataset.add(question, leaked_answer, split="test")
 
             report = ai.learning.evaluate()

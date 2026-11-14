@@ -11,6 +11,7 @@ from .learner import FeedbackLearner
 from .mental_map import MentalMap
 from .world_model import WorldModel
 from .planning import GoalManager
+from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
 from .learning import LearningEngine
@@ -62,6 +63,10 @@ class NixLMsNeuralCore:
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
         self.world_model = WorldModel(self.data_dir / "world_model.json")
         self.goals = GoalManager(self.data_dir / "goals.json")
+        self.scheduler = TaskScheduler(self.data_dir / "scheduler.sqlite3")
+        self.scheduler.register_handler("memory_housekeeping", self._scheduled_memory_housekeeping)
+        self.scheduler.register_handler("dataset_audit", self._scheduled_dataset_audit)
+        self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
@@ -109,6 +114,32 @@ class NixLMsNeuralCore:
             self.retrieval_encoder = self.encoder
             self.memory._embedding_cache.clear()
             return self.memory.recall(text, self.encoder, limit=limit)
+
+    def _scheduled_memory_housekeeping(self, payload):
+        """Manutenção conservadora: poda apenas além do limite já configurado."""
+        before = len(self.memory.episodes)
+        if before > self.memory.max_items:
+            self.memory.episodes = self.memory.episodes[-self.memory.max_items:]
+            save_json(self.memory.episodes_path, self.memory.episodes)
+        cache_before = len(self.memory._embedding_cache)
+        if cache_before > self.memory.max_items * 2:
+            self.memory._embedding_cache.clear()
+        return {"episodes_before": before, "episodes_after": len(self.memory.episodes),
+                "embedding_cache_before": cache_before,
+                "embedding_cache_after": len(self.memory._embedding_cache)}
+
+    def _scheduled_dataset_audit(self, payload):
+        return self.learning.dataset.audit_splits()
+
+    def _scheduled_goal_review(self, payload):
+        goals = self.goals.list_goals()
+        active = [goal for goal in goals if goal.get("status") == "active"]
+        actions = []
+        for goal in active:
+            for step in self.goals.next_actions(goal["id"]):
+                actions.append({"goal_id": goal["id"], "goal_title": goal["title"],
+                                "step": step})
+        return {"active_goals": len(active), "available_actions": actions[:100]}
 
     def respond(self, message, use_language=True):
         text = str(message).strip()
@@ -226,6 +257,7 @@ class NixLMsNeuralCore:
             **self.memory.stats(), **self.mental_map.stats(), **self.learner.stats(),
             "world_model": self.world_model.stats(),
             "planning": self.goals.stats(),
+            "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_contrastive_recurrent_lif_memory_world_model_goal_manager",
             "encoder": {

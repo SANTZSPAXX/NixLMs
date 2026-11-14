@@ -1,6 +1,6 @@
 # NixLMs
 
-**NixLMs 0.5.0 — Balanced Cognitive Evolution** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
+**NixLMs 0.6.0 — Persistent Cognitive Scheduler** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
 
 ## Evolução 0.5
 
@@ -11,6 +11,39 @@
 - **Native Neural Core:** o encoder treinável nativo continua alimentando a rede LIF e recebendo treinamento contrastivo.
 - **Context Integration:** fatos e objetivos podem ser fornecidos ao LLM local Ollama como contexto identificado.
 - **Benchmark Consistency:** recuperação híbrida usa a mesma fórmula e o contrato query/passage do sistema de memória.
+
+## Agendador persistente (0.6)
+
+O `TaskScheduler` usa SQLite e apenas a biblioteca padrão do Python. As tarefas sobrevivem ao reinício do processo e são executadas por handlers registrados explicitamente pelo runtime.
+
+Handlers internos disponíveis:
+- `memory_housekeeping` — poda conservadora de episódios acima do limite configurado e limpeza de cache excessivo.
+- `dataset_audit` — verifica a integridade dos splits sem treinar nem modificar o dataset.
+- `goal_review` — reúne objetivos ativos e etapas liberadas, sem alterar o plano.
+
+Exemplos na CLI:
+```text
+/agenda listar
+/agenda criar dataset_audit 3600
+/agenda criar goal_review 1800
+/agenda uma-vez memory_housekeeping 10
+/agenda cancelar job-ID
+/agenda executar
+```
+
+O worker automático é iniciado somente pela CLI. Aplicações que importam a biblioteca precisam chamar `ai.scheduler.start()` explicitamente e encerrá-lo com `ai.scheduler.stop()`. Tarefas recorrentes usam intervalo em segundos, não expressões cron nem calendário local.
+
+Segurança e semântica:
+- O banco armazena nome do handler e payload JSON; nunca serializa callables nem executa shell/comandos.
+- Somente handlers registrados no código podem ser agendados.
+- Há limite de tarefas ativas, tamanho de payload, tentativas e backoff exponencial.
+- A reivindicação de tarefas usa transação `BEGIN IMMEDIATE`; o handler executa fora da transação.
+- Leases são renovados durante a execução; tarefas abandonadas podem ser recuperadas após expiração.
+- A entrega é *at-least-once*, não *exactly-once*. Handlers devem ser idempotentes.
+- Cancelamento afeta tarefas pendentes; não interrompe um handler já em execução.
+- Use o arquivo SQLite em disco local, não em filesystem de rede.
+
+O agendador não treina modelos automaticamente, não altera pesos neurais, não acessa a rede, não executa ações externas e não transforma fatos em conhecimento sem validação. Para programar uma nova capacidade, implemente um handler explícito, idempotente e coberto por testes.
 
 ## Arquitetura atual
 
@@ -162,4 +195,4 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 
 ## Arquitetura
 
-`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.
+`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, agendador SQLite, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.

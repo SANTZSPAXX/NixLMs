@@ -161,6 +161,10 @@ print(report)
 
 O treinamento e a avaliação recusam datasets com sobreposição exata de textos de entrada entre treino e teste. Para avaliações confiáveis, use datasets maiores, representativos e com deduplicação de paráfrases; os exemplos iniciais são apenas smoke tests.
 
+O comando `/avaliar` também executa o benchmark cognitivo integrado no split `test`, passando cada pergunta pelo fluxo completo de resposta sem persistir os episódios de avaliação. Ele informa exact match, token F1, taxa de abstenção, eco da pergunta, distribuição da origem das respostas e uso/candidatos da LIF. Esses indicadores são proxies textuais e operacionais, não verificadores de factualidade. As consultas exatas do split de teste são temporariamente excluídas da memória QA e episódica durante essa avaliação.
+
+Use `/avaliar-llm` para uma execução opcional com o Ollama instalado. A avaliação padrão não chama o LLM, permitindo comparações offline reproduzíveis; a variante com LLM depende do modelo local, sua versão e configuração.
+
 ## Modelo de mundo e objetivos
 
 Registrar um fato:

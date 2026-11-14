@@ -105,6 +105,16 @@ class LIFRecurrentLearningTests(unittest.TestCase):
             self.assertFalse(report["protocol"]["weights_updated"])
             self.assertEqual(ai.network.state_dict(), before)
 
+    def test_invalid_recurrent_counter_does_not_partially_load_checkpoint(self):
+        net = self._network()
+        before = net.state_dict()
+        invalid = dict(before)
+        invalid["w_in"] = [[value + 0.01 for value in row] for row in before["w_in"]]
+        invalid["recurrent_updates"] = "not-an-integer"
+
+        self.assertFalse(net.load_state_dict(invalid))
+        self.assertEqual(net.state_dict(), before)
+
     def test_learning_engine_trains_lif_recurrence_from_qa_and_contrastive_pairs(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

@@ -77,9 +77,13 @@ class NixLMsNeuralCore:
             max_sequence_length=self.config.decoder_max_sequence_length,
         )
         self.decoder_load_error = None
+        decoder_file_exists = self.decoder_path.exists()
         decoder_state = load_json(self.decoder_path, None)
-        self.decoder_persistence_enabled = True
-        if decoder_state is not None and not self.decoder.load_state_dict(decoder_state):
+        self.decoder_persistence_enabled = not decoder_file_exists or decoder_state is not None
+        if decoder_file_exists and decoder_state is None:
+            self.decoder_load_error = "decoder_state_unreadable"
+            self.decoder_persistence_enabled = False
+        elif decoder_state is not None and not self.decoder.load_state_dict(decoder_state):
             self.decoder_load_error = "decoder_state_incompatible_or_invalid"
             self.decoder_persistence_enabled = False
 

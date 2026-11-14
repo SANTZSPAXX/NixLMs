@@ -104,6 +104,8 @@ class NeuralTextDecoderTests(unittest.TestCase):
             answer = "A água reflete a luz."
             ai.learning.dataset.add(question, answer, "train")
             ai.learning.train(epochs=100)
+            preview = ai.decoder.generate(ai._lif_forward(question)[0], max_tokens=12)
+            self.assertGreaterEqual(preview["token_count"], 2, msg=repr(preview))
 
             with patch.object(ai.language, "generate", side_effect=AssertionError("LLM não deveria ser chamado")):
                 ai.respond(question, use_language=True)

@@ -286,6 +286,8 @@ class NixLMsNeuralCore:
         })
         energies = self.eeg.band_energy(signal)
         eeg_state = self.eeg.cognitive_state(energies)
+        if isinstance(excluded_questions, str):
+            excluded_questions = (excluded_questions,)
         excluded_questions = tuple(excluded_questions or ())
         vector = self.encoder.encode(text)
         output, hidden = self.network.forward(

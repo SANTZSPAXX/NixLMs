@@ -11,7 +11,7 @@ class LIFRecurrentLearningTests(unittest.TestCase):
     def _network(self):
         return LIFNetwork(
             input_size=8, hidden_size=10, output_size=4, steps=12,
-            threshold=0.06, leak=0.86, seed=19,
+            threshold=0.005, leak=0.86, seed=19,
         )
 
     def test_contrastive_recurrent_training_updates_core_not_readout(self):

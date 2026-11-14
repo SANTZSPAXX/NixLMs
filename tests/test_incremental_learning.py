@@ -67,6 +67,35 @@ class SafeIncrementalLearningTests(unittest.TestCase):
             self.assertEqual(ai.encoder.state_dict(), before)
             self.assertFalse((Path(tmp) / "checkpoints" / "incremental").exists())
 
+    def test_real_candidate_training_completes_and_keeps_rollback_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = self._agent(tmp)
+            before = {
+                "encoder": ai.encoder.state_dict(),
+                "network": ai.network.state_dict(),
+                "decoder": ai.decoder.state_dict(),
+            }
+
+            report = ai.learning.train_incremental(epochs=1)
+
+            self.assertIn(report["reason"], {
+                "accepted", "validation_regression", "no_measurable_improvement"
+            })
+            self.assertTrue(report["checkpoint_id"])
+            self.assertTrue(report["rollback_available"])
+            if report["accepted"]:
+                self.assertNotEqual(ai.decoder.state_dict(), before["decoder"])
+            else:
+                self.assertEqual(ai.encoder.state_dict(), before["encoder"])
+                self.assertEqual(ai.network.state_dict(), before["network"])
+                self.assertEqual(ai.decoder.state_dict(), before["decoder"])
+
+            restored = ai.learning.restore_incremental_checkpoint(report["checkpoint_id"])
+            self.assertTrue(restored["restored"])
+            self.assertEqual(ai.encoder.state_dict(), before["encoder"])
+            self.assertEqual(ai.network.state_dict(), before["network"])
+            self.assertEqual(ai.decoder.state_dict(), before["decoder"])
+
     def test_regressing_candidate_is_rejected_without_touching_live_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = self._agent(tmp)

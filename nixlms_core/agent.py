@@ -149,6 +149,53 @@ class NixLMsNeuralCore:
         return {"active_goals": len(active), "available_actions": actions[:100]}
 
     @staticmethod
+    def _is_greeting(message):
+        query = normalize(message)
+        return query in {
+            'oi', 'ola', 'oi ola', 'bom dia', 'boa tarde', 'boa noite',
+            'e ai', 'tudo bem', 'ola tudo bem',
+        }
+
+    @staticmethod
+    def _is_person_question(message):
+        query = normalize(message)
+        return query.startswith('quem foi ') or query.startswith('quem era ')
+
+    @staticmethod
+    def _memory_is_relevant(query, item, score):
+        query_tokens = set(normalize(query).split())
+        item_tokens = set(normalize(item.get('question', '')).split())
+        overlap = len(query_tokens & item_tokens) / max(1, len(query_tokens))
+        return float(score) >= 0.55 and (overlap >= 0.20 or float(score) >= 0.82)
+
+    @staticmethod
+    def _validate_llm_answer(question, answer):
+        if not answer or not str(answer).strip():
+            return False, 'empty_answer'
+        query = normalize(question)
+        response = normalize(answer)
+        if response == query:
+            return False, 'question_echo'
+        query_tokens = set(query.split())
+        response_tokens = set(response.split())
+        if len(query_tokens) >= 3 and len(query_tokens & response_tokens) / len(query_tokens) >= 0.85:
+            return False, 'near_question_echo'
+        greeting_starts = ('ola sou a nixlms', 'ola sou nixlms', 'como posso ajudar', 'oi sou a nixlms', 'sou a nixlms uma ia')
+        if any(response.startswith(prefix) for prefix in greeting_starts) and not NixLMsNeuralCore._is_greeting(question):
+            return False, 'irrelevant_greeting'
+        if NixLMsNeuralCore._is_person_question(question):
+            entity_tokens = [token for token in query_tokens if token not in {'quem', 'foi', 'era', 'o', 'a', 'um', 'uma', 'de', 'do', 'da'}]
+            if entity_tokens and not any(token in response_tokens for token in entity_tokens):
+                return False, 'requested_person_not_mentioned'
+        return True, None
+
+    @staticmethod
+    def _user_name_response(message):
+        query = normalize(message)
+        if query in {'qual meu nome', 'qual e meu nome', 'voce sabe meu nome', 'como eu me chamo', 'lembra meu nome'}:
+            return 'Ainda não sei seu nome. Você pode me dizer como prefere ser chamado?'
+        return None
+    @staticmethod
     def _temporal_response(message, now=None):
         """Responde consultas simples de data/hora com o relógio local do runtime."""
         query = normalize(message)
@@ -219,10 +266,14 @@ class NixLMsNeuralCore:
             for retrieval_score, item in ranked
         ]
         attended_ranked.sort(key=lambda pair: pair[0], reverse=True)
-        selected, confidence = self.cognition.decide(attended_ranked, attention_state)
+        relevant_ranked = [
+            (score, item) for score, item in attended_ranked
+            if self._memory_is_relevant(text, item, score)
+        ]
+        selected, confidence = self.cognition.decide(relevant_ranked, attention_state)
         memory_context = [
             {"question": item.get("question"), "answer": item.get("answer")}
-            for _, item in attended_ranked[:3]
+            for _, item in relevant_ranked[:3]
         ]
         episodic_encoder = self._active_retrieval_encoder()
         episodic_context = self.episodic.recall(text, episodic_encoder, limit=3)
@@ -238,17 +289,30 @@ class NixLMsNeuralCore:
         goal_context = self.goals.active_context(limit=5)
         history = self.attention.working.context(limit=6)
         temporal_answer = self._temporal_response(text)
-        llm_attempted = use_language and temporal_answer is None
+        user_name_answer = self._user_name_response(text)
+        greeting_answer = 'Olá! Sou a NixLMs. Como posso ajudar?' if self._is_greeting(text) else None
+        llm_attempted = (use_language and temporal_answer is None and user_name_answer is None and greeting_answer is None)
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
             world_facts=world_facts, goals=goal_context
         ) if llm_attempted else None
+        llm_rejection_reason = None
+        if llm_answer:
+            valid_answer, llm_rejection_reason = self._validate_llm_answer(text, llm_answer)
+            if not valid_answer:
+                llm_answer = None
 
         if temporal_answer:
-            answer, source = temporal_answer, "runtime_datetime"
+            answer, source = temporal_answer, 'runtime_datetime'
+            confidence = 1.0
+        elif user_name_answer:
+            answer, source = user_name_answer, 'unknown_user_profile'
+            confidence = 1.0
+        elif greeting_answer:
+            answer, source = greeting_answer, 'greeting_rule'
             confidence = 1.0
         elif llm_answer:
-            answer, source = llm_answer, "local_llm"
+            answer, source = llm_answer, 'local_llm'
         elif selected:
             answer, source = selected.get("answer", ""), "semantic_memory"
         elif world_facts:
@@ -259,10 +323,14 @@ class NixLMsNeuralCore:
                 for fact in world_facts
             ]
             answer, source = "Encontrei estes registros no modelo de mundo: " + "; ".join(statements), "world_model"
+        elif llm_rejection_reason == 'requested_person_not_mentioned':
+            answer = ('Não consegui identificar essa pessoa com segurança. Você se refere a Pedro Álvares Cabral ou a outra pessoa?'
+                      if 'pedro' in normalize(text) else 'Não consegui identificar essa pessoa com segurança. Pode informar o nome completo?')
+            source = 'entity_abstention'
         else:
             answer = ("Ainda não encontrei uma resposta confiável. Você pode me ensinar "
                       "com /ensinar pergunta => resposta ou treinar pares semânticos.")
-            source = "fallback"
+            source = 'fallback'
 
         self.attention.attend_message("user", text, priority=attention_state["priority"])
         self.attention.attend_message("assistant", answer, priority=attention_state["priority"])
@@ -277,6 +345,8 @@ class NixLMsNeuralCore:
             "network_output_norm": sum(x * x for x in output) ** .5,
             "response_source": source, "concepts": concepts,
             "llm_error": self.language.last_error if llm_attempted else None,
+            "llm_rejection_reason": llm_rejection_reason,
+            "relevant_memories_used": len(relevant_ranked),
             "retrieval_encoder_error": self._retrieval_encoder_error,
             "world_facts_considered": len(world_facts),
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),

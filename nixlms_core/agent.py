@@ -100,7 +100,15 @@ class NixLMsNeuralCore:
 
     def _recall(self, text, limit=8):
         encoder = self._active_retrieval_encoder()
-        return self.memory.recall(text, encoder, limit=limit)
+        try:
+            return self.memory.recall(text, encoder, limit=limit)
+        except (ImportError, OSError, RuntimeError) as exc:
+            if encoder is self.encoder:
+                raise
+            self._retrieval_encoder_error = f"{type(exc).__name__}: {exc}"
+            self.retrieval_encoder = self.encoder
+            self.memory._embedding_cache.clear()
+            return self.memory.recall(text, self.encoder, limit=limit)
 
     def respond(self, message, use_language=True):
         text = str(message).strip()

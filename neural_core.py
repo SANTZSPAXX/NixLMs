@@ -20,6 +20,12 @@ HELP = """Comandos:
                                       adiciona etapa a um objetivo
   /objetivo concluir ID || ETAPA_ID    conclui etapa liberada
   /objetivo proximos ID                mostra próximas etapas liberadas
+  /agenda listar                       lista tarefas agendadas
+  /agenda criar HANDLER SEGUNDOS       agenda tarefa recorrente
+  /agenda uma-vez HANDLER SEGUNDOS     agenda tarefa única
+  /agenda cancelar ID                 cancela tarefa pendente
+  /agenda executar                    executa tarefas vencidas agora
+  Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
   /avaliar                             métricas de recuperação e semântica
   /llm                                 disponibilidade do LLM local

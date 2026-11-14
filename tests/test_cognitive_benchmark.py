@@ -48,7 +48,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))
             ai.learning.dataset.add("Pergunta de avaliação sem resposta", "Resposta esperada.", "test")
-            before = len(ai.episodic.episodes)
+            before = len(ai.episodic.items)
 
             ai.learning.evaluate()
 

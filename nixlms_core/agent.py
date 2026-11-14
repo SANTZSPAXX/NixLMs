@@ -356,18 +356,10 @@ class NixLMsNeuralCore:
         if not text:
             return "Digite uma mensagem para começarmos."
 
-        signal = self.eeg.synthesize(profile={
-            "delta": .12, "theta": .24, "alpha": .32, "beta": .25, "gamma": .07
-        })
-        energies = self.eeg.band_energy(signal)
-        eeg_state = self.eeg.cognitive_state(energies)
         if isinstance(excluded_questions, str):
             excluded_questions = (excluded_questions,)
         excluded_questions = tuple(excluded_questions or ())
-        vector = self.encoder.encode(text)
-        output, hidden = self.network.forward(
-            vector, modulation=.8 + eeg_state["focus"] * .4
-        )
+        output, hidden, eeg_state, energies = self._lif_forward(text)
         lif_raw_ranked = self._lif_ranked_candidates(
             output, limit=3, exclude_questions=excluded_questions
         )
@@ -443,7 +435,27 @@ class NixLMsNeuralCore:
         temporal_answer = self._temporal_response(text)
         user_name_answer = self._user_name_response(text)
         greeting_answer = 'Olá! Sou a NixLMs. Como posso ajudar?' if self._is_greeting(text) else None
-        llm_attempted = (use_language and temporal_answer is None and user_name_answer is None and greeting_answer is None)
+        decoder_result = self.decoder.generate(
+            output, max_tokens=self.config.decoder_max_tokens
+        )
+        decoder_answer = str(decoder_result.get("text", "")).strip()
+        decoder_rejection_reason = None
+        decoder_accepted = False
+        if self.decoder.trained_steps <= 0:
+            decoder_rejection_reason = "decoder_untrained"
+        elif decoder_result.get("token_count", 0) < 2 or not decoder_answer:
+            decoder_rejection_reason = "too_few_tokens"
+        elif float(decoder_result.get("confidence", 0.0)) < float(self.config.decoder_min_confidence):
+            decoder_rejection_reason = "low_confidence"
+        elif normalize(decoder_answer) == normalize(text):
+            decoder_rejection_reason = "question_echo"
+        else:
+            decoder_accepted = True
+
+        llm_attempted = (
+            use_language and temporal_answer is None and user_name_answer is None
+            and greeting_answer is None and not decoder_accepted
+        )
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
             world_facts=world_facts, goals=goal_context,
@@ -452,6 +464,7 @@ class NixLMsNeuralCore:
                 "output_updates": self.network.output_updates,
                 "output_norm": sum(value * value for value in output) ** .5,
                 "readout_trained": self.network.output_updates > 0,
+                "neural_decoder_candidate": decoder_result,
             }
         ) if llm_attempted else None
         llm_rejection_reason = None
@@ -469,6 +482,9 @@ class NixLMsNeuralCore:
         elif greeting_answer:
             answer, source = greeting_answer, 'greeting_rule'
             confidence = 1.0
+        elif decoder_accepted:
+            answer, source = decoder_answer, "lif_neural_decoder"
+            confidence = float(decoder_result.get("confidence", 0.0))
         elif llm_answer:
             answer, source = llm_answer, 'lif_conditioned_llm' if lif_ranked else 'local_llm'
         elif lif_ranked:
@@ -511,7 +527,15 @@ class NixLMsNeuralCore:
             "lif_top_candidate_score": lif_raw_ranked[0]["score"] if lif_raw_ranked else None,
             "lif_top_candidate_answer": lif_raw_ranked[0]["answer"] if lif_raw_ranked else None,
             "lif_candidate_conditioned_generation": bool(lif_ranked and llm_answer),
+            "decoder_trained_steps": self.decoder.trained_steps,
+            "decoder_vocabulary_size": len(self.decoder.vocab),
+            "decoder_confidence": float(decoder_result.get("confidence", 0.0)),
+            "decoder_token_count": int(decoder_result.get("token_count", 0)),
+            "decoder_accepted": decoder_accepted,
+            "decoder_rejection_reason": decoder_rejection_reason,
+            "decoder_generated_text": decoder_answer,
             "neural_generation_path": (
+                "lif_neural_decoder" if decoder_accepted else
                 "lif_conditioned_llm" if lif_ranked and llm_answer else
                 "lif_associative_readout" if lif_ranked else
                 "llm_without_trained_lif_readout" if llm_answer else "no_trained_lif_readout"
@@ -525,7 +549,7 @@ class NixLMsNeuralCore:
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),
             "episodic_experiences_recalled": len(episodic_context),
-            "encoder": "trainable_word_bigram_contrastive"
+            "encoder": "trainable_word_bigram_char_subword"
         }
         if record:
             self.memory.add_episode("user", text)

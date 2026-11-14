@@ -151,6 +151,7 @@ class LIFCalibrationTests(unittest.TestCase):
                 "readout_updates": 12,
                 "encoder_updates": 7,
                 "encoder_vocab_size": len(ai.encoder.vocab),
+                "validation_fingerprint": ai.learning.validation_fingerprint(),
             })
 
             restored = NixLMsNeuralCore(data_dir)
@@ -160,6 +161,29 @@ class LIFCalibrationTests(unittest.TestCase):
             save_json(data_dir / "neural_weights.json", restored.network.state_dict())
             stale = NixLMsNeuralCore(data_dir)
             self.assertAlmostEqual(stale.config.lif_retrieval_threshold, 0.45)
+
+    def test_calibration_is_ignored_when_validation_dataset_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            ai.network.output_updates = 12
+            ai.encoder.updates = 7
+            ai.learning.dataset.add("validation question one", "validation answer one", "validation")
+            save_json(data_dir / "neural_weights.json", ai.network.state_dict())
+            ai._save_encoder()
+            save_json(data_dir / "lif_calibration.json", {
+                "schema_version": 1,
+                "threshold": 0.80,
+                "readout_updates": 12,
+                "encoder_updates": 7,
+                "encoder_vocab_size": len(ai.encoder.vocab),
+                "validation_fingerprint": ai.learning.validation_fingerprint(),
+            })
+
+            ai.learning.dataset.add("validation question two", "validation answer two", "validation")
+            restored = NixLMsNeuralCore(data_dir)
+
+            self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.45)
 
     def test_new_training_invalidates_persisted_calibration(self):
         with tempfile.TemporaryDirectory() as tmp:

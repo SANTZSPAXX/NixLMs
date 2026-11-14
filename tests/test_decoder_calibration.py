@@ -26,10 +26,10 @@ class DecoderCalibrationTests(unittest.TestCase):
              "token_count": 5, "confidence": 0.90, "terminated": True, "reason": None},
             {"text": "A água refrata a luz.", "tokens": ["a", "água", "refrata", "a", "luz"],
              "token_count": 5, "confidence": 0.80, "terminated": True, "reason": None},
-            {"text": "O sol está quente.", "tokens": ["o", "sol", "está", "quente"],
-             "token_count": 4, "confidence": 0.70, "terminated": True, "reason": None},
-            {"text": "Gato dorme.", "tokens": ["gato", "dorme"],
-             "token_count": 2, "confidence": 0.20, "terminated": True, "reason": None},
+            {"text": "A água reflete a luz.", "tokens": ["a", "água", "reflete", "a", "luz"],
+             "token_count": 5, "confidence": 0.70, "terminated": True, "reason": None},
+            {"text": "A água reflete a luz.", "tokens": ["a", "água", "reflete", "a", "luz"],
+             "token_count": 5, "confidence": 0.20, "terminated": True, "reason": None},
         ])
 
     def _prepare_trained(self, ai):

@@ -232,10 +232,12 @@ class LearningEngine:
             corpus.extend([pair["text_a"], pair["text_b"]])
         self.agent.encoder.fit_vocabulary(corpus)
 
+        self.agent.decoder.fit_vocabulary([row["answer"] for row in qa_rows])
         rng = random.Random(seed)
         losses = []
         updates = 0
         lif_losses = []
+        decoder_losses = []
         for _ in range(epochs):
             batch = list(pairs)
             rng.shuffle(batch)
@@ -250,8 +252,7 @@ class LearningEngine:
             qa_batch = list(qa_rows)
             rng.shuffle(qa_batch)
             for row in qa_batch:
-                input_vector = self.agent.encoder.encode(row["question"])
-                _, hidden = self.agent.network.forward(input_vector)
+                _, hidden, _, _ = self.agent._lif_forward(row["question"])
                 target = self.agent._compress_neural_target(
                     self.agent.encoder.encode(row["answer"])
                 )
@@ -259,10 +260,17 @@ class LearningEngine:
                     hidden, target,
                     learning_rate=self.agent.config.lif_output_learning_rate
                 ))
+            for row in qa_batch:
+                lif_context, _, _, _ = self.agent._lif_forward(row["question"])
+                decoder_result = self.agent.decoder.train_pair(
+                    lif_context, row["answer"]
+                )
+                decoder_losses.append(decoder_result["loss"])
 
         self.agent._save_encoder()
         save_json(self.agent.data_dir / "neural_weights.json",
                   self.agent.network.state_dict())
+        self.agent._save_decoder()
         self.last_training = {
             "qa_memories_upserted": len(qa_rows),
             "contrastive_pairs": len(pairs),
@@ -272,6 +280,9 @@ class LearningEngine:
             "lif_output_updates": self.agent.network.output_updates,
             "lif_qa_examples_trained": len(qa_rows),
             "mean_lif_readout_loss": sum(lif_losses) / len(lif_losses) if lif_losses else None,
+            "decoder_trained_steps": self.agent.decoder.trained_steps,
+            "decoder_vocabulary_size": len(self.agent.decoder.vocab),
+            "mean_decoder_loss": sum(decoder_losses) / len(decoder_losses) if decoder_losses else None,
             "vocabulary_size": len(self.agent.encoder.vocab),
         }
         return dict(self.last_training)
@@ -285,6 +296,47 @@ class LearningEngine:
     def _encode_passage(encoder, text):
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
+
+    def evaluate_decoder(self, qa_test=None):
+        """Avalia perplexidade e acurácia teacher-forced apenas no split test."""
+        rows = qa_test if qa_test is not None else [
+            row for row in self.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split") == "test"
+        ]
+        if self.agent.decoder.trained_steps <= 0:
+            return {
+                "samples": 0,
+                "trained_steps": 0,
+                "vocabulary_size": len(self.agent.decoder.vocab),
+                "metrics": {"loss": None, "perplexity": None,
+                            "token_accuracy": None, "oov_target_rate": None},
+                "protocol": {"test_split_used": True, "weights_updated": False},
+            }
+        scores = []
+        for row in rows:
+            context, _, _, _ = self.agent._lif_forward(row["question"])
+            result = self.agent.decoder.score(context, row["answer"])
+            if result["loss"] is not None:
+                scores.append(result)
+        count = len(scores)
+        known = sum(item["known_tokens"] for item in scores)
+        oov = sum(item["oov_tokens"] for item in scores)
+        return {
+            "samples": count,
+            "trained_steps": self.agent.decoder.trained_steps,
+            "vocabulary_size": len(self.agent.decoder.vocab),
+            "metrics": {
+                "loss": sum(item["loss"] for item in scores) / count if count else None,
+                "perplexity": (
+                    sum(item["perplexity"] for item in scores) / count if count else None
+                ),
+                "token_accuracy": (
+                    sum(item["token_accuracy"] for item in scores) / count if count else None
+                ),
+                "oov_target_rate": oov / (known + oov) if known + oov else None,
+            },
+            "protocol": {"test_split_used": True, "weights_updated": False},
+        }
 
     def evaluate_representations(self):
         """Mede generalização semântica validation->train e cobertura de subwords."""
@@ -731,12 +783,14 @@ class LearningEngine:
             "decision_threshold": threshold,
         }
         representations = self.evaluate_representations()
+        decoder = self.evaluate_decoder(qa_test)
         cognition = self.evaluate_cognition(qa_test, include_llm=include_llm)
 
         return {
             "retrieval": retrieval,
             "contrastive": contrastive,
             "representations": representations,
+            "decoder": decoder,
             "cognition": cognition,
             "protocol": {
                 "test_qa_samples": len(qa_test),

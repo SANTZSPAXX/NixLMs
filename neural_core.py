@@ -28,7 +28,7 @@ HELP = """Comandos:
   Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
   /avaliar                             métricas de recuperação e semântica
-  /llm                                 disponibilidade do LLM local
+  /llm                                 diagnóstico do Ollama local\n  /llm usar NOME                       seleciona modelo já instalado
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair
 """

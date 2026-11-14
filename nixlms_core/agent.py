@@ -261,13 +261,11 @@ class NixLMsNeuralCore:
         self._save_encoder()
 
     def feedback(self, question, positive=True):
+        """Avalia o episódio correspondente sem alterar pesos neurais sem treino validado."""
         if not str(question).strip():
-            return
-        vector = self.encoder.encode(question)
-        _, hidden = self.network.forward(vector, track_plasticity=True)
-        self.learner.reinforce(vector, hidden, 1.0 if positive else -.5)
-        save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
-        self.episodic.set_feedback(question, positive)
+            return False
+        episode = self.episodic.set_feedback(question, positive)
+        return episode is not None
 
     def status(self):
         retrieval_status = (

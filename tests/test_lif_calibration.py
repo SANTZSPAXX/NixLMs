@@ -156,6 +156,17 @@ class LIFCalibrationTests(unittest.TestCase):
             })
 
             restored = NixLMsNeuralCore(data_dir)
+            self.assertEqual(restored.network.output_updates, 12)
+            self.assertEqual(restored.encoder.updates, 7)
+            self.assertEqual(len(restored.encoder.vocab), len(ai.encoder.vocab))
+            self.assertEqual(
+                restored.learning.validation_fingerprint(),
+                ai.learning.validation_fingerprint(),
+            )
+            self.assertEqual(
+                restored.learning.lif_candidate_fingerprint(),
+                ai.learning.lif_candidate_fingerprint(),
+            )
             self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.80)
 
             restored.network.output_updates = 13

@@ -7,6 +7,13 @@
 {"question":"o que é aprendizado hebbiano","answer":"Aprendizado hebbiano ajusta conexões com base na coativação de unidades, frequentemente resumido como neurônios que disparam juntos fortalecem sua conexão.","split":"train"}
 {"question":"o que é um LLM","answer":"Um LLM é um modelo de linguagem de grande porte treinado para prever e gerar sequências de tokens.","split":"train"}
 {"question":"qual é a capital do Brasil","answer":"Brasília é a capital do Brasil.","split":"train"}
+{"question":"Explique inteligência artificial de forma simples","answer":"Inteligência artificial é um campo da computação que cria sistemas capazes de executar tarefas associadas a percepção, linguagem, previsão e decisão.","split":"validation"}
+{"question":"Descreva uma rede neural artificial","answer":"Uma rede neural é um modelo computacional composto por unidades conectadas que transformam sinais por meio de parâmetros ajustáveis.","split":"validation"}
+{"question":"Defina memória episódica com suas palavras","answer":"Memória episódica registra eventos e experiências situadas em um contexto temporal.","split":"validation"}
+{"question":"Para que serve a atenção computacional?","answer":"Atenção computacional prioriza partes de uma entrada ou contexto conforme relevância para a tarefa atual.","split":"validation"}
+{"question":"Como funciona o aprendizado hebbiano?","answer":"Aprendizado hebbiano ajusta conexões com base na coativação de unidades, frequentemente resumido como neurônios que disparam juntos fortalecem sua conexão.","split":"validation"}
+{"question":"O que quer dizer LLM?","answer":"Um LLM é um modelo de linguagem de grande porte treinado para prever e gerar sequências de tokens.","split":"validation"}
+{"question":"Qual é a cidade capital do Brasil?","answer":"Brasília é a capital do Brasil.","split":"validation"}
 {"question":"qual linguagem é usada nesta implementação","answer":"A implementação da NixLMs Neural Core é escrita em Python.","split":"test"}
 {"question":"o que significa LIF","answer":"LIF significa Leaky Integrate-and-Fire, um modelo simplificado de neurônio que acumula potencial e dispara ao atingir um limiar.","split":"test"}
 {"question":"O que é um mapa mental computacional","answer":"É uma representação em grafo de conceitos e relações que permite explorar associações entre informações.","split":"test"}

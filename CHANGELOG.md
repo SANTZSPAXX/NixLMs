@@ -1,5 +1,14 @@
 # Changelog
 
+## Reliability improvements — runtime integration
+
+- Added deterministic local date/time responses that work without an installed LLM.
+- Reused the configured retrieval encoder for episodic as well as semantic memory.
+- Added bounded context fields and explicit untrusted-context instructions to reduce prompt-injection risk from retrieved memories.
+- Distinguished Ollama service reachability from model availability and validated malformed API payloads.
+- Added response trace diagnostics for LLM and retrieval backend failures.
+
+
 ## 0.7.0 — Episodic Experience Memory (em desenvolvimento)
 
 - Added structured persistent episodes with timestamps, context, response source, outcome, importance and tags.

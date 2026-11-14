@@ -53,6 +53,19 @@ class EpisodicMemoryTests(unittest.TestCase):
             self.assertEqual(len(memory.items), 1)
             self.assertEqual(memory.items[0]["user_input"], "segunda")
 
+    def test_agent_records_interaction_and_feedback(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            ai.respond("Pergunta experimental sobre memória episódica", use_language=False)
+            self.assertEqual(len(ai.episodic.items), 1)
+            episode = ai.episodic.items[0]
+            self.assertEqual(episode["user_input"], "Pergunta experimental sobre memória episódica")
+            self.assertIn("response_source", episode["context"])
+            ai.feedback("Pergunta experimental sobre memória episódica", True)
+            self.assertEqual(ai.episodic.items[0]["feedback"], "positive")
+            self.assertEqual(ai.status()["positive_feedback"], 1)
+
     def test_empty_query_and_nonpositive_limit_return_no_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             memory = EpisodicMemory(Path(tmp) / "episodic.json")

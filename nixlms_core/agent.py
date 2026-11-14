@@ -85,15 +85,22 @@ class NixLMsNeuralCore:
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
 
-    def _recall(self, text, limit=8):
+    def _active_retrieval_encoder(self):
+        if self.retrieval_encoder is self.encoder:
+            return self.encoder
         try:
-            return self.memory.recall(text, self.retrieval_encoder, limit=limit)
+            # Inicializa o backend uma única vez antes de usá-lo no benchmark
+            # ou na memória; o encoder retorna vetor zero para texto vazio.
+            self.retrieval_encoder.encode_query("")
         except (ImportError, OSError, RuntimeError) as exc:
-            if self.retrieval_encoder is self.encoder:
-                raise
             self._retrieval_encoder_error = f"{type(exc).__name__}: {exc}"
             self.retrieval_encoder = self.encoder
-            return self.memory.recall(text, self.encoder, limit=limit)
+            self.memory._embedding_cache.clear()
+        return self.retrieval_encoder
+
+    def _recall(self, text, limit=8):
+        encoder = self._active_retrieval_encoder()
+        return self.memory.recall(text, encoder, limit=limit)
 
     def respond(self, message, use_language=True):
         text = str(message).strip()

@@ -28,6 +28,7 @@ HELP = """Comandos:
   Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
   /calibrar-lif                        calibra limiar LIF com split validation
+  /calibrar-decoder                    calibra confiança do decoder com split validation
   /avaliar                             benchmark offline de recuperação, semântica e respostas
   /avaliar-llm                         benchmark integrado usando o Ollama local (opcional)
   /llm                                 diagnóstico do Ollama local
@@ -186,6 +187,12 @@ def main():
                 print(ai.learning.calibrate_lif_threshold())
             except ValueError as exc:
                 print("Falha na calibração LIF:", exc)
+            continue
+        if low == "/calibrar-decoder":
+            try:
+                print(ai.learning.calibrate_decoder_confidence())
+            except ValueError as exc:
+                print("Falha na calibração do decoder:", exc)
             continue
         if low in {"/avaliar", "/avaliar-llm"}:
             try:

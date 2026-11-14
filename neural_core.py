@@ -27,6 +27,7 @@ HELP = """Comandos:
   /agenda executar                    executa tarefas vencidas agora
   Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
+  /calibrar-lif                        calibra limiar LIF com split validation
   /avaliar                             benchmark offline de recuperação, semântica e respostas
   /avaliar-llm                         benchmark integrado usando o Ollama local (opcional)
   /llm                                 diagnóstico do Ollama local
@@ -176,6 +177,12 @@ def main():
                 print(ai.learning.train(int(parts[1]) if len(parts) > 1 else 1))
             except ValueError as exc:
                 print("Falha no treinamento:", exc)
+            continue
+        if low == "/calibrar-lif":
+            try:
+                print(ai.learning.calibrate_lif_threshold())
+            except ValueError as exc:
+                print("Falha na calibração LIF:", exc)
             continue
         if low in {"/avaliar", "/avaliar-llm"}:
             try:

@@ -117,13 +117,16 @@ class NixLMsNeuralCore:
         right_norm = sum(float(b) ** 2 for b in right) ** .5
         return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
-    def _lif_recall(self, neural_output, limit=3):
+    def _lif_recall(self, neural_output, limit=3, exclude_questions=None):
         """Recupera respostas pela representação produzida pela rede LIF treinada."""
         if self.network.output_updates <= 0:
             return []
+        excluded = {normalize(text) for text in (exclude_questions or [])}
         ranked = []
         seen = set()
         for item in self.memory.knowledge:
+            if normalize(item.get("question", "")) in excluded:
+                continue
             answer = str(item.get("answer", "")).strip()
             key = normalize(answer)
             if not answer or not key or key in seen:
@@ -154,17 +157,21 @@ class NixLMsNeuralCore:
             self.memory._embedding_cache.clear()
         return self.retrieval_encoder
 
-    def _recall(self, text, limit=8):
+    def _recall(self, text, limit=8, exclude_questions=None):
         encoder = self._active_retrieval_encoder()
         try:
-            return self.memory.recall(text, encoder, limit=limit)
+            return self.memory.recall(
+                text, encoder, limit=limit, exclude_questions=exclude_questions
+            )
         except (ImportError, OSError, RuntimeError) as exc:
             if encoder is self.encoder:
                 raise
             self._retrieval_encoder_error = f"{type(exc).__name__}: {exc}"
             self.retrieval_encoder = self.encoder
             self.memory._embedding_cache.clear()
-            return self.memory.recall(text, self.encoder, limit=limit)
+            return self.memory.recall(
+                text, self.encoder, limit=limit, exclude_questions=exclude_questions
+            )
 
     def _scheduled_memory_housekeeping(self, payload):
         """Manutenção conservadora: poda apenas além do limite já configurado."""
@@ -269,7 +276,7 @@ class NixLMsNeuralCore:
             return f"Hoje é {date_text}."
         return f"Agora são {time_text}."
 
-    def respond(self, message, use_language=True, record=True):
+    def respond(self, message, use_language=True, record=True, excluded_questions=None):
         text = str(message).strip()
         if not text:
             return "Digite uma mensagem para começarmos."
@@ -279,15 +286,20 @@ class NixLMsNeuralCore:
         })
         energies = self.eeg.band_energy(signal)
         eeg_state = self.eeg.cognitive_state(energies)
+        excluded_questions = tuple(excluded_questions or ())
         vector = self.encoder.encode(text)
         output, hidden = self.network.forward(
             vector, modulation=.8 + eeg_state["focus"] * .4
         )
-        lif_ranked = self._lif_recall(output, limit=3)
+        lif_ranked = self._lif_recall(
+            output, limit=3, exclude_questions=excluded_questions
+        )
 
         if record:
             self.mental_map.observe(text)
-        ranked = self._recall(text, limit=8)
+        ranked = self._recall(
+            text, limit=8, exclude_questions=excluded_questions
+        )
         candidates = [
             {"question": item.get("question", ""), "answer": item.get("answer", ""),
              "priority": score}
@@ -331,7 +343,10 @@ class NixLMsNeuralCore:
                 "source": "lif_associative_readout",
             })
         episodic_encoder = self._active_retrieval_encoder()
-        episodic_context = self.episodic.recall(text, episodic_encoder, limit=3)
+        episodic_context = self.episodic.recall(
+            text, episodic_encoder, limit=3,
+            exclude_user_inputs=excluded_questions,
+        )
         for _, episode in episodic_context:
             feedback = episode.get("feedback") or "sem feedback"
             memory_context.append({

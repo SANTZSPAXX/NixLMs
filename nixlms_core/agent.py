@@ -648,6 +648,7 @@ class NixLMsNeuralCore:
             "llm_error": self.language.last_error if llm_attempted else None,
             "llm_model_used": self.language.last_used_model if llm_attempted else None,
             "llm_generation_verified": bool(llm_attempted and self.language.last_used_model == self.language.model),
+            "llm_answer_used": source in {"lif_conditioned_llm", "local_llm"},
             "llm_rejection_reason": llm_rejection_reason,
             "relevant_memories_used": len(relevant_ranked),
             "retrieval_encoder_error": self._retrieval_encoder_error,

@@ -88,6 +88,7 @@ class LanguageEngine:
             "installed_models": list(self.installed_models),
             "reachable": self.reachable,
             "last_error": self.last_error, "last_check": self.last_check,
+            "last_used_model": self.last_used_model, "last_generation": self.last_generation,
         }
 
     def available(self):

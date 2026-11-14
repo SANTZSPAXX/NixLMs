@@ -273,7 +273,7 @@ class CoreTests(unittest.TestCase):
     def test_dataset_import_rejects_invalid_split(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "bad.jsonl"
-            source.write_text('{"question":"x","answer":"y","split":"validation"}', encoding="utf-8")
+            source.write_text('{"question":"x","answer":"y","split":"holdout"}', encoding="utf-8")
             ai = NixLMsNeuralCore(Path(tmp) / "data")
             with self.assertRaises(ValueError):
                 ai.learning.dataset.import_jsonl(source)

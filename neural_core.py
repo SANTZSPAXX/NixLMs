@@ -27,6 +27,7 @@ HELP = """Comandos:
   /agenda executar                    executa tarefas vencidas agora
   Handlers: memory_housekeeping, dataset_audit, goal_review
   /treinar [epocas]                    treino contrastivo incremental
+  /calibrar-lif                        calibra limiar LIF com split validation
   /avaliar                             benchmark offline de recuperação, semântica e respostas
   /avaliar-llm                         benchmark integrado usando o Ollama local (opcional)
   /llm                                 diagnóstico do Ollama local
@@ -166,7 +167,10 @@ def main():
         if low.startswith("/importar "):
             source = Path(msg[len("/importar "):].strip()).expanduser()
             try:
-                print("Registros importados:", ai.learning.dataset.import_jsonl(source))
+                imported = ai.learning.dataset.import_jsonl(source)
+                if imported:
+                    ai.invalidate_lif_calibration()
+                print("Registros importados:", imported)
             except (OSError, ValueError) as exc:
                 print("Falha ao importar:", exc)
             continue
@@ -176,6 +180,12 @@ def main():
                 print(ai.learning.train(int(parts[1]) if len(parts) > 1 else 1))
             except ValueError as exc:
                 print("Falha no treinamento:", exc)
+            continue
+        if low == "/calibrar-lif":
+            try:
+                print(ai.learning.calibrate_lif_threshold())
+            except ValueError as exc:
+                print("Falha na calibração LIF:", exc)
             continue
         if low in {"/avaliar", "/avaliar-llm"}:
             try:
@@ -195,6 +205,7 @@ def main():
                 continue
             try:
                 ai.learning.dataset.add_pair(parts[0], parts[1], int(parts[2]), "train")
+                ai.invalidate_lif_calibration()
                 ai.encoder.fit_vocabulary(parts[:2])
                 ai._save_encoder()
                 print("Par contrastivo salvo. Execute /treinar para ajustar as representações.")

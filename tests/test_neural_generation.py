@@ -56,6 +56,24 @@ class LIFReadoutTests(unittest.TestCase):
                              "lif_associative_readout")
             self.assertGreater(ai.last_trace["lif_retrieval_candidates"], 0)
 
+    def test_raw_lif_candidate_score_is_traced_below_acceptance_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            question = "consulta candidata de diagnóstico"
+            ai.memory.knowledge = [{"question": question, "answer": "Resposta candidata."}]
+            ai.network.output_updates = 1
+            ai.network.w_out = [
+                [0.0] * ai.network.hidden_size
+                for _ in range(ai.network.output_size)
+            ]
+            ai.config.lif_retrieval_threshold = 1.1
+
+            ai.respond(question, use_language=False, record=False)
+
+            self.assertEqual(ai.last_trace["lif_retrieval_candidates"], 0)
+            self.assertEqual(ai.last_trace["lif_top_candidate_answer"], "Resposta candidata.")
+            self.assertAlmostEqual(ai.last_trace["lif_top_candidate_score"], 0.0)
+
     def test_untrained_lif_readout_is_not_used_as_a_language_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

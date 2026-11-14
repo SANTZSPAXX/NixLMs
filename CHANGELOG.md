@@ -1,5 +1,15 @@
 # Changelog
 
+## Validation-driven LIF calibration
+
+- Adds a dedicated validation dataset split, separate from training and final test data.
+- Keeps encoder vocabulary construction and training restricted to the train split.
+- Adds a validation-only procedure to select the LIF acceptance threshold from top-candidate precision/recall/F1.
+- Persists calibration only when validation has enough correct and incorrect top candidates.
+- Binds saved calibration to readout/encoder update counts, vocabulary size, validation-set fingerprint, and candidate-memory fingerprint; stale calibration is ignored and new training invalidates it.
+- Adds `/calibrar-lif` to CLI and Colab and expands the starter dataset with paraphrased validation QA.
+
+
 ## Integrated cognitive benchmark
 
 - Adds end-to-end evaluation of held-out QA responses through the normal NixLMs response pipeline.

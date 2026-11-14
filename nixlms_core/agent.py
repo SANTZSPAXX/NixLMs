@@ -233,6 +233,7 @@ class NixLMsNeuralCore:
         try:
             threshold = float(state["threshold"])
             readout_updates = int(state["readout_updates"])
+            recurrent_updates = int(state.get("recurrent_updates", 0))
             encoder_updates = int(state["encoder_updates"])
             vocab_size = int(state["encoder_vocab_size"])
         except (KeyError, TypeError, ValueError):
@@ -240,6 +241,8 @@ class NixLMsNeuralCore:
         if not math.isfinite(threshold) or not -1.000001 <= threshold <= 1.000001:
             return False
         if readout_updates != self.network.output_updates:
+            return False
+        if recurrent_updates != self.network.recurrent_updates:
             return False
         if encoder_updates != self.encoder.updates or vocab_size != len(self.encoder.vocab):
             return False
@@ -262,6 +265,7 @@ class NixLMsNeuralCore:
             decoder_steps = int(state["decoder_trained_steps"])
             decoder_vocab_size = int(state["decoder_vocab_size"])
             lif_updates = int(state["lif_readout_updates"])
+            lif_recurrent_updates = int(state.get("lif_recurrent_updates", 0))
             encoder_updates = int(state["encoder_updates"])
             encoder_vocab_size = int(state["encoder_vocab_size"])
         except (KeyError, TypeError, ValueError):
@@ -273,6 +277,8 @@ class NixLMsNeuralCore:
         if decoder_vocab_size != len(self.decoder.vocab):
             return False
         if lif_updates != self.network.output_updates:
+            return False
+        if lif_recurrent_updates != self.network.recurrent_updates:
             return False
         if encoder_updates != self.encoder.updates or encoder_vocab_size != len(self.encoder.vocab):
             return False

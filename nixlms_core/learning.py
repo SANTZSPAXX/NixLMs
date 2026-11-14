@@ -270,7 +270,8 @@ class LearningEngine:
         self.agent._save_encoder()
         save_json(self.agent.data_dir / "neural_weights.json",
                   self.agent.network.state_dict())
-        self.agent._save_decoder()
+        if getattr(self.agent, "decoder_persistence_enabled", True):
+            self.agent._save_decoder()
         self.last_training = {
             "qa_memories_upserted": len(qa_rows),
             "contrastive_pairs": len(pairs),

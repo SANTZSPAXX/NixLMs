@@ -3,10 +3,10 @@
 ## Safe incremental learning and rollback checkpoints
 
 - Adds isolated candidate training: the active model is never modified while training and evaluating a candidate.
-- Saves pre-training encoder, LIF, decoder and calibration snapshots under `data/checkpoints/incremental/` with SHA-256 manifests.
+- Saves pre-training encoder, LIF, decoder, learned knowledge, mental map and calibration snapshots under `data/checkpoints/incremental/` with SHA-256 manifests.
 - Compares decoder loss/token accuracy, generation token-F1, LIF readout loss and representation margins on the validation split only.
 - Promotes candidate weights only when at least one metric improves and no protected metric regresses beyond tolerance; otherwise leaves the active model untouched.
-- Detects concurrent changes to validation data or active model weights before promotion.
+- Detects concurrent changes to any dataset split or active model/knowledge state before promotion.
 - Adds explicit checkpoint restore with path validation and integrity checks; no automatic checkpoint pruning.
 - Routes CLI and Colab `/treinar` through the safe pipeline and adds `/rollback ID`.
 - Keeps the existing low-level `LearningEngine.train()` for direct/internal experiments; interactive training uses `train_incremental()`.

@@ -237,6 +237,8 @@ class CoreTests(unittest.TestCase):
             metrics = ai.learning.evaluate()
             self.assertEqual(metrics["retrieval"]["samples"], 1)
             self.assertEqual(metrics["contrastive"]["samples"], 1)
+            self.assertEqual(metrics["lif_representations"]["samples"], 1)
+            self.assertTrue(metrics["lif_representations"]["protocol"]["test_split_used"])
 
     def test_semantic_benchmark_reports_comparable_retrieval_channels(self):
         with tempfile.TemporaryDirectory() as tmp:

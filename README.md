@@ -12,6 +12,21 @@
 - **Context Integration:** fatos e objetivos podem ser fornecidos ao LLM local Ollama como contexto identificado.
 - **Benchmark Consistency:** recuperação híbrida usa a mesma fórmula e o contrato query/passage do sistema de memória.
 
+## Memória episódica e aprendizagem experiencial (0.7 em desenvolvimento)
+
+A memória episódica registra cada interação como uma experiência estruturada em `data/episodic_memory.json`, separada da memória de perguntas/respostas e do modelo de fatos.
+
+Cada episódio inclui:
+- Timestamp UTC e identificador único.
+- Entrada do usuário e resposta produzida.
+- Contexto de execução, origem da resposta e confiança estimada.
+- Resultado registrado, importância, tags e feedback explícito.
+- Recuperação por relevância lexical/semântica, recência e feedback.
+
+O feedback `/positivo` e `/negativo` atualiza a avaliação do episódio correspondente e mantém o mecanismo de reforço neural explícito já existente. A recuperação episódica pode fornecer experiências anteriores ao LLM local como contexto, sem tratá-las como fatos verificados.
+
+Limites: feedback não comprova que uma resposta está correta; episódios não são automaticamente convertidos em conhecimento factual; não há consolidação abstrativa nem alteração autônoma de pesos. A recuperação é uma heurística híbrida e deve ser avaliada em benchmark antes de qualquer alegação de melhoria geral.
+
 ## Agendador persistente (0.6)
 
 O `TaskScheduler` usa SQLite e apenas a biblioteca padrão do Python. As tarefas sobrevivem ao reinício do processo e são executadas por handlers registrados explicitamente pelo runtime.

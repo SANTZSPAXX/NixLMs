@@ -1,41 +1,42 @@
 # NixLMs
 
-**NixLMs 0.4.0 — Semantic Learning Architecture** é uma IA experimental modular em Python, compatível com Windows e Google Colab. Esta versão introduz um encoder de palavras e bigramas treinável por pares contrastivos, memória vetorial híbrida e avaliação separada de recuperação e similaridade.
+**NixLMs 0.5.0 — Balanced Cognitive Evolution** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
 
-## O que mudou na 0.4
+## Evolução 0.5
 
-- **Semantic Encoder:** embeddings densos treináveis de tokens e bigramas, com vocabulário persistente e inicialização determinística.
-- **Contrastive Learning:** pares positivos aproximam representações; pares negativos com similaridade acima da margem são afastados.
-- **Semantic Memory:** recuperação combina similaridade vetorial e sobreposição lexical; o peso semântico cresce gradualmente conforme o encoder acumula atualizações contrastivas, até 85%; não executa a rede LIF para cada memória.
-- **Memory Upsert:** ensinar ou treinar repetidamente uma mesma pergunta atualiza o registro em vez de duplicá-lo.
-- **LIF:** telemetria de disparos real, traços de elegibilidade corrigidos e plasticidade acumulada apenas durante aprendizagem/feedback explícitos.
-- **Evaluation Engine:** métricas separadas de recuperação QA e classificação de pares contrastivos.
-- **Ollama:** integração opcional com endpoint localhost; endereços remotos são recusados.
+- **Dataset Integrity:** importação JSONL transacional, auditoria de separação train/test e bloqueio de sobreposição textual entre QA e pares contrastivos.
+- **World Model:** memória de fatos tipados com sujeito, relação, objeto, confiança, fonte e timestamps. Possíveis conflitos são apresentados sem resolução automática.
+- **Goal Manager:** objetivos persistentes, etapas, dependências e lista de próximas ações. O módulo organiza planos, mas não executa ações.
+- **Optional Multilingual Retrieval:** backend opcional `TransformersSentenceEncoder` para recuperação com embeddings pré-treinados, carregado sob demanda, somente CPU e arquivos locais/cache.
+- **Native Neural Core:** o encoder treinável nativo continua alimentando a rede LIF e recebendo treinamento contrastivo.
+- **Context Integration:** fatos e objetivos podem ser fornecidos ao LLM local Ollama como contexto identificado.
+- **Benchmark Consistency:** recuperação híbrida usa a mesma fórmula e o contrato query/passage do sistema de memória.
 
-## Benchmark semântico (base da 0.5)
+## Arquitetura atual
 
-O comando `/avaliar` agora compara três estratégias de recuperação sobre os mesmos exemplos QA de teste:
-
-- **Lexical:** Jaccard entre tokens normalizados.
-- **Semantic:** similaridade cosseno entre embeddings.
-- **Hybrid:** combinação ponderada das duas estratégias, usando o mesmo peso progressivo da memória.
-
-Para cada canal são calculados **MRR** e **Recall@1, @3 e @5**. A classificação de pares contrastivos informa accuracy, precision, recall, F1, specificity, matriz de confusão e médias de similaridade positiva/negativa. A avaliação aceita limiar e K's configuráveis pela API Python: `ai.learning.evaluate(threshold=0.25, ks=(1, 3, 5))`.
-
-O conjunto QA de teste é comparado com o conteúdo atualmente presente em `memory.knowledge`; ele não é inserido automaticamente na memória durante a avaliação. Por isso, para medir recuperação de forma válida, cadastre exemplos de treino na memória e mantenha perguntas/respostas de teste realmente separadas. Os pares de teste também não participam do treinamento. O dataset inicial é pequeno e serve apenas como smoke test: resultados estatisticamente úteis exigem um conjunto de teste maior, representativo e sem paráfrases duplicadas entre divisões.
+- **Semantic Encoder:** embeddings treináveis de palavras e bigramas, inicialização determinística e aprendizado contrastivo.
+- **LIF/STDP:** rede recorrente experimental com telemetria de disparos e plasticidade somente durante aprendizado/feedback explícitos.
+- **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
+- **Attention:** memória de trabalho e priorização de contexto.
+- **Mental Map:** grafo associativo lexical.
+- **World Model:** grafo local de fatos com proveniência e confiança.
+- **Goal Manager:** registro de objetivos e dependências.
+- **Language Engine:** Ollama local opcional, limitado a loopback.
 
 ## Limitações importantes
 
-O Semantic Encoder 0.4 é um modelo compacto treinável de embeddings de palavras e bigramas, não um Transformer contextual pré-treinado. Ele começa com vetores determinísticos inicializados aleatoriamente e aprende similaridades a partir dos pares contrastivos fornecidos. Portanto, **não possui semântica geral garantida sem dados de treinamento suficientes e representativos**. A ordem local é parcialmente representada por bigramas; relações linguísticas complexas e contexto longo ainda não são modelados adequadamente.
+O encoder nativo não é um Transformer pré-treinado. Ele aprende a partir dos pares fornecidos e não possui semântica geral garantida. O backend E5 opcional melhora a qualidade inicial da recuperação semântica, mas não treina automaticamente o encoder nativo nem prova raciocínio geral.
 
-O HashEncoder permanece no código apenas para compatibilidade. A rede LIF/STDP é experimental e não substitui o encoder semântico. As métricas são proxies de tarefas específicas, não prova de compreensão geral, consciência ou senciência.
+O modelo de mundo não extrai fatos automaticamente de texto; fatos são registrados explicitamente e devem ter fonte confiável. Conflitos não são decididos automaticamente. O Goal Manager não executa etapas nem autoriza ações. Visão e audição ainda não fazem parte do runtime desta versão.
+
+As métricas são proxies de tarefas específicas, não prova de compreensão geral, consciência ou senciência.
 
 ## Requisitos
 
 - Python 3.10 ou superior.
 - Núcleo sem dependências externas obrigatórias.
 - Execução em CPU; GPU não é necessária.
-- Para máquinas com 8 GB de RAM, mantenha o LLM opcional desativado ou use um modelo Ollama pequeno.
+- Para máquinas com 8 GB de RAM, mantenha o LLM opcional pequeno e carregue o encoder pré-treinado apenas se houver memória disponível.
 
 ## Windows
 
@@ -47,9 +48,42 @@ Ou execute `iniciar_neural.bat`.
 
 ## Google Colab
 
-Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/feature/semantic-learning-0.4/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.
+Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/feature/nixlms-0.5-balanced-evolution/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.
 
-## Treinamento
+## Backend opcional de embeddings multilíngues
+
+A referência inicial é [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small): 118M parâmetros, 384 dimensões, contexto de até 512 tokens, licença MIT e suporte a português entre aproximadamente 100 idiomas. O leaderboard MTEB reporta cerca de 449 MB de memória para o modelo; o consumo total do processo depende também do PyTorch, precisão e runtime. O backend usa CPU e `local_files_only=True`: não baixa modelos automaticamente nem envia texto para serviços externos.
+
+1. Instale PyTorch para CPU conforme as instruções oficiais para sua versão do Windows/Python. Exemplo para Windows x64:
+
+```powershell
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+2. Instale a dependência opcional:
+
+```powershell
+python -m pip install -r requirements-embeddings.txt
+```
+
+3. Baixe o modelo manualmente com a ferramenta Hugging Face e mantenha-o em uma pasta local. Exemplo:
+
+```powershell
+hf download intfloat/multilingual-e5-small --local-dir models/multilingual-e5-small
+```
+
+4. Configure a pasta local antes de iniciar:
+
+```powershell
+$env:NIXLMS_EMBEDDING_MODEL_PATH = ".\\models\\multilingual-e5-small"
+python neural_core.py
+```
+
+O carregamento é lazy. Se o pacote ou os pesos locais não estiverem disponíveis, a NixLMs retorna ao encoder nativo. O encoder pré-treinado é usado somente para recuperação; o encoder nativo continua responsável pelo vetor LIF e pelo treinamento contrastivo. E5 recebe prefixo `query:` para consultas e `passage:` para itens da memória.
+
+Sem essa configuração, o núcleo continua funcionando sem PyTorch, Transformers ou acesso à internet.
+
+## Treinamento e avaliação
 
 O dataset inicial está em `datasets/starter_ptbr.jsonl`. Ele contém exemplos QA e pares contrastivos:
 
@@ -64,15 +98,35 @@ No terminal:
 /avaliar
 ```
 
-Para criar pares manualmente:
+A auditoria pode ser consultada pela API:
 
-```text
-/ensinar-par estou feliz || estou contente || 1
-/ensinar-par o cachorro persegue o gato || o gato persegue o cachorro || 0
-/treinar 5
+```python
+report = ai.learning.dataset.audit_splits()
+print(report)
 ```
 
-O conjunto de teste não é utilizado pelo treinamento. Separe pares de teste que não sejam simples duplicatas ou reformulações triviais dos pares de treino.
+O treinamento e a avaliação recusam datasets com sobreposição exata de textos de entrada entre treino e teste. Para avaliações confiáveis, use datasets maiores, representativos e com deduplicação de paráfrases; os exemplos iniciais são apenas smoke tests.
+
+## Modelo de mundo e objetivos
+
+Registrar um fato:
+
+```text
+/fato Terra || orbita || Sol || fonte científica
+/fato-buscar Terra Sol
+```
+
+Criar objetivo e etapas:
+
+```text
+/objetivo criar Evoluir a memória semântica
+/objetivo etapa goal-ID || Criar benchmark
+/objetivo etapa goal-ID || Integrar avaliação || step-ID
+/objetivo proximos goal-ID
+/objetivo concluir goal-ID || step-ID
+```
+
+As dependências precisam estar concluídas antes de iniciar ou concluir uma etapa dependente. O sistema apenas registra e apresenta o plano.
 
 ## Memória e persistência
 
@@ -82,10 +136,12 @@ Os arquivos em `data/` incluem:
 - `knowledge.json`: conhecimento QA.
 - `episodes.json`: histórico episódico.
 - `mental_map.json`: grafo associativo.
+- `world_model.json`: fatos tipados e proveniência.
+- `goals.json`: objetivos e etapas.
 - `neural_weights.json`: pesos LIF e elegibilidade.
 - `dataset.json`: exemplos locais de treinamento.
 
-Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso.
+Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso. Os novos módulos criam seus próprios arquivos sem sobrescrever os arquivos anteriores.
 
 ## Testes
 
@@ -97,8 +153,13 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 
 ## Segurança e privacidade
 
-O adaptador Ollama aceita somente `localhost`, `127.0.0.1` ou `::1`. Não inclua dados pessoais ou confidenciais nos datasets sem autorização e base legal. O núcleo não acessa sensores nem dispositivos.
+- O adaptador Ollama aceita somente `localhost`, `127.0.0.1` ou `::1`.
+- O backend de embeddings aceita somente carregamento local/cache.
+- O modelo de mundo registra fonte e confiança; não transforma afirmações em verdades verificadas.
+- O Goal Manager não executa ferramentas, comandos ou alterações no sistema.
+- Não inclua dados pessoais ou confidenciais nos datasets sem autorização e base legal.
+- O núcleo não acessa sensores nem dispositivos.
 
 ## Arquitetura
 
-`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, aprendizagem, cognição, EEG sintético e adaptador linguístico opcional.
+`nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.

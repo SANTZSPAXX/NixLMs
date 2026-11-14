@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interface de terminal da NixLMs Neural Core 0.4."""
+"""Interface de terminal da NixLMs Neural Core 0.5."""
 from pathlib import Path
 from nixlms_core import NixLMsNeuralCore
 
@@ -11,6 +11,15 @@ HELP = """Comandos:
   /status                              estado dos módulos
   /eeg                                 bandas sintéticas e atividade LIF
   /mapa                                conceitos e associações
+  /fato sujeito || relação || objeto [|| fonte]
+                                      registra fato com proveniência
+  /fato-buscar texto                   pesquisa fatos do modelo de mundo
+  /objetivo criar título               cria um objetivo
+  /objetivo listar                     lista objetivos
+  /objetivo etapa ID || título [|| dependência1,dependência2]
+                                      adiciona etapa a um objetivo
+  /objetivo concluir ID || ETAPA_ID    conclui etapa liberada
+  /objetivo proximos ID                mostra próximas etapas liberadas
   /treinar [epocas]                    treino contrastivo incremental
   /avaliar                             métricas de recuperação e semântica
   /llm                                 disponibilidade do LLM local
@@ -18,16 +27,51 @@ HELP = """Comandos:
   /ajuda | /sair
 """
 
+
+def _objective_command(ai, message):
+    parts = message.split(None, 2)
+    if len(parts) < 2:
+        print("Use /objetivo criar|listar|etapa|concluir|proximos ...")
+        return
+    action = parts[1].lower()
+    payload = parts[2] if len(parts) > 2 else ""
+    try:
+        if action == "criar":
+            goal = ai.goals.create_goal(payload)
+            print("Objetivo criado:", goal)
+        elif action == "listar":
+            print(ai.goals.list_goals())
+        elif action == "etapa":
+            fields = [value.strip() for value in payload.split("||")]
+            if len(fields) not in (2, 3):
+                print("Use /objetivo etapa ID || título [|| dependência1,dependência2]")
+                return
+            dependencies = [value.strip() for value in fields[2].split(",") if value.strip()] if len(fields) == 3 else []
+            print("Etapa criada:", ai.goals.add_step(fields[0], fields[1], dependencies))
+        elif action == "concluir":
+            fields = [value.strip() for value in payload.split("||")]
+            if len(fields) != 2:
+                print("Use /objetivo concluir ID || ETAPA_ID")
+                return
+            print("Etapa atualizada:", ai.goals.set_step_status(fields[0], fields[1], "completed"))
+        elif action == "proximos":
+            print(ai.goals.next_actions(payload.strip()))
+        else:
+            print("Ação desconhecida. Use /ajuda.")
+    except ValueError as exc:
+        print("Falha no objetivo:", exc)
+
+
 def main():
     ai = NixLMsNeuralCore()
-    print("NixLMs Neural Core 0.4.0 | Semantic Learning")
+    print("NixLMs Neural Core 0.5.0 | Balanced Cognitive Evolution")
     print("LLM local:", "disponível" if ai.language.available() else "não detectado; fallback para memória")
     print("Digite /ajuda para comandos.")
     while True:
         try:
             msg = input("Você: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\\nAté logo!")
+            print("\nAté logo!")
             break
         if not msg:
             continue
@@ -48,8 +92,27 @@ def main():
         if low == "/mapa":
             print({"concepts": len(ai.mental_map.nodes), "associations": ai.mental_map.associate(ai.last_question, 12)})
             continue
+        if low.startswith("/fato-buscar "):
+            print(ai.world_model.search(msg[len("/fato-buscar "):], limit=10))
+            continue
+        if low.startswith("/fato "):
+            fields = [value.strip() for value in msg[len("/fato "):].split("||")]
+            if len(fields) not in (3, 4):
+                print("Use /fato sujeito || relação || objeto [|| fonte]")
+                continue
+            try:
+                print("Fato registrado:", ai.world_model.assert_fact(
+                    fields[0], fields[1], fields[2], source=fields[3] if len(fields) == 4 else "user"
+                ))
+            except ValueError as exc:
+                print("Falha ao registrar fato:", exc)
+            continue
+        if low.startswith("/objetivo"):
+            _objective_command(ai, msg)
+            continue
         if low == "/llm":
             print(ai.language.status(), "available=", ai.language.available())
+            print("Encoder de recuperação:", ai.status()["retrieval_encoder"])
             continue
         if low.startswith("/importar "):
             source = Path(msg[len("/importar "):].strip()).expanduser()
@@ -66,7 +129,10 @@ def main():
                 print("Falha no treinamento:", exc)
             continue
         if low == "/avaliar":
-            print(ai.learning.evaluate())
+            try:
+                print(ai.learning.evaluate())
+            except ValueError as exc:
+                print("Falha na avaliação:", exc)
             continue
         if low in {"/positivo", "/negativo"}:
             ai.feedback(ai.last_question, low == "/positivo")
@@ -98,6 +164,7 @@ def main():
                 print(exc)
             continue
         print("NixLMs:", ai.respond(msg))
+
 
 if __name__ == "__main__":
     main()

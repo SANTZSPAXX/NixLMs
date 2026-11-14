@@ -29,16 +29,26 @@ class LanguageEngine:
         except (URLError, HTTPError, TimeoutError, ValueError, OSError):
             return False
 
-    def generate(self, message, memories=None, concepts=None, history=None):
+    def generate(self, message, memories=None, concepts=None, history=None,
+                 world_facts=None, goals=None):
         if not self.enabled or not self.local_host:
             return None
-        context = {"memorias_relevantes": memories or [],
-                   "conceitos_associados": concepts or [],
-                   "memoria_de_trabalho": history or []}
-        prompt = ("Responda em português brasileiro, com clareza. Use o contexto como pistas, "
-                  "não como fatos garantidos. Admita quando não souber. Não afirme consciência, "
-                  "sentimentos reais ou acesso a sensores.\n\nCONTEXTO:\n"
-                  + json.dumps(context, ensure_ascii=False) + "\n\nMENSAGEM:\n" + message)
+        context = {
+            "memorias_relevantes": memories or [],
+            "conceitos_associados": concepts or [],
+            "memoria_de_trabalho": history or [],
+            "fatos_do_modelo_de_mundo_com_proveniencia": world_facts or [],
+            "objetivos_ativos_e_proximas_etapas": goals or [],
+        }
+        prompt = (
+            "Responda em português brasileiro, com clareza. Use o contexto como pistas, "
+            "não como fatos garantidos. Fatos do modelo de mundo incluem fonte e confiança; "
+            "não invente proveniência e sinalize conflitos. Objetivos são registros, não "
+            "permissão para executar ações. Admita quando não souber. Não afirme consciência, "
+            "sentimentos reais ou acesso a sensores.\n\nCONTEXTO:\n"
+            + json.dumps(context, ensure_ascii=False)
+            + "\n\nMENSAGEM:\n" + str(message)
+        )
         payload = json.dumps({"model": self.model, "stream": False, "messages": [
             {"role": "system", "content": "Você é o mecanismo linguístico local da NixLMs, uma IA experimental."},
             {"role": "user", "content": prompt}],

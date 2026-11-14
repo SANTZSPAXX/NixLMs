@@ -28,7 +28,6 @@ class MemorySystem:
             raise ValueError("Pergunta e resposta não podem ficar vazias.")
         key = normalize(question)
         now = datetime.now(timezone.utc).isoformat()
-        # Atualiza a entrada existente em vez de criar duplicatas em cada época.
         for item in reversed(self.knowledge):
             if normalize(item.get("question", "")) == key:
                 item.update({"question": question, "answer": answer,
@@ -43,31 +42,42 @@ class MemorySystem:
         save_json(self.knowledge_path, self.knowledge)
         return item
 
+    @staticmethod
+    def _encode_query(encoder, text):
+        method = getattr(encoder, "encode_query", None)
+        return method(text) if callable(method) else encoder.encode(text)
+
+    @staticmethod
+    def _encode_passage(encoder, text):
+        method = getattr(encoder, "encode_passage", None)
+        return method(text) if callable(method) else encoder.encode(text)
+
     def recall(self, query, encoder, network=None, limit=5):
         """Busca híbrida; não executa nem modifica a rede neural durante leitura."""
         if limit <= 0:
             return []
         qtokens = set(tokenize(query))
-        qvec = encoder.encode(query)
+        qvec = self._encode_query(encoder, query)
         ranked = []
+        version = getattr(encoder, "updates", 0)
+        semantic_weight = getattr(
+            encoder, "semantic_weight",
+            .35 + .50 * min(1.0, version / 30.0)
+        )
         for item in self.knowledge:
             text = item.get("question", "")
             tokens = set(tokenize(text))
             lexical = len(qtokens & tokens) / max(1, len(qtokens | tokens))
-            version = getattr(encoder, "updates", 0)
             cache_key = normalize(text)
             cached = self._embedding_cache.get(cache_key)
             if cached is None or cached[0] != version:
-                vector = encoder.encode(text)
+                vector = self._encode_passage(encoder, text)
                 self._embedding_cache[cache_key] = (version, vector)
             else:
                 vector = cached[1]
             if len(self._embedding_cache) > self.max_items * 2:
                 self._embedding_cache.clear()
-            semantic = max(0.0, cosine(qvec, vector))
-            # No início, embeddings pouco treinados recebem peso menor. A semântica
-            # assume gradualmente a recuperação conforme pares contrastivos são aprendidos.
-            semantic_weight = .35 + .50 * min(1.0, getattr(encoder, "updates", 0) / 30.0)
+            semantic = max(0.0, min(1.0, cosine(qvec, vector)))
             score = semantic_weight * semantic + (1.0 - semantic_weight) * lexical
             ranked.append((score, item))
         return sorted(ranked, key=lambda pair: pair[0], reverse=True)[:limit]

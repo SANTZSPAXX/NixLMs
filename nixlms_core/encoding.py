@@ -54,7 +54,33 @@ class SemanticEncoder:
             return ["<empty>"]
         features = list(words)
         features.extend("bi:" + a + "_" + b for a, b in zip(words, words[1:]))
+        # Subwords de caracteres permitem compartilhar parâmetros entre flexões
+        # e palavras OOV sem expandir o vocabulário durante a inferência.
+        for word in words:
+            padded = "^" + word[:48] + "$"
+            for size in (3, 4, 5):
+                features.extend(
+                    "char:" + padded[index:index + size]
+                    for index in range(len(padded) - size + 1)
+                )
         return features
+
+    def feature_coverage(self, text):
+        """Mede cobertura lexical e de subwords sem alterar o vocabulário."""
+        features = self._features(text)
+        subwords = [feature for feature in features if feature.startswith("char:")]
+        known = sum(feature in self.vocab for feature in features)
+        known_subwords = sum(feature in self.vocab for feature in subwords)
+        return {
+            "total_features": len(features),
+            "known_features": known,
+            "feature_coverage": known / len(features) if features else 0.0,
+            "total_subword_features": len(subwords),
+            "known_subword_features": known_subwords,
+            "subword_feature_coverage": (
+                known_subwords / len(subwords) if subwords else 0.0
+            ),
+        }
 
     def _initial_vector(self, feature):
         # Hash é usado somente para inicialização determinística, não para codificar

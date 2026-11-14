@@ -71,7 +71,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 - **Goal Manager:** registro de objetivos e dependências.
 - **Language Engine:** Ollama local opcional, limitado a loopback; descobre modelos já instalados, seleciona um modelo local disponível sem executar downloads e expõe diagnóstico de conexão/erros.
 
-Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm usar NOME_EXATO` para selecionar um modelo já instalado. Se o Ollama estiver ativo, mas não houver modelo, instale um manualmente (por exemplo, `ollama pull qwen2.5:0.5b`). A NixLMs não baixa modelos automaticamente. Perguntas simples de data/hora são respondidas diretamente pelo relógio local do runtime, mesmo sem Ollama. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
+Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm usar NOME_EXATO` para selecionar um modelo já instalado. Se o Ollama estiver ativo, mas não houver modelo, instale um manualmente (por exemplo, `ollama pull qwen2.5:0.5b`). A NixLMs não baixa modelos automaticamente. Saudações e perguntas simples de data/hora são tratadas por regras determinísticas; perguntas sobre o nome do usuário não inventam um perfil ausente. A recuperação QA exige relevância mínima antes de usar uma lembrança como resposta. Respostas do LLM que apenas repetem a pergunta, desviam para uma saudação ou omitem a pessoa perguntada são recusadas. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
 
 ## Limitações importantes
 

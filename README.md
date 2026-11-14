@@ -52,7 +52,7 @@ Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/Ni
 
 ## Backend opcional de embeddings multilíngues
 
-A referência inicial é `intfloat/multilingual-e5-small` (118M parâmetros, 384 dimensões, pesos em torno de 449 MB, licença MIT e suporte a português). O backend usa CPU e `local_files_only=True`: não baixa modelos automaticamente nem envia texto para serviços externos.
+A referência inicial é [`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small): 118M parâmetros, 384 dimensões, contexto de até 512 tokens, licença MIT e suporte a português entre aproximadamente 100 idiomas. O leaderboard MTEB reporta cerca de 449 MB de memória para o modelo; o consumo total do processo depende também do PyTorch, precisão e runtime. O backend usa CPU e `local_files_only=True`: não baixa modelos automaticamente nem envia texto para serviços externos.
 
 1. Instale PyTorch para CPU conforme as instruções oficiais para sua versão do Windows/Python. Exemplo para Windows x64:
 

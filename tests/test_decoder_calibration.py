@@ -82,7 +82,7 @@ class DecoderCalibrationTests(unittest.TestCase):
             ])
             with patch.object(ai.decoder, "generate", side_effect=lambda *_a, **_k: next(outputs)):
                 report = ai.learning.calibrate_decoder_confidence(
-                    min_validation_samples=4, min_correct=2, min_incorrect=2
+                    min_validation_samples=4, min_correct=2, min_incorrect=2, min_token_f1=0.90
                 )
 
             self.assertFalse(report["calibrated"])

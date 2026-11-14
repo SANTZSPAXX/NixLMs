@@ -547,12 +547,15 @@ class LearningEngine:
             return {"accepted": False, "reason": "insufficient_validation_metrics"}
 
         validation_fingerprint = self.validation_fingerprint()
+        dataset_fingerprint = self.dataset_fingerprint()
         live_state = self._live_model_state()
         state_fingerprint = self._state_fingerprint(live_state)
         checkpoint_id = uuid.uuid4().hex
         checkpoint_dir, manifest = self._create_incremental_checkpoint(
             checkpoint_id, baseline_metrics, validation_fingerprint, state_fingerprint
         )
+        manifest["dataset_fingerprint"] = dataset_fingerprint
+        self._write_checkpoint_manifest(checkpoint_dir, manifest)
 
         with tempfile.TemporaryDirectory(prefix="nixlms-incremental-") as temporary:
             candidate_dir = Path(temporary) / "candidate"
@@ -620,6 +623,14 @@ class LearningEngine:
             if self.validation_fingerprint() != validation_fingerprint:
                 manifest["status"] = "rejected"
                 manifest["reason"] = "validation_dataset_changed"
+                self._write_checkpoint_manifest(checkpoint_dir, manifest)
+                return {
+                    "accepted": False, "reason": manifest["reason"],
+                    "checkpoint_id": checkpoint_id, "rollback_available": True,
+                }
+            if self.dataset_fingerprint() != dataset_fingerprint:
+                manifest["status"] = "rejected"
+                manifest["reason"] = "dataset_changed_during_candidate_training"
                 self._write_checkpoint_manifest(checkpoint_dir, manifest)
                 return {
                     "accepted": False, "reason": manifest["reason"],
@@ -1083,6 +1094,13 @@ class LearningEngine:
             for item in self.agent.memory.knowledge
         ]
         payload = json.dumps(sorted(rows), ensure_ascii=False, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def dataset_fingerprint(self):
+        """Fingerprint de todos os registros para detectar mudanças durante treino isolado."""
+        payload = json.dumps(
+            self.dataset.load(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def validation_fingerprint(self):

@@ -69,7 +69,9 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 - **Mental Map:** grafo associativo lexical.
 - **World Model:** grafo local de fatos com proveniência e confiança.
 - **Goal Manager:** registro de objetivos e dependências.
-- **Language Engine:** Ollama local opcional, limitado a loopback; descobre modelos já instalados, seleciona um modelo local disponível sem executar downloads e expõe diagnóstico de conexão/erros.\n\nNa CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm usar NOME_EXATO` para selecionar um modelo já instalado. Se o Ollama estiver ativo, mas não houver modelo, instale um manualmente (por exemplo, `ollama pull qwen2.5:0.5b`). A NixLMs não baixa modelos automaticamente. Perguntas temporais recebem a data/hora local do runtime no contexto enviado ao Ollama.
+- **Language Engine:** Ollama local opcional, limitado a loopback; descobre modelos já instalados, seleciona um modelo local disponível sem executar downloads e expõe diagnóstico de conexão/erros.
+
+Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm usar NOME_EXATO` para selecionar um modelo já instalado. Se o Ollama estiver ativo, mas não houver modelo, instale um manualmente (por exemplo, `ollama pull qwen2.5:0.5b`). A NixLMs não baixa modelos automaticamente. Perguntas temporais recebem a data/hora local do runtime no contexto enviado ao Ollama.
 
 ## Limitações importantes
 

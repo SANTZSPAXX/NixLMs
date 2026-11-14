@@ -3,6 +3,7 @@ import math
 from datetime import datetime
 from pathlib import Path
 from .config import CoreConfig
+from .decoder import NeuralTextDecoder
 from .eeg import EEGInspiredEngine
 from .neural import LIFNetwork
 from .encoding import SemanticEncoder
@@ -66,6 +67,22 @@ class NixLMsNeuralCore:
         if weights:
             self.network.load_state_dict(weights)
 
+        self.decoder = NeuralTextDecoder(
+            context_size=self.config.output_size,
+            hidden_size=self.config.decoder_hidden_size,
+            embedding_size=self.config.decoder_embedding_size,
+            max_vocab=self.config.decoder_max_vocab,
+            learning_rate=self.config.decoder_learning_rate,
+            seed=self.config.seed,
+            max_sequence_length=self.config.decoder_max_sequence_length,
+        )
+        self.decoder_load_error = None
+        decoder_state = load_json(self.decoder_path, None)
+        self.decoder_persistence_enabled = True
+        if decoder_state is not None and not self.decoder.load_state_dict(decoder_state):
+            self.decoder_load_error = "decoder_state_incompatible_or_invalid"
+            self.decoder_persistence_enabled = False
+
         self.eeg = EEGInspiredEngine(self.config.seed)
         self.memory = MemorySystem(self.data_dir, self.config.max_memory_items)
         self.episodic = EpisodicMemory(
@@ -102,7 +119,8 @@ class NixLMsNeuralCore:
             row.get("answer", "") for row in self.learning.dataset.load()
             if row.get("type", "qa") == "qa" and row.get("split", "train") == "train"
         ])
-        self._save_decoder()
+        if self.decoder_persistence_enabled:
+            self._save_decoder()
         self._load_lif_calibration()
 
         self.last_trace = {}

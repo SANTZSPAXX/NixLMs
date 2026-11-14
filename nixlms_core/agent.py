@@ -205,10 +205,24 @@ class NixLMsNeuralCore:
             "focus": eeg_state.get("focus", 0.0),
             "priority": focused[0][0] if focused else 0.0
         }
-        selected, confidence = self.cognition.decide(ranked, attention_state)
+        attention_scores = {
+            normalize(candidate.get("question", "")): float(score)
+            for score, candidate in focused
+            if normalize(candidate.get("question", ""))
+        }
+        attended_ranked = [
+            (
+                0.8 * retrieval_score
+                + 0.2 * attention_scores.get(normalize(item.get("question", "")), 0.0),
+                item,
+            )
+            for retrieval_score, item in ranked
+        ]
+        attended_ranked.sort(key=lambda pair: pair[0], reverse=True)
+        selected, confidence = self.cognition.decide(attended_ranked, attention_state)
         memory_context = [
             {"question": item.get("question"), "answer": item.get("answer")}
-            for _, item in ranked[:3]
+            for _, item in attended_ranked[:3]
         ]
         episodic_encoder = self._active_retrieval_encoder()
         episodic_context = self.episodic.recall(text, episodic_encoder, limit=3)
@@ -256,6 +270,8 @@ class NixLMsNeuralCore:
         self.last_trace = {
             "eeg_bands": energies, "eeg_state": eeg_state,
             "attention": attention_state, "confidence": confidence,
+            "attention_reranking_applied": bool(focused),
+            "attention_reranking_weights": {"retrieval": 0.8, "attention": 0.2},
             "spike_activity": sum(self.network.last_spike_counts),
             "active_neurons": sum(1 for count in self.network.last_spike_counts if count > 0),
             "network_output_norm": sum(x * x for x in output) ** .5,

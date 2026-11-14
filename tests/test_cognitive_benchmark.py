@@ -75,7 +75,7 @@ class CognitiveBenchmarkTests(unittest.TestCase):
             self.assertIsNone(report["cognition"]["metrics"]["token_f1"])
             self.assertEqual(report["cognition"]["cases"], [])
 
-    def test_cognitive_benchmark_restores_memory_when_response_raises(self):
+    def test_cognitive_benchmark_keeps_memory_collections_unchanged_on_error(self):
         from unittest.mock import patch
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

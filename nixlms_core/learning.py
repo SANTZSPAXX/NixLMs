@@ -276,8 +276,9 @@ class LearningEngine:
         reciprocal = {name: 0.0 for name in channels}
         hits = {name: {k: 0 for k in ks} for name in channels}
         excluded_exact_queries = 0
-        semantic_weight = .35 + .50 * min(
-            1.0, getattr(retrieval_encoder, "updates", 0) / 30.0
+        semantic_weight = getattr(
+            retrieval_encoder, "semantic_weight",
+            .35 + .50 * min(1.0, getattr(retrieval_encoder, "updates", 0) / 30.0)
         )
         for row in qa_test:
             query = row["question"]

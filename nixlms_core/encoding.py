@@ -48,17 +48,71 @@ class SemanticEncoder:
         self.embeddings = []
         self.updates = 0
 
+    @staticmethod
+    def _char_ngrams(word):
+        padded = "^" + str(word)[:32] + "$"
+        return [
+            "char:" + padded[index:index + size]
+            for size in (3, 4, 5)
+            for index in range(len(padded) - size + 1)
+        ]
+
     def _features(self, text):
-        words = tokenize(text)
+        words = tokenize(text)[:128]
         if not words:
             return ["<empty>"]
-        features = list(words)
+        features = []
+        for word in words:
+            features.extend(self._char_ngrams(word))
+        features.extend(words)
         features.extend("bi:" + a + "_" + b for a, b in zip(words, words[1:]))
         return features
 
+    def _subword_vector(self, word):
+        grams = self._char_ngrams(word)
+        if not grams:
+            return self._initial_vector(word)
+        vectors = []
+        for feature in grams:
+            index = self.vocab.get(feature)
+            vectors.append(
+                self.embeddings[index] if index is not None
+                else self._initial_vector(feature)
+            )
+        pooled = [
+            sum(vector[dimension] for vector in vectors) / len(vectors)
+            for dimension in range(self.dimensions)
+        ]
+        return _normalize(pooled)
+
+    def feature_coverage(self, text):
+        """Mede cobertura lexical e de subwords sem alterar o vocabulário."""
+        features = self._features(text)
+        subwords = [feature for feature in features if feature.startswith("char:")]
+        known = sum(feature in self.vocab for feature in features)
+        known_subwords = sum(feature in self.vocab for feature in subwords)
+        return {
+            "total_features": len(features),
+            "known_features": known,
+            "feature_coverage": known / len(features) if features else 0.0,
+            "total_subword_features": len(subwords),
+            "known_subword_features": known_subwords,
+            "subword_feature_coverage": (
+                known_subwords / len(subwords) if subwords else 0.0
+            ),
+        }
+
     def _initial_vector(self, feature):
-        # Hash é usado somente para inicialização determinística, não para codificar
-        # a frase. Os parâmetros passam a ser ajustados pelo treinamento contrastivo.
+        # Inicializa palavras a partir de seus subwords para compartilhar estrutura
+        # morfológica; bigramas e n-gramas recebem inicialização determinística.
+        if not feature.startswith(("char:", "bi:", "<")):
+            grams = self._char_ngrams(feature)
+            if grams:
+                vectors = [self._initial_vector(gram) for gram in grams]
+                return _normalize([
+                    sum(vector[dimension] for vector in vectors) / len(vectors)
+                    for dimension in range(self.dimensions)
+                ])
         digest = hashlib.blake2b(
             (str(self.seed) + ":" + feature).encode("utf-8"), digest_size=16
         ).digest()
@@ -84,17 +138,25 @@ class SemanticEncoder:
         return added
 
     def encode(self, text):
-        features = self._features(text)
-        vectors = []
-        for feature in features:
-            index = self.vocab.get(feature)
-            # Tokens desconhecidos recebem um vetor inicial determinístico sem
-            # alterar o vocabulário durante uma consulta de inferência.
-            vectors.append(self.embeddings[index] if index is not None
-                           else self._initial_vector(feature))
-        if not vectors:
+        words = tokenize(text)[:128]
+        if not words:
             return [0.0] * self.dimensions
-        pooled = [sum(v[d] for v in vectors) / len(vectors)
+        vectors = []
+        for word in words:
+            index = self.vocab.get(word)
+            # OOV usa subwords conhecidos sem criar entradas no vocabulário.
+            vectors.append(
+                self.embeddings[index] if index is not None
+                else self._subword_vector(word)
+            )
+        for left, right in zip(words, words[1:]):
+            feature = "bi:" + left + "_" + right
+            index = self.vocab.get(feature)
+            vectors.append(
+                self.embeddings[index] if index is not None
+                else self._initial_vector(feature)
+            )
+        pooled = [sum(vector[d] for vector in vectors) / len(vectors)
                   for d in range(self.dimensions)]
         return _normalize(pooled)
 

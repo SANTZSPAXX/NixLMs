@@ -62,7 +62,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 
 ## Arquitetura atual
 
-- **Semantic Encoder:** embeddings treináveis de palavras e bigramas, inicialização determinística e aprendizado contrastivo.
+- **Semantic Encoder:** embeddings treináveis de palavras, bigramas e subwords de caracteres (n-gramas 3–5), inicialização determinística e aprendizado contrastivo. A sobreposição de subwords permite generalização para flexões e tokens OOV sem expandir o vocabulário durante a inferência; a expansão é limitada a 128 tokens e 32 caracteres por token.
 - **LIF/STDP + Readout supervisionado:** a rede recorrente produz uma representação de saída treinada com pares pergunta→resposta. Essa leitura recupera candidatos semânticos e condiciona o LLM local; sem LLM, pode fornecer diretamente a resposta associativa acima do limiar configurado.
 - **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
 - **Attention:** memória de trabalho e priorização de contexto.
@@ -162,7 +162,7 @@ print(report)
 
 O treinamento e a avaliação recusam datasets com sobreposição exata de textos de entrada entre treino e teste. Para avaliações confiáveis, use datasets maiores, representativos e com deduplicação de paráfrases; os exemplos iniciais são apenas smoke tests.
 
-O comando `/avaliar` também executa o benchmark cognitivo integrado no split `test`, passando cada pergunta pelo fluxo completo de resposta sem persistir os episódios de avaliação. Ele informa exact match, token F1, taxa de abstenção, eco da pergunta, distribuição da origem das respostas e uso/candidatos da LIF. Esses indicadores são proxies textuais e operacionais, não verificadores de factualidade. As consultas exatas do split de teste são temporariamente excluídas da memória QA e episódica durante essa avaliação.
+O comando `/avaliar` também mede a representação semântica no split `validation`: compara cada pergunta a exemplos `train` com a mesma resposta e a hard negatives, informa margem/pairwise accuracy e cobertura de subwords. Essa etapa não treina pesos nem expande o vocabulário. O benchmark cognitivo integrado no split `test` também passa cada pergunta pelo fluxo completo de resposta sem persistir os episódios de avaliação. Ele informa exact match, token F1, taxa de abstenção, eco da pergunta, distribuição da origem das respostas e uso/candidatos da LIF. Esses indicadores são proxies textuais e operacionais, não verificadores de factualidade. As consultas exatas do split de teste são temporariamente excluídas da memória QA e episódica durante essa avaliação.
 
 Use `/avaliar-llm` para uma execução opcional com o Ollama instalado. A avaliação padrão não chama o LLM, permitindo comparações offline reproduzíveis; a variante com LLM depende do modelo local, sua versão e configuração.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Trainable character subword encoder
+
+- Extends the native semantic encoder with trainable 3–5 character n-gram features for morphological and OOV generalization.
+- Keeps OOV inference deterministic and vocabulary-read-only; overlapping subwords reuse learned train features.
+- Bounds encoder feature expansion to 128 tokens and 32 characters per token.
+- Adds validation representation metrics: positive similarity, hard-negative similarity, margin, pairwise accuracy, and subword coverage.
+
+
 ## Validation-driven LIF calibration
 
 - Adds a dedicated validation dataset split, separate from training and final test data.

@@ -286,6 +286,7 @@ class LearningEngine:
             )
 
         representation = self.evaluate_representations()["metrics"]
+        lif_representation = self.evaluate_lif_representations()["metrics"]
         count = len(rows)
         metrics = {
             "decoder_loss": (
@@ -308,6 +309,8 @@ class LearningEngine:
             ),
             "representation_margin": representation.get("margin"),
             "representation_pairwise_accuracy": representation.get("pairwise_accuracy"),
+            "lif_contrastive_margin": lif_representation.get("margin"),
+            "lif_contrastive_pairwise_accuracy": lif_representation.get("pairwise_accuracy"),
         }
         return {
             "samples": count,
@@ -330,6 +333,8 @@ class LearningEngine:
             "lif_output_loss": -1.0,
             "representation_margin": 1.0,
             "representation_pairwise_accuracy": 1.0,
+            "lif_contrastive_margin": 1.0,
+            "lif_contrastive_pairwise_accuracy": 1.0,
         }
         comparisons = {}
         regressions = []
@@ -1146,6 +1151,55 @@ class LearningEngine:
             self.dataset.load(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def evaluate_lif_representations(self):
+        """Avalia similaridade das representações ocultas LIF em pares validation."""
+        rows = [
+            row for row in self.dataset.load()
+            if row.get("type") == "pair" and row.get("split") == "validation"
+        ]
+        positive = []
+        negative = []
+        cases = []
+        for row in rows:
+            _, hidden_a = self.agent.network.forward(
+                self.agent.encoder.encode(row.get("text_a", ""))
+            )
+            _, hidden_b = self.agent.network.forward(
+                self.agent.encoder.encode(row.get("text_b", ""))
+            )
+            similarity = cosine(hidden_a, hidden_b)
+            label = int(row.get("label", 1))
+            (positive if label == 1 else negative).append(similarity)
+            cases.append({"label": label, "similarity": similarity})
+        positive_mean = sum(positive) / len(positive) if positive else None
+        negative_mean = sum(negative) / len(negative) if negative else None
+        margin = (
+            positive_mean - negative_mean
+            if positive_mean is not None and negative_mean is not None else None
+        )
+        pairwise = (
+            sum(pos > neg for pos in positive for neg in negative)
+            / (len(positive) * len(negative))
+            if positive and negative else None
+        )
+        return {
+            "samples": len(rows),
+            "positive_samples": len(positive),
+            "negative_samples": len(negative),
+            "metrics": {
+                "positive_similarity": positive_mean,
+                "negative_similarity": negative_mean,
+                "margin": margin,
+                "pairwise_accuracy": pairwise,
+            },
+            "cases": cases,
+            "protocol": {
+                "validation_split_used": True,
+                "test_split_used": False,
+                "weights_updated": False,
+            },
+        }
 
     def validation_fingerprint(self):
         """Fingerprint determinístico das perguntas/respostas QA de validation."""

@@ -703,7 +703,15 @@ class NixLMsNeuralCore:
             "planning": self.goals.stats(),
             "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
-            "architecture": "semantic_subword_encoder_lif_readout_autoregressive_decoder_memory_world_model_goal_manager",
+            "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
+            "lif_network": {
+                "recurrent_updates": self.network.recurrent_updates,
+                "readout_updates": self.network.output_updates,
+                "hidden_size": self.network.hidden_size,
+                "steps": self.network.steps,
+                "surrogate_training": "fast_sigmoid_bptt",
+                "contrastive_recurrent_training": True,
+            },
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,
                 "vocabulary_size": len(self.encoder.vocab),

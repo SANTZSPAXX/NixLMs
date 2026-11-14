@@ -32,9 +32,12 @@ DEFAULTS = [
 
 class NixLMsNeuralCore:
     def __init__(self, data_dir=None, config=None, llm_model=None):
-        self._explicit_config = config is not None
         self.config = config or CoreConfig()
         self._base_lif_retrieval_threshold = float(self.config.lif_retrieval_threshold)
+        self._explicit_lif_threshold = (
+            config is not None
+            and self._base_lif_retrieval_threshold != float(CoreConfig().lif_retrieval_threshold)
+        )
         self.data_dir = Path(data_dir or Path(__file__).resolve().parents[1] / "data")
         self.lif_calibration_path = self.data_dir / "lif_calibration.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -160,7 +163,7 @@ class NixLMsNeuralCore:
         ]
 
     def _load_lif_calibration(self):
-        if self._explicit_config:
+        if self._explicit_lif_threshold:
             return False
         self.config.lif_retrieval_threshold = self._base_lif_retrieval_threshold
         state = load_json(self.lif_calibration_path, None)

@@ -96,6 +96,22 @@ class SubwordEncoderTests(unittest.TestCase):
             self.assertGreater(metrics["subword_feature_coverage"], 0.0)
             self.assertFalse(report["representations"]["protocol"]["test_split_used"])
 
+    def test_starter_dataset_runs_validation_representation_benchmark(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            starter = Path(__file__).resolve().parents[1] / "datasets" / "starter_ptbr.jsonl"
+            imported = ai.learning.dataset.import_jsonl(starter)
+            self.assertGreater(imported, 0)
+
+            ai.learning.train(epochs=1)
+            report = ai.learning.evaluate()
+            representations = report["representations"]
+
+            self.assertEqual(representations["samples"], 7)
+            self.assertIsNotNone(representations["metrics"]["pairwise_accuracy"])
+            self.assertGreater(representations["metrics"]["subword_feature_coverage"], 0.0)
+            self.assertFalse(representations["protocol"]["test_split_used"])
+
     def test_representation_benchmark_reports_empty_validation_without_fake_scores(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

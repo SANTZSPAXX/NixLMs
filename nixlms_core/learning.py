@@ -1,7 +1,9 @@
 """Importação, treinamento contrastivo e avaliação sem vazamento de dados."""
 import json
+import math
 import random
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .utils import save_json, load_json, normalize, tokenize, cosine
@@ -255,6 +257,8 @@ class LearningEngine:
                     learning_rate=self.agent.config.lif_output_learning_rate
                 ))
 
+        if hasattr(self.agent, "invalidate_lif_calibration"):
+            self.agent.invalidate_lif_calibration()
         self.agent._save_encoder()
         save_json(self.agent.data_dir / "neural_weights.json",
                   self.agent.network.state_dict())
@@ -280,6 +284,122 @@ class LearningEngine:
     def _encode_passage(encoder, text):
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
+
+    def calibrate_lif_threshold(self, min_validation_samples=4,
+                                 min_correct_candidates=2,
+                                 min_incorrect_candidates=2):
+        """Calibra somente o limiar de aceitação LIF usando QA do split validation."""
+        self._require_clean_splits()
+        min_validation_samples = int(min_validation_samples)
+        min_correct_candidates = int(min_correct_candidates)
+        min_incorrect_candidates = int(min_incorrect_candidates)
+        if min_validation_samples < 1 or min_correct_candidates < 1 or min_incorrect_candidates < 1:
+            raise ValueError("Os mínimos de calibração devem ser inteiros positivos.")
+        if self.agent.network.output_updates <= 0:
+            return {"calibrated": False, "reason": "lif_readout_untrained"}
+
+        rows = [
+            row for row in self.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        if not rows:
+            return {"calibrated": False, "reason": "validation_split_empty"}
+        if len(rows) < min_validation_samples:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_validation_samples",
+                "validation_samples": len(rows),
+                "required_samples": min_validation_samples,
+            }
+
+        excluded_questions = {normalize(row.get("question", "")) for row in rows}
+        cases = []
+        for row in rows:
+            question = str(row.get("question", "")).strip()
+            expected = str(row.get("answer", "")).strip()
+            self.agent.respond(
+                question, use_language=False, record=False,
+                excluded_questions=excluded_questions,
+            )
+            trace = dict(self.agent.last_trace)
+            score = trace.get("lif_top_candidate_score")
+            candidate_answer = str(trace.get("lif_top_candidate_answer", "")).strip()
+            if score is None or not candidate_answer:
+                continue
+            score = float(score)
+            if not math.isfinite(score):
+                continue
+            cases.append({
+                "question": question,
+                "expected_answer": expected,
+                "candidate_answer": candidate_answer,
+                "score": score,
+                "correct": normalize(candidate_answer) == normalize(expected),
+            })
+
+        correct_count = sum(case["correct"] for case in cases)
+        incorrect_count = len(cases) - correct_count
+        if len(cases) < min_validation_samples:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_lif_candidates",
+                "validation_samples": len(rows),
+                "scored_samples": len(cases),
+            }
+        if correct_count < min_correct_candidates or incorrect_count < min_incorrect_candidates:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_candidate_class_balance",
+                "scored_samples": len(cases),
+                "positive_top1": correct_count,
+                "negative_top1": incorrect_count,
+                "required_positive": min_correct_candidates,
+                "required_negative": min_incorrect_candidates,
+            }
+
+        scores = sorted({case["score"] for case in cases})
+        thresholds = sorted(set([scores[0] - 1e-9, *scores, scores[-1] + 1e-9]))
+        best = None
+        for threshold in thresholds:
+            accepted = [case for case in cases if case["score"] >= threshold]
+            rejected = [case for case in cases if case["score"] < threshold]
+            tp = sum(case["correct"] for case in accepted)
+            fp = len(accepted) - tp
+            fn = sum(case["correct"] for case in rejected)
+            tn = len(rejected) - fn
+            precision = tp / (tp + fp) if tp + fp else 0.0
+            recall_score = tp / (tp + fn) if tp + fn else 0.0
+            f1 = (
+                2.0 * precision * recall_score / (precision + recall_score)
+                if precision + recall_score else 0.0
+            )
+            candidate = (f1, precision, threshold, {
+                "precision": precision,
+                "recall": recall_score,
+                "f1": f1,
+                "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+                "positive_top1": correct_count,
+                "negative_top1": incorrect_count,
+                "scored_samples": len(cases),
+            })
+            if best is None or candidate[:3] > best[:3]:
+                best = candidate
+
+        threshold = float(best[2])
+        metrics = best[3]
+        calibration = {
+            "schema_version": 1,
+            "threshold": threshold,
+            "readout_updates": int(self.agent.network.output_updates),
+            "encoder_updates": int(self.agent.encoder.updates),
+            "validation_samples": len(rows),
+            "scored_samples": len(cases),
+            "metrics": metrics,
+            "selected_at": datetime.now(timezone.utc).isoformat(),
+        }
+        save_json(self.agent.lif_calibration_path, calibration)
+        self.agent.config.lif_retrieval_threshold = threshold
+        return {"calibrated": True, **calibration}
 
     @staticmethod
     def _token_f1(expected, actual):

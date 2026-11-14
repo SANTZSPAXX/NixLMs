@@ -155,6 +155,7 @@ class PretrainedEncoderTests(unittest.TestCase):
         self.assertEqual(captured["device"], "cpu")
         self.assertTrue(captured["local_files_only"])
         self.assertTrue(encoder.status()["loaded"])
+        self.assertEqual(encoder.status()["semantic_weight"], .85)
 
     def test_backend_surfaces_missing_optional_dependency_without_importing_at_module_load(self):
         from nixlms_core.pretrained_encoder import TransformersSentenceEncoder

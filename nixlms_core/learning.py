@@ -782,7 +782,6 @@ class LearningEngine:
                 lif_recurrent_losses.append(recurrent_result["loss"])
             # Treina a leitura depois da atualização recorrente,
             # mantendo os alvos semânticos alinhados aos embeddings atuais.
-            # mantendo os alvos semânticos alinhados aos embeddings atuais.
             for row in qa_batch:
                 _, hidden, _, _ = self.agent._lif_forward(row["question"])
                 target = self.agent._compress_neural_target(

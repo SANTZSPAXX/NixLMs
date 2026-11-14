@@ -62,9 +62,23 @@ class EpisodicMemoryTests(unittest.TestCase):
             episode = ai.episodic.items[0]
             self.assertEqual(episode["user_input"], "Pergunta experimental sobre memória episódica")
             self.assertIn("response_source", episode["context"])
-            ai.feedback("Pergunta experimental sobre memória episódica", True)
+            self.assertTrue(ai.feedback("Pergunta experimental sobre memória episódica", True))
             self.assertEqual(ai.episodic.items[0]["feedback"], "positive")
             self.assertEqual(ai.status()["positive_feedback"], 1)
+
+    def test_feedback_requires_matching_episode_and_never_changes_neural_weights(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            before = ai.network.state_dict()
+            self.assertFalse(ai.feedback("pergunta sem episódio", True))
+            self.assertEqual(ai.network.state_dict(), before)
+            question = "Experiência para validar feedback sem plasticidade"
+            ai.respond(question, use_language=False)
+            before = ai.network.state_dict()
+            self.assertTrue(ai.feedback(question, False))
+            self.assertEqual(ai.network.state_dict(), before)
+            self.assertEqual(ai.episodic.items[-1]["feedback"], "negative")
 
     def test_empty_query_and_nonpositive_limit_return_no_results(self):
         with tempfile.TemporaryDirectory() as tmp:

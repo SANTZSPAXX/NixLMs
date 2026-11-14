@@ -63,7 +63,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 ## Arquitetura atual
 
 - **Semantic Encoder:** embeddings treináveis de palavras, bigramas e subwords de caracteres (n-gramas 3–5), inicialização determinística e aprendizado contrastivo. A sobreposição de subwords permite generalização para flexões e tokens OOV sem expandir o vocabulário durante a inferência; a expansão é limitada a 128 tokens e 32 caracteres por token.
-- **LIF/STDP + Readout supervisionado:** a rede recorrente produz uma representação de saída treinada com pares pergunta→resposta. Essa leitura recupera candidatos semânticos e condiciona o LLM local; sem LLM, pode fornecer diretamente a resposta associativa acima do limiar configurado.
+- **LIF/STDP + Readout + Neural Decoder:** o readout LIF aprende uma representação semântica da resposta e condiciona um pequeno RNN autoregressivo que gera tokens um a um. Quando treinado e confiante, esse decoder é o caminho primário; o Ollama permanece como fallback quando a geração neural é rejeitada.
 - **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
 - **Attention:** memória de trabalho e priorização de contexto.
 - **Mental Map:** grafo associativo lexical.
@@ -75,7 +75,7 @@ Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último 
 
 ## Limitações importantes
 
-A leitura de saída LIF é um decodificador associativo supervisionado, não um gerador autoregressivo de tokens. Ela aprende a mapear estados ocultos recorrentes para representações comprimidas das respostas do dataset; na inferência, recupera respostas candidatas e as fornece como condicionamento semântico primário ao Ollama. Sem Ollama, uma resposta LIF pode ser retornada diretamente quando supera o limiar de similaridade. A qualidade depende da cobertura e da qualidade dos exemplos QA, e o limiar precisa ser calibrado por benchmark.
+O readout LIF continua sendo um mapeador associativo para representações semânticas, não um gerador de tokens. A geração token a token é feita por um RNN autoregressivo pequeno, supervisionado por respostas QA e condicionado pelo vetor de saída LIF. Ele é treinado apenas com o split `train`, usa vocabulário limitado e pode sobreajustar datasets pequenos; não é um Transformer, não é pré-treinado e não oferece conhecimento geral. A NixLMs só o prioriza quando a sequência gerada passa pelos critérios mínimos de confiança e consistência; caso contrário, tenta Ollama quando habilitado ou usa os caminhos de recuperação/abstenção.
 
 O encoder nativo não é um Transformer pré-treinado. Ele aprende a partir dos pares fornecidos e não possui semântica geral garantida. O backend E5 opcional melhora a qualidade inicial da recuperação semântica, mas não treina automaticamente o encoder nativo nem prova raciocínio geral.
 
@@ -151,7 +151,7 @@ No terminal:
 /avaliar
 ```
 
-O treinamento QA também ajusta a leitura de saída LIF para associar a representação recorrente da pergunta à representação semântica da resposta. O split `validation` não participa do treinamento: use `/calibrar-lif` depois de treinar para selecionar o limiar de aceitação do readout com base no acerto do melhor candidato LIF. A calibração exige pelo menos quatro exemplos pontuados, com ao menos dois candidatos top-1 corretos e dois incorretos; se a evidência for insuficiente, o limiar atual é preservado. Para datasets persistentes já existentes, importe novamente o starter atualizado com `/importar datasets/starter_ptbr.jsonl` para acrescentar o split validation. A calibração é persistida e vinculada às contagens do readout/encoder, ao vocabulário, ao fingerprint do conjunto validation e à memória candidata. Ela é ignorada quando esses dados divergem e invalidada antes de novos treinos ou mudanças de vocabulário.
+O comando `/treinar` ajusta o encoder contrastivo, o readout LIF e o decoder autoregressivo com pares QA do split `train`. O contexto LIF é determinístico por pergunta para manter treino e inferência consistentes. O relatório inclui loss média do decoder e número de sequências treinadas. O split `validation` não participa do treinamento: use `/calibrar-lif` depois de treinar para selecionar o limiar de aceitação do readout com base no acerto do melhor candidato LIF. A calibração exige pelo menos quatro exemplos pontuados, com ao menos dois candidatos top-1 corretos e dois incorretos; se a evidência for insuficiente, o limiar atual é preservado. Para datasets persistentes já existentes, importe novamente o starter atualizado com `/importar datasets/starter_ptbr.jsonl` para acrescentar o split validation. A calibração é persistida e vinculada às contagens do readout/encoder, ao vocabulário, ao fingerprint do conjunto validation e à memória candidata. Ela é ignorada quando esses dados divergem e invalidada antes de novos treinos ou mudanças de vocabulário.
 
 A auditoria pode ser consultada pela API:
 
@@ -198,6 +198,7 @@ Os arquivos em `data/` incluem:
 - `world_model.json`: fatos tipados e proveniência.
 - `goals.json`: objetivos e etapas.
 - `neural_weights.json`: pesos LIF, elegibilidade e contador de atualizações do readout supervisionado.
+- `neural_decoder.json`: vocabulário e pesos do decoder autoregressivo condicionado pela saída LIF.
 - `dataset.json`: exemplos locais de treinamento.
 
 Faça backup do diretório `data/` antes de trocar versões ou realizar treinamento extenso. Os novos módulos criam seus próprios arquivos sem sobrescrever os arquivos anteriores.

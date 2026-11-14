@@ -89,6 +89,38 @@ class LIFCalibrationTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "lif_calibration.json").exists())
             self.assertEqual(ai.config.lif_retrieval_threshold, report["threshold"])
 
+    def test_recalibration_resets_stale_threshold_when_validation_is_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            self._add_validation_cases(ai)
+            ai.network.output_updates = 12
+            outcomes = iter([
+                (0.90, "Resposta Alfa."),
+                (0.80, "Resposta Beta."),
+                (0.85, "Resposta Incorreta."),
+                (0.20, "Outra Resposta Incorreta."),
+            ])
+
+            def fake_respond(_question, **_kwargs):
+                score, answer = next(outcomes)
+                ai.last_trace = {
+                    "lif_top_candidate_score": score,
+                    "lif_top_candidate_answer": answer,
+                }
+                return answer
+
+            with patch.object(ai, "respond", side_effect=fake_respond):
+                calibrated = ai.learning.calibrate_lif_threshold()
+            self.assertTrue(calibrated["calibrated"])
+            self.assertAlmostEqual(ai.config.lif_retrieval_threshold, 0.80)
+
+            save_json(ai.learning.dataset.path, [])
+            report = ai.learning.calibrate_lif_threshold()
+
+            self.assertFalse(report["calibrated"])
+            self.assertEqual(report["reason"], "validation_split_empty")
+            self.assertAlmostEqual(ai.config.lif_retrieval_threshold, 0.45)
+
     def test_calibration_refuses_missing_or_insufficient_validation_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

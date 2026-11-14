@@ -101,6 +101,41 @@ class NeuralTextDecoderTests(unittest.TestCase):
             self.assertTrue(ai.last_trace["decoder_accepted"])
             self.assertGreater(ai.last_trace["decoder_token_count"], 0)
 
+    def test_agent_persists_and_reloads_trained_decoder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            question = "Explique a água"
+            ai.learning.dataset.add(question, "A água reflete a luz.", "train")
+            ai.learning.train(epochs=5)
+            context, _, _, _ = ai._lif_forward(question)
+            expected = ai.decoder.generate(context, max_tokens=10)
+            trained_steps = ai.decoder.trained_steps
+
+            restored = NixLMsNeuralCore(data_dir)
+            restored_context, _, _, _ = restored._lif_forward(question)
+
+            self.assertEqual(restored.decoder.trained_steps, trained_steps)
+            self.assertEqual(
+                restored.decoder.generate(restored_context, max_tokens=10),
+                expected,
+            )
+
+    def test_unreadable_decoder_checkpoint_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            checkpoint = data_dir / "neural_decoder.json"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            checkpoint.write_text("{not valid json", encoding="utf-8")
+            ai = NixLMsNeuralCore(data_dir)
+            self.assertEqual(ai.decoder_load_error, "decoder_state_unreadable")
+            self.assertFalse(ai.decoder_persistence_enabled)
+
+            ai.learning.dataset.add("pergunta treino", "resposta treino", "train")
+            ai.learning.train(epochs=1)
+
+            self.assertEqual(checkpoint.read_text(encoding="utf-8"), "{not valid json")
+
     def test_decoder_test_metrics_are_reported_without_training(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

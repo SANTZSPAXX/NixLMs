@@ -841,6 +841,11 @@ class LearningEngine:
         payload = {
             "decoder": self.agent.decoder.state_dict(),
             "lif_readout": self.agent.network.w_out,
+            "lif_recurrent": {
+                "w_in": self.agent.network.w_in,
+                "w_rec": self.agent.network.w_rec,
+                "recurrent_updates": self.agent.network.recurrent_updates,
+            },
             "encoder_updates": self.agent.encoder.updates,
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "encoder_dimensions": self.agent.encoder.dimensions,
@@ -982,6 +987,7 @@ class LearningEngine:
             "decoder_trained_steps": int(self.agent.decoder.trained_steps),
             "decoder_vocab_size": len(self.agent.decoder.vocab),
             "lif_readout_updates": int(self.agent.network.output_updates),
+            "lif_recurrent_updates": int(self.agent.network.recurrent_updates),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),
@@ -1259,6 +1265,7 @@ class LearningEngine:
             "schema_version": 1,
             "threshold": threshold,
             "readout_updates": int(self.agent.network.output_updates),
+            "recurrent_updates": int(self.agent.network.recurrent_updates),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),

@@ -165,6 +165,26 @@ class DecoderCalibrationTests(unittest.TestCase):
 
             self.assertAlmostEqual(ai.config.decoder_min_confidence, 0.15)
 
+    def test_recurrent_lif_weight_change_invalidates_decoder_calibration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            self._add_cases(ai)
+            self._prepare_trained(ai)
+            outputs = self._outputs()
+            with patch.object(ai.decoder, "generate", side_effect=lambda *_a, **_k: next(outputs)):
+                ai.learning.calibrate_decoder_confidence(
+                    min_validation_samples=4, min_correct=2, min_incorrect=2,
+                    min_token_f1=0.65,
+                )
+            self.assertAlmostEqual(ai.config.decoder_min_confidence, 0.80)
+
+            ai.network.w_rec[0][1] += 0.1
+            save_json(data_dir / "neural_weights.json", ai.network.state_dict())
+            restored = NixLMsNeuralCore(data_dir)
+
+            self.assertAlmostEqual(restored.config.decoder_min_confidence, 0.15)
+
     def test_explicit_decoder_confidence_overrides_saved_calibration(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

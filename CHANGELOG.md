@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — Episodic Experience Memory (em desenvolvimento)
+
+- Added structured persistent episodes with timestamps, context, response source, outcome, importance and tags.
+- Added hybrid episodic retrieval with lexical/semantic relevance, recency and explicit feedback weighting.
+- Integrated recalled experiences into local LLM context without promoting them to verified facts.
+- Connected positive/negative user feedback to the latest matching episode.
+- Preserved the legacy conversation log and kept episodic data in a separate file.
+- Added persistence, retrieval, validation, retention and agent integration tests.
+
+
 ## 0.6.0 — Persistent Cognitive Scheduler
 
 - Added a standard-library SQLite scheduler with durable one-shot and interval jobs.

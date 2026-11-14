@@ -4,6 +4,7 @@ from .world_model import WorldModel
 from .planning import GoalManager
 from .pretrained_encoder import TransformersSentenceEncoder
 from .scheduler import TaskScheduler
+from .episodic import EpisodicMemory
 
 __all__ = [
     "NixLMsNeuralCore",
@@ -12,4 +13,5 @@ __all__ = [
     "GoalManager",
     "TransformersSentenceEncoder",
     "TaskScheduler",
+    "EpisodicMemory",
 ]

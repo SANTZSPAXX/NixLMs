@@ -221,12 +221,13 @@ def main():
             _objective_command(ai, msg)
             continue
         if low == "/llm":
-            available = ai.language.available()
-            print("Ollama:", "disponível" if available else "indisponível")
+            models = ai.language.refresh_models()
+            qwen_installed = "qwen2.5:0.5b" in models
+            print("API Ollama:", "acessível" if ai.language.reachable else "indisponível")
+            print("Qwen 2.5 0.5B:", "instalado" if qwen_installed else "não instalado")
             print(ai.language.status())
             print("Gerenciador:", ai.ollama.status())
-            if not available:
-                print("Diagnóstico:", ai.language.last_error or "Nenhum modelo local disponível.")
+            if not ai.language.reachable or not qwen_installed:
                 print("Use /llm preparar para instalar/iniciar e baixar o Qwen, sempre com confirmação.")
             continue
         if low == "/llm preparar":

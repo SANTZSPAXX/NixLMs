@@ -840,6 +840,20 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def lif_model_fingerprint(self):
+        """Fingerprint das matrizes LIF que determinam a recuperação neural."""
+        payload = {
+            "w_in": self.agent.network.w_in,
+            "w_rec": self.agent.network.w_rec,
+            "w_out": self.agent.network.w_out,
+            "recurrent_updates": self.agent.network.recurrent_updates,
+            "output_updates": self.agent.network.output_updates,
+        }
+        serialized = json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
     def decoder_model_fingerprint(self):
         """Fingerprint do decoder, readout LIF e versão do encoder usada no contexto."""
         payload = {
@@ -1319,6 +1333,7 @@ class LearningEngine:
             "threshold": threshold,
             "readout_updates": int(self.agent.network.output_updates),
             "recurrent_updates": int(self.agent.network.recurrent_updates),
+            "lif_model_fingerprint": self.lif_model_fingerprint(),
             "encoder_updates": int(self.agent.encoder.updates),
             "encoder_vocab_size": len(self.agent.encoder.vocab),
             "validation_fingerprint": self.validation_fingerprint(),

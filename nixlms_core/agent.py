@@ -6,6 +6,7 @@ from .neural import LIFNetwork
 from .encoding import SemanticEncoder
 from .pretrained_encoder import TransformersSentenceEncoder
 from .memory import MemorySystem
+from .episodic import EpisodicMemory
 from .cognition import CognitiveEngine
 from .learner import FeedbackLearner
 from .mental_map import MentalMap
@@ -58,6 +59,9 @@ class NixLMsNeuralCore:
 
         self.eeg = EEGInspiredEngine(self.config.seed)
         self.memory = MemorySystem(self.data_dir, self.config.max_memory_items)
+        self.episodic = EpisodicMemory(
+            self.data_dir / "episodic_memory.json", self.config.max_memory_items
+        )
         self.cognition = CognitiveEngine(self.config.confidence_threshold)
         self.learner = FeedbackLearner(self.network)
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
@@ -121,12 +125,14 @@ class NixLMsNeuralCore:
         if before > self.memory.max_items:
             self.memory.episodes = self.memory.episodes[-self.memory.max_items:]
             save_json(self.memory.episodes_path, self.memory.episodes)
+        episodic_report = self.episodic.prune()
         cache_before = len(self.memory._embedding_cache)
         if cache_before > self.memory.max_items * 2:
             self.memory._embedding_cache.clear()
         return {"episodes_before": before, "episodes_after": len(self.memory.episodes),
                 "embedding_cache_before": cache_before,
-                "embedding_cache_after": len(self.memory._embedding_cache)}
+                "embedding_cache_after": len(self.memory._embedding_cache),
+                "episodic_memory": episodic_report}
 
     def _scheduled_dataset_audit(self, payload):
         return self.learning.dataset.audit_splits()
@@ -175,6 +181,14 @@ class NixLMsNeuralCore:
             {"question": item.get("question"), "answer": item.get("answer")}
             for _, item in ranked[:3]
         ]
+        episodic_context = self.episodic.recall(text, self.encoder, limit=3)
+        for _, episode in episodic_context:
+            feedback = episode.get("feedback") or "sem feedback"
+            memory_context.append({
+                "question": f"Experiência anterior: {episode.get('user_input', '')}",
+                "answer": (f"Resposta anterior: {episode.get('assistant_output', '')} "
+                           f"(feedback: {feedback}; origem: {episode.get('source', 'unknown')})")
+            })
         concepts = self.mental_map.associate(text, limit=8)
         world_facts = self.world_model.search(text, limit=5)
         goal_context = self.goals.active_context(limit=5)
@@ -214,10 +228,18 @@ class NixLMsNeuralCore:
             "world_facts_considered": len(world_facts),
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),
+            "episodic_experiences_recalled": len(episodic_context),
             "encoder": "trainable_word_bigram_contrastive"
         }
         self.memory.add_episode("user", text)
         self.memory.add_episode("assistant", answer)
+        self.episodic.record(
+            text, answer,
+            context={"response_source": source, "confidence": confidence,
+                     "world_fact_sources": self.last_trace["world_fact_sources"]},
+            outcome="response_generated", source=source,
+            importance=max(0.0, min(1.0, float(confidence))),
+        )
         return answer
 
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,
@@ -245,6 +267,7 @@ class NixLMsNeuralCore:
         _, hidden = self.network.forward(vector, track_plasticity=True)
         self.learner.reinforce(vector, hidden, 1.0 if positive else -.5)
         save_json(self.data_dir / "neural_weights.json", self.network.state_dict())
+        self.episodic.set_feedback(question, positive)
 
     def status(self):
         retrieval_status = (
@@ -254,7 +277,7 @@ class NixLMsNeuralCore:
                   "dimensions": self.encoder.dimensions, "loaded": True}
         )
         return {
-            **self.memory.stats(), **self.mental_map.stats(), **self.learner.stats(),
+            **self.memory.stats(), **self.episodic.stats(), **self.mental_map.stats(), **self.learner.stats(),
             "world_model": self.world_model.stats(),
             "planning": self.goals.stats(),
             "scheduler": self.scheduler.stats(),

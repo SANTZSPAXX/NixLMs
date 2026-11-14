@@ -33,6 +33,7 @@ HELP = """Comandos:
   /avaliar                             benchmark offline de recuperação, semântica e respostas
   /avaliar-llm                         benchmark integrado usando o Ollama local (opcional)
   /llm                                 diagnóstico do Ollama local
+  /llm preparar                         configura Ollama e Qwen com consentimento
   /llm usar NOME                       seleciona modelo já instalado
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair

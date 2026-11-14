@@ -1,6 +1,6 @@
 # NixLMs
 
-**NixLMs 0.6.0 — Persistent Cognitive Scheduler** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
+**NixLMs 0.7 — Memória episódica e integração local** é uma IA experimental modular em Python, compatível com Windows e Google Colab. O núcleo permanece local-first e sem dependências externas obrigatórias.
 
 ## Evolução 0.5
 
@@ -23,7 +23,7 @@ Cada episódio inclui:
 - Resultado registrado, importância, tags e feedback explícito.
 - Recuperação por relevância lexical/semântica, recência e feedback.
 
-O feedback `/positivo` e `/negativo` atualiza a avaliação do episódio correspondente e mantém o mecanismo de reforço neural explícito já existente. A recuperação episódica pode fornecer experiências anteriores ao LLM local como contexto, sem tratá-las como fatos verificados.
+O feedback `/positivo` e `/negativo` atualiza a avaliação do episódio correspondente e influencia a recuperação futura. Ele não altera pesos neurais: reforço da rede LIF exige treinamento explícito e avaliação separada. A recuperação episódica pode fornecer experiências anteriores ao LLM local como contexto, sem tratá-las como fatos verificados.
 
 Limites: feedback não comprova que uma resposta está correta; episódios não são automaticamente convertidos em conhecimento factual; não há consolidação abstrativa nem alteração autônoma de pesos. A recuperação é uma heurística híbrida e deve ser avaliada em benchmark antes de qualquer alegação de melhoria geral.
 
@@ -96,7 +96,7 @@ Ou execute `iniciar_neural.bat`.
 
 ## Google Colab
 
-Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/feature/nixlms-0.5-balanced-evolution/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.
+Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.
 
 ## Backend opcional de embeddings multilíngues
 
@@ -182,7 +182,7 @@ Os arquivos em `data/` incluem:
 
 - `semantic_encoder.json`: vocabulário, embeddings e contagem de atualizações.
 - `knowledge.json`: conhecimento QA.
-- `episodes.json`: histórico episódico.
+- `episodic_memory.json`: histórico episódico.
 - `mental_map.json`: grafo associativo.
 - `world_model.json`: fatos tipados e proveniência.
 - `goals.json`: objetivos e etapas.

@@ -60,7 +60,7 @@ class LIFReadoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))
             question = "consulta candidata de diagnóstico"
-            ai.memory.remember(question, "Resposta candidata.")
+            ai.memory.knowledge = [{"question": question, "answer": "Resposta candidata."}]
             ai.network.output_updates = 1
             ai.network.w_out = [
                 [0.0] * ai.network.hidden_size

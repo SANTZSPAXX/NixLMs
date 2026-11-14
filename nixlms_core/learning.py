@@ -298,6 +298,161 @@ class LearningEngine:
         method = getattr(encoder, "encode_passage", None)
         return method(text) if callable(method) else encoder.encode(text)
 
+    def decoder_model_fingerprint(self):
+        """Fingerprint do decoder, readout LIF e versão do encoder usada no contexto."""
+        payload = {
+            "decoder": self.agent.decoder.state_dict(),
+            "lif_readout": self.agent.network.w_out,
+            "encoder_updates": self.agent.encoder.updates,
+            "encoder_vocab_size": len(self.agent.encoder.vocab),
+        }
+        serialized = json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def calibrate_decoder_confidence(self, min_validation_samples=4,
+                                     min_correct=2, min_incorrect=2,
+                                     min_token_f1=0.60):
+        """Calibra a aceitação do decoder exclusivamente com QA do split validation."""
+        if hasattr(self.agent, "_load_decoder_calibration"):
+            self.agent._load_decoder_calibration()
+        self._require_clean_splits()
+        min_validation_samples = int(min_validation_samples)
+        min_correct = int(min_correct)
+        min_incorrect = int(min_incorrect)
+        min_token_f1 = float(min_token_f1)
+        if min_validation_samples < 1 or min_correct < 1 or min_incorrect < 1:
+            raise ValueError("Os mínimos de calibração devem ser inteiros positivos.")
+        if not math.isfinite(min_token_f1) or not 0.0 <= min_token_f1 <= 1.0:
+            raise ValueError("min_token_f1 deve estar entre 0 e 1.")
+        if self.agent.decoder.trained_steps <= 0 or self.agent.network.output_updates <= 0:
+            return {"calibrated": False, "reason": "decoder_or_lif_readout_untrained"}
+
+        rows = [
+            row for row in self.dataset.load()
+            if row.get("type", "qa") == "qa" and row.get("split") == "validation"
+        ]
+        if not rows:
+            return {"calibrated": False, "reason": "validation_split_empty"}
+        if len(rows) < min_validation_samples:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_validation_samples",
+                "validation_samples": len(rows),
+                "required_samples": min_validation_samples,
+            }
+
+        cases = []
+        for row in rows:
+            question = str(row.get("question", "")).strip()
+            expected = str(row.get("answer", "")).strip()
+            context, _, _, _ = self.agent._lif_forward(question)
+            generated = self.agent.decoder.generate(
+                context, max_tokens=self.agent.config.decoder_max_tokens
+            )
+            candidate = str(generated.get("text", "")).strip()
+            try:
+                confidence = float(generated.get("confidence", 0.0))
+            except (TypeError, ValueError):
+                confidence = 0.0
+            if not math.isfinite(confidence):
+                confidence = 0.0
+            confidence = min(1.0, max(0.0, confidence))
+            tokens = list(generated.get("tokens", []))
+            token_f1 = self._token_f1(expected, candidate)
+            valid_sequence = (
+                bool(candidate)
+                and int(generated.get("token_count", len(tokens))) >= 2
+                and not self._is_question_echo(question, candidate)
+                and len(set(tokens)) > 1
+            )
+            correct = bool(valid_sequence and token_f1 >= min_token_f1)
+            cases.append({
+                "question": question,
+                "expected_answer": expected,
+                "generated_answer": candidate,
+                "confidence": confidence,
+                "token_f1": token_f1,
+                "valid_sequence": valid_sequence,
+                "correct": correct,
+            })
+
+        correct_count = sum(case["correct"] for case in cases)
+        incorrect_count = len(cases) - correct_count
+        if len(cases) < min_validation_samples:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_decoder_generations",
+                "validation_samples": len(rows),
+                "scored_samples": len(cases),
+            }
+        if correct_count < min_correct or incorrect_count < min_incorrect:
+            return {
+                "calibrated": False,
+                "reason": "insufficient_generation_class_balance",
+                "scored_samples": len(cases),
+                "positive_generations": correct_count,
+                "negative_generations": incorrect_count,
+                "required_positive": min_correct,
+                "required_negative": min_incorrect,
+            }
+
+        scores = sorted({case["confidence"] for case in cases})
+        thresholds = sorted({0.0, *scores, 1.000001})
+        best = None
+        for threshold in thresholds:
+            accepted = [case for case in cases if case["confidence"] >= threshold]
+            rejected = [case for case in cases if case["confidence"] < threshold]
+            tp = sum(case["correct"] for case in accepted)
+            fp = len(accepted) - tp
+            fn = sum(case["correct"] for case in rejected)
+            tn = len(rejected) - fn
+            precision = tp / (tp + fp) if tp + fp else 0.0
+            recall_score = tp / (tp + fn) if tp + fn else 0.0
+            f1 = (
+                2.0 * precision * recall_score / (precision + recall_score)
+                if precision + recall_score else 0.0
+            )
+            candidate = (f1, precision, threshold, {
+                "precision": precision,
+                "recall": recall_score,
+                "f1": f1,
+                "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+                "positive_generations": correct_count,
+                "negative_generations": incorrect_count,
+                "scored_samples": len(cases),
+                "mean_token_f1": sum(case["token_f1"] for case in cases) / len(cases),
+            })
+            if best is None or candidate[:3] > best[:3]:
+                best = candidate
+
+        threshold = float(best[2])
+        calibration = {
+            "schema_version": 1,
+            "threshold": threshold,
+            "decoder_trained_steps": int(self.agent.decoder.trained_steps),
+            "decoder_vocab_size": len(self.agent.decoder.vocab),
+            "lif_readout_updates": int(self.agent.network.output_updates),
+            "encoder_updates": int(self.agent.encoder.updates),
+            "encoder_vocab_size": len(self.agent.encoder.vocab),
+            "validation_fingerprint": self.validation_fingerprint(),
+            "decoder_model_fingerprint": self.decoder_model_fingerprint(),
+            "validation_samples": len(rows),
+            "scored_samples": len(cases),
+            "min_token_f1": min_token_f1,
+            "metrics": best[3],
+            "protocol": {
+                "validation_split_used": True,
+                "test_split_used": False,
+                "weights_updated": False,
+            },
+            "selected_at": datetime.now(timezone.utc).isoformat(),
+        }
+        save_json(self.agent.decoder_calibration_path, calibration)
+        self.agent.config.decoder_min_confidence = threshold
+        return {"calibrated": True, **calibration}
+
     def evaluate_decoder(self, qa_test=None):
         """Avalia perplexidade e acurácia teacher-forced apenas no split test."""
         rows = qa_test if qa_test is not None else [

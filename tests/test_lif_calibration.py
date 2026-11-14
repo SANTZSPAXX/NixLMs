@@ -233,6 +233,38 @@ class LIFCalibrationTests(unittest.TestCase):
             self.assertEqual(restored.network.recurrent_updates, 3)
             self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.45)
 
+    def test_manual_recurrent_weight_change_invalidates_lif_calibration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            self._add_validation_cases(ai)
+            ai.network.output_updates = 12
+            outcomes = iter([
+                (0.90, "Resposta Alfa."),
+                (0.80, "Resposta Beta."),
+                (0.85, "Resposta Incorreta."),
+                (0.20, "Outra Resposta Incorreta."),
+            ])
+
+            def fake_respond(_question, **_kwargs):
+                score, answer = next(outcomes)
+                ai.last_trace = {
+                    "lif_top_candidate_score": score,
+                    "lif_top_candidate_answer": answer,
+                }
+                return answer
+
+            with patch.object(ai, "respond", side_effect=fake_respond):
+                report = ai.learning.calibrate_lif_threshold()
+            self.assertTrue(report["calibrated"])
+            self.assertAlmostEqual(ai.config.lif_retrieval_threshold, 0.80)
+
+            ai.network.w_rec[0][1] += 0.1
+            save_json(data_dir / "neural_weights.json", ai.network.state_dict())
+            restored = NixLMsNeuralCore(data_dir)
+
+            self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.45)
+
     def test_explicit_custom_lif_threshold_overrides_persisted_calibration(self):
         with tempfile.TemporaryDirectory() as tmp:
             data_dir = Path(tmp)

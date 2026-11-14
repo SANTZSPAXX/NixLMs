@@ -169,7 +169,7 @@ def main():
     ai = NixLMsNeuralCore()
     print("NixLMs Neural Core 0.7 | Episodic Memory")
     initial_models = ai.language.refresh_models()
-    print("Ollama:", "API acessível" if ai.language.reachable else "não detectado/indisponível")
+    print("Ollama:", "API acessível" if ai.language.reachable else "não detectado/indisponível; respostas podem usar caminhos locais ou abstenção")
     if not ai.language.reachable or "qwen2.5:0.5b" not in initial_models:
         print("Para configurar Ollama e Qwen com autorização, execute /llm preparar.")
     print("Digite /ajuda para comandos.")

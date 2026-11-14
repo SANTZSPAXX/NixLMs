@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -245,6 +247,29 @@ class PretrainedEncoderBatchTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             encoder.encode_passages(["texto"], batch_size=0)
+
+
+class EpisodicBenchmarkSmokeTests(unittest.TestCase):
+    def test_synthetic_benchmark_reports_zero_warm_reencoding(self):
+        root = Path(__file__).resolve().parents[1]
+        script = root / "benchmarks" / "episodic_retrieval.py"
+        completed = subprocess.run(
+            [
+                sys.executable, str(script),
+                "--sizes", "10",
+                "--batch-size", "4",
+            ],
+            cwd=str(root),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        report = json.loads(completed.stdout)
+        result = report["results"][0]
+        self.assertEqual(result["episodes"], 10)
+        self.assertEqual(result["cold_encoded_passages"], 10)
+        self.assertEqual(result["warm_additional_encoded_passages"], 0)
+        self.assertEqual(result["warm_additional_encoder_calls"], 0)
 
 
 if __name__ == "__main__":

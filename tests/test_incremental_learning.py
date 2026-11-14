@@ -96,6 +96,11 @@ class SafeIncrementalLearningTests(unittest.TestCase):
                 "encoder": ai.encoder.state_dict(),
                 "network": ai.network.state_dict(),
                 "decoder": ai.decoder.state_dict(),
+                "knowledge": list(ai.memory.knowledge),
+                "mental_map": {
+                    "nodes": dict(ai.mental_map.nodes),
+                    "edges": dict(ai.mental_map.edges),
+                },
             }
             metrics = [
                 self._metrics(1.0, 0.4, 0.5),
@@ -107,6 +112,8 @@ class SafeIncrementalLearningTests(unittest.TestCase):
             self.assertTrue(report["accepted"])
             self.assertTrue(report["rollback_available"])
             self.assertNotEqual(ai.decoder.state_dict(), before["decoder"])
+            self.assertGreaterEqual(len(ai.memory.knowledge), len(before["knowledge"]))
+            self.assertNotEqual(ai.mental_map.nodes, before["mental_map"]["nodes"])
 
             restored = ai.learning.restore_incremental_checkpoint(report["checkpoint_id"])
 
@@ -114,6 +121,9 @@ class SafeIncrementalLearningTests(unittest.TestCase):
             self.assertEqual(ai.encoder.state_dict(), before["encoder"])
             self.assertEqual(ai.network.state_dict(), before["network"])
             self.assertEqual(ai.decoder.state_dict(), before["decoder"])
+            self.assertEqual(ai.memory.knowledge, before["knowledge"])
+            self.assertEqual(ai.mental_map.nodes, before["mental_map"]["nodes"])
+            self.assertEqual(ai.mental_map.edges, before["mental_map"]["edges"])
 
     def test_checkpoint_tampering_is_rejected_before_restore(self):
         with tempfile.TemporaryDirectory() as tmp:

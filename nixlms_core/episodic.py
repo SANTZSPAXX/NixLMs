@@ -85,11 +85,14 @@ class EpisodicMemory:
         )
         return hashlib.sha256(repr(attributes).encode("utf-8")).hexdigest()
 
-    def _prune_embedding_cache(self):
-        valid_entries = set()
-        for item in self.items:
-            passage = self._passage_text(item)
-            valid_entries.add(self._episode_cache_identity(item, passage))
+    def _prune_embedding_cache(self, valid_entries=None):
+        if not self._embedding_cache:
+            return
+        if valid_entries is None:
+            valid_entries = set()
+            for item in self.items:
+                passage = self._passage_text(item)
+                valid_entries.add(self._episode_cache_identity(item, passage))
 
         for key in list(self._embedding_cache):
             _, identity, content_fingerprint = key
@@ -107,7 +110,6 @@ class EpisodicMemory:
             self._embedding_cache.clear()
             self._cache_encoder_ref = encoder
             self._cache_encoder_fingerprint = fingerprint
-        self._prune_embedding_cache()
         return fingerprint
 
     def _cache_get(self, key):
@@ -153,7 +155,7 @@ class EpisodicMemory:
         if len(self.items) > self.max_items:
             self.items = self.items[-self.max_items:]
             save_json(self.path, self.items)
-        self._prune_embedding_cache()
+            self._prune_embedding_cache()
 
     def record(self, user_input, assistant_output, *, context=None, outcome=None,
                source="unknown", importance=0.5, tags=None):
@@ -222,6 +224,34 @@ class EpisodicMemory:
         excluded = {normalize(text) for text in (exclude_user_inputs or [])}
         ranked = []
         pending = []
+        prepared = []
+        valid_entries = set()
+
+        for item in self.items:
+            passage_text = None
+            cache_key = None
+            if encoder is not None and query_vector is not None:
+                passage_text = self._passage_text(item)
+                identity, content_fingerprint = self._episode_cache_identity(
+                    item, passage_text
+                )
+                valid_entries.add((identity, content_fingerprint))
+                cache_key = (
+                    encoder_fingerprint, identity, content_fingerprint
+                )
+
+            if normalize(item.get("user_input", "")) in excluded:
+                continue
+            searchable = " ".join([
+                item.get("user_input", ""), item.get("assistant_output", ""),
+                " ".join(item.get("tags", [])), item.get("outcome", ""),
+            ])
+            tokens = set(tokenize(searchable))
+            lexical = len(query_tokens & tokens) / max(1, len(query_tokens | tokens))
+            prepared.append((item, lexical, passage_text, cache_key))
+
+        if encoder is not None and query_vector is not None:
+            self._prune_embedding_cache(valid_entries)
 
         def add_ranked(item, lexical, passage_vector):
             semantic = 0.0
@@ -252,23 +282,11 @@ class EpisodicMemory:
                 add_ranked(item, lexical, vector)
             pending.clear()
 
-        for item in self.items:
-            if normalize(item.get("user_input", "")) in excluded:
-                continue
-            searchable = " ".join([
-                item.get("user_input", ""), item.get("assistant_output", ""),
-                " ".join(item.get("tags", [])), item.get("outcome", ""),
-            ])
-            tokens = set(tokenize(searchable))
-            lexical = len(query_tokens & tokens) / max(1, len(query_tokens | tokens))
-
+        for item, lexical, passage_text, cache_key in prepared:
             if encoder is None or query_vector is None:
                 add_ranked(item, lexical, [])
                 continue
 
-            passage_text = self._passage_text(item)
-            identity, content_fingerprint = self._episode_cache_identity(item, passage_text)
-            cache_key = (encoder_fingerprint, identity, content_fingerprint)
             passage_vector = self._cache_get(cache_key)
             if passage_vector is not None:
                 add_ranked(item, lexical, passage_vector)

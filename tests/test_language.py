@@ -83,6 +83,16 @@ class OllamaDiagnosticsTests(unittest.TestCase):
             self.assertFalse(engine.available())
         self.assertIn("Resposta inválida", engine.status()["last_error"])
 
+    def test_invalid_chat_payload_is_reported_not_raised(self):
+        engine = LanguageEngine()
+        responses = [
+            FakeResponse({"models": [{"name": "qwen2.5:0.5b"}]}),
+            FakeResponse([]),
+        ]
+        with patch("nixlms_core.language.urlopen", side_effect=responses):
+            self.assertIsNone(engine.generate("Pergunta de teste"))
+        self.assertIn("Resposta inválida de /api/chat", engine.last_error)
+
     def test_generate_sends_local_date_and_clears_error_on_success(self):
         engine = LanguageEngine()
         responses = [

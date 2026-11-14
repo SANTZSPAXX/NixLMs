@@ -34,6 +34,26 @@ class SafeIncrementalLearningTests(unittest.TestCase):
                          "weights_updated": False},
         }
 
+    def test_validation_metrics_never_read_test_rows_or_update_weights(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = self._agent(tmp)
+            ai.learning.dataset.add("pergunta teste isolada", "resposta teste isolada", "test")
+            before = {
+                "encoder": ai.encoder.state_dict(),
+                "network": ai.network.state_dict(),
+                "decoder": ai.decoder.state_dict(),
+            }
+
+            report = ai.learning._validation_metrics()
+
+            self.assertEqual(report["samples"], 2)
+            self.assertTrue(report["protocol"]["validation_split_used"])
+            self.assertFalse(report["protocol"]["test_split_used"])
+            self.assertFalse(report["protocol"]["weights_updated"])
+            self.assertEqual(ai.encoder.state_dict(), before["encoder"])
+            self.assertEqual(ai.network.state_dict(), before["network"])
+            self.assertEqual(ai.decoder.state_dict(), before["decoder"])
+
     def test_safe_training_refuses_without_validation_and_does_not_mutate(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

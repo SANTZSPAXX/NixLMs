@@ -216,6 +216,8 @@ class LearningEngine:
         "semantic_encoder.json",
         "neural_weights.json",
         "neural_decoder.json",
+        "knowledge.json",
+        "mental_map.json",
     )
     INCREMENTAL_CALIBRATION_FILES = (
         "lif_calibration.json",
@@ -234,6 +236,11 @@ class LearningEngine:
             "semantic_encoder.json": self.agent.encoder.state_dict(),
             "neural_weights.json": self.agent.network.state_dict(),
             "neural_decoder.json": self.agent.decoder.state_dict(),
+            "knowledge.json": self.agent.memory.knowledge,
+            "mental_map.json": {
+                "nodes": self.agent.mental_map.nodes,
+                "edges": self.agent.mental_map.edges,
+            },
         }
 
     def _validation_metrics(self):
@@ -476,6 +483,15 @@ class LearningEngine:
                     load_json(self.agent.data_dir / "neural_decoder.json", None)
                 ):
                     raise ValueError("Checkpoint do decoder incompatível.")
+                self.agent.memory.knowledge = load_json(
+                    self.agent.data_dir / "knowledge.json", []
+                )
+                self.agent.memory._embedding_cache.clear()
+                mental_state = load_json(
+                    self.agent.data_dir / "mental_map.json", {"nodes": {}, "edges": {}}
+                )
+                self.agent.mental_map.nodes = mental_state.get("nodes", {})
+                self.agent.mental_map.edges = mental_state.get("edges", {})
                 self.agent._load_lif_calibration()
                 self.agent._load_decoder_calibration()
             except Exception:
@@ -653,6 +669,14 @@ class LearningEngine:
                     candidate_state["neural_decoder.json"]
                 ):
                     raise ValueError("Decoder candidato incompatível.")
+                self.agent.memory.knowledge = copy.deepcopy(candidate_state["knowledge.json"])
+                self.agent.memory._embedding_cache.clear()
+                self.agent.mental_map.nodes = copy.deepcopy(
+                    candidate_state["mental_map.json"].get("nodes", {})
+                )
+                self.agent.mental_map.edges = copy.deepcopy(
+                    candidate_state["mental_map.json"].get("edges", {})
+                )
                 self.agent.invalidate_lif_calibration()
             except Exception:
                 self.restore_incremental_checkpoint(checkpoint_id)

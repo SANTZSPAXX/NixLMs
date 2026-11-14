@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from pathlib import Path
 from .config import CoreConfig
 from .eeg import EEGInspiredEngine
@@ -16,7 +17,7 @@ from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
 from .learning import LearningEngine
-from .utils import save_json, load_json
+from .utils import save_json, load_json, normalize
 
 
 DEFAULTS = [
@@ -147,6 +148,34 @@ class NixLMsNeuralCore:
                                 "step": step})
         return {"active_goals": len(active), "available_actions": actions[:100]}
 
+    @staticmethod
+    def _temporal_response(message, now=None):
+        """Responde consultas simples de data/hora com o relógio local do runtime."""
+        query = normalize(message)
+        words = set(query.split())
+        asks_time = bool(words & {"hora", "horas", "horario"}) and bool(
+            words & {"agora", "sao", "atual", "atualmente"}
+        )
+        asks_date = (
+            "hoje" in words
+            or ("data" in words and bool(words & {"qual", "hoje"}))
+            or ("dia" in words and bool(words & {"hoje", "semana"}))
+        )
+        if not asks_date and not asks_time:
+            return None
+        current = now or datetime.now().astimezone()
+        weekdays = (
+            "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+            "sexta-feira", "sábado", "domingo",
+        )
+        date_text = f"{weekdays[current.weekday()]}, {current:%d/%m/%Y}"
+        time_text = current.strftime("%H:%M")
+        if asks_date and asks_time:
+            return f"Hoje é {date_text}. Agora são {time_text}."
+        if asks_date:
+            return f"Hoje é {date_text}."
+        return f"Agora são {time_text}."
+
     def respond(self, message, use_language=True):
         text = str(message).strip()
         if not text:
@@ -181,7 +210,8 @@ class NixLMsNeuralCore:
             {"question": item.get("question"), "answer": item.get("answer")}
             for _, item in ranked[:3]
         ]
-        episodic_context = self.episodic.recall(text, self.encoder, limit=3)
+        episodic_encoder = self._active_retrieval_encoder()
+        episodic_context = self.episodic.recall(text, episodic_encoder, limit=3)
         for _, episode in episodic_context:
             feedback = episode.get("feedback") or "sem feedback"
             memory_context.append({
@@ -193,12 +223,16 @@ class NixLMsNeuralCore:
         world_facts = self.world_model.search(text, limit=5)
         goal_context = self.goals.active_context(limit=5)
         history = self.attention.working.context(limit=6)
+        temporal_answer = self._temporal_response(text)
         llm_answer = self.language.generate(
             text, memory_context, concepts, history,
             world_facts=world_facts, goals=goal_context
-        ) if use_language else None
+        ) if use_language and temporal_answer is None else None
 
-        if llm_answer:
+        if temporal_answer:
+            answer, source = temporal_answer, "runtime_datetime"
+            confidence = 1.0
+        elif llm_answer:
             answer, source = llm_answer, "local_llm"
         elif selected:
             answer, source = selected.get("answer", ""), "semantic_memory"
@@ -225,6 +259,8 @@ class NixLMsNeuralCore:
             "active_neurons": sum(1 for count in self.network.last_spike_counts if count > 0),
             "network_output_norm": sum(x * x for x in output) ** .5,
             "response_source": source, "concepts": concepts,
+            "llm_error": self.language.last_error if source != "runtime_datetime" else None,
+            "retrieval_encoder_error": self._retrieval_encoder_error,
             "world_facts_considered": len(world_facts),
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),

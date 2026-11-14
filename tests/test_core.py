@@ -40,6 +40,25 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(ai.last_trace["response_source"], "runtime_datetime")
             self.assertEqual(ai.last_trace["confidence"], 1.0)
 
+    def test_attention_reranking_changes_final_memory_selection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            candidates = [
+                (0.90, {"question": "consulta alfa", "answer": "Resposta A"}),
+                (0.80, {"question": "consulta beta", "answer": "Resposta B"}),
+            ]
+            def prioritize(_query, items, _eeg, _map, limit=5):
+                return [(0.0, items[0]), (1.0, items[1])][:limit]
+            with mock.patch.object(ai, "_recall", return_value=candidates), \
+                 mock.patch.object(ai.attention, "allocate", side_effect=prioritize):
+                answer = ai.respond("consulta de teste", use_language=False)
+            self.assertEqual(answer, "Resposta B")
+            self.assertTrue(ai.last_trace["attention_reranking_applied"])
+            self.assertEqual(
+                ai.last_trace["attention_reranking_weights"],
+                {"retrieval": 0.8, "attention": 0.2},
+            )
+
     def test_episodic_recall_uses_the_configured_retrieval_encoder(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

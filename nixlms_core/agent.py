@@ -535,7 +535,7 @@ class NixLMsNeuralCore:
             "decoder_rejection_reason": decoder_rejection_reason,
             "decoder_generated_text": decoder_answer,
             "neural_generation_path": (
-                "lif_neural_decoder" if decoder_accepted else
+                "lif_neural_decoder" if source == "lif_neural_decoder" else
                 "lif_conditioned_llm" if lif_ranked and llm_answer else
                 "lif_associative_readout" if lif_ranked else
                 "llm_without_trained_lif_readout" if llm_answer else "no_trained_lif_readout"
@@ -606,7 +606,7 @@ class NixLMsNeuralCore:
             "planning": self.goals.stats(),
             "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
-            "architecture": "semantic_contrastive_recurrent_lif_memory_world_model_goal_manager",
+            "architecture": "semantic_subword_encoder_lif_readout_autoregressive_decoder_memory_world_model_goal_manager",
             "encoder": {
                 "type": "SemanticEncoder", "dimensions": self.encoder.dimensions,
                 "vocabulary_size": len(self.encoder.vocab),
@@ -618,6 +618,16 @@ class NixLMsNeuralCore:
                 "active_threshold": self.config.lif_retrieval_threshold,
                 "saved": self.lif_calibration_path.exists(),
                 "loaded": self._load_lif_calibration(),
+            },
+            "decoder": {
+                "type": "lif_conditioned_autoregressive_rnn",
+                "context_size": self.decoder.context_size,
+                "hidden_size": self.decoder.hidden_size,
+                "embedding_size": self.decoder.embedding_size,
+                "vocabulary_size": len(self.decoder.vocab),
+                "trained_steps": self.decoder.trained_steps,
+                "trained_tokens": self.decoder.trained_tokens,
+                "load_error": self.decoder_load_error,
             },
             "llm": self.language.status(), "last_trace": self.last_trace,
             "config": self.config.__dict__

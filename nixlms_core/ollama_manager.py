@@ -130,7 +130,7 @@ class OllamaManager:
             self.last_action = "installed"
             self.last_error = None
             return {"ok": True, "executable": binary}
-        except (OSError, subprocess.SubprocessError, RuntimeError, Exception) as exc:
+        except Exception as exc:
             self.last_error = f"{type(exc).__name__}: {exc}"
             self.last_action = "install_failed"
             return {"ok": False, "error": self.last_error}

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Persistent Cognitive Scheduler
+
+- Added a standard-library SQLite scheduler with durable one-shot and interval jobs.
+- Added allowlisted runtime handlers, JSON payload validation, task limits and priority ordering.
+- Added atomic task claiming, renewable leases, retry backoff, event history and graceful worker shutdown.
+- Integrated conservative memory housekeeping, dataset integrity audits and goal review handlers.
+- Added CLI agenda commands; background execution starts only in the CLI or after explicit API opt-in.
+- Documented at-least-once delivery semantics, idempotency requirements and local-filesystem constraints.
+- Added scheduler persistence, recurrence, retry, priority, cancellation and lifecycle tests.
+
+
 ## 0.5.0 — Balanced Cognitive Evolution
 
 - Added a persistent typed World Model with source, confidence and possible-conflict reporting.

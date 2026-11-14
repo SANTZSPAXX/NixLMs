@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from nixlms_core import NixLMsNeuralCore
+from nixlms_core import CoreConfig, NixLMsNeuralCore
 from nixlms_core.learning import DatasetStore
 from nixlms_core.utils import save_json
 
@@ -175,6 +175,30 @@ class LIFCalibrationTests(unittest.TestCase):
             save_json(data_dir / "neural_weights.json", restored.network.state_dict())
             stale = NixLMsNeuralCore(data_dir)
             self.assertAlmostEqual(stale.config.lif_retrieval_threshold, 0.45)
+
+    def test_explicit_custom_lif_threshold_overrides_persisted_calibration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = Path(tmp)
+            ai = NixLMsNeuralCore(data_dir)
+            ai.network.output_updates = 12
+            ai.encoder.updates = 7
+            save_json(data_dir / "neural_weights.json", ai.network.state_dict())
+            ai._save_encoder()
+            save_json(data_dir / "lif_calibration.json", {
+                "schema_version": 1,
+                "threshold": 0.80,
+                "readout_updates": 12,
+                "encoder_updates": 7,
+                "encoder_vocab_size": len(ai.encoder.vocab),
+                "validation_fingerprint": ai.learning.validation_fingerprint(),
+                "candidate_memory_fingerprint": ai.learning.lif_candidate_fingerprint(),
+            })
+
+            restored = NixLMsNeuralCore(
+                data_dir, config=CoreConfig(lif_retrieval_threshold=0.60)
+            )
+
+            self.assertAlmostEqual(restored.config.lif_retrieval_threshold, 0.60)
 
     def test_calibration_is_ignored_when_validation_dataset_changes(self):
         with tempfile.TemporaryDirectory() as tmp:

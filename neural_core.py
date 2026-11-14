@@ -99,10 +99,79 @@ def _scheduler_command(ai, message):
         print("Falha no agendamento:", exc)
 
 
+def _confirm_action(prompt):
+    try:
+        answer = input(prompt + " [s/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\\nOperação cancelada.")
+        return False
+    return answer in {"s", "sim", "y", "yes"}
+
+
+def _prepare_ollama(ai):
+    manager = ai.ollama
+    target_model = "qwen2.5:0.5b"
+
+    if manager.executable() is None:
+        print("Ollama não está instalado.")
+        if not _confirm_action("Autoriza instalar o Ollama neste computador?"):
+            print("Instalação não autorizada; nenhuma alteração foi realizada.")
+            return
+        result = manager.install()
+        if not result.get("ok"):
+            print("ERRO na instalação:", result.get("error"))
+            return
+        print("Ollama instalado:", result.get("executable"))
+
+    ai.language.refresh_models()
+    if not ai.language.reachable:
+        print("Serviço Ollama indisponível:", ai.language.last_error)
+        if not _confirm_action("Autoriza iniciar o serviço local Ollama?"):
+            print("Inicialização não autorizada.")
+            return
+        result = manager.start_service()
+        if not result.get("ok"):
+            print("ERRO ao iniciar Ollama:", result.get("error"))
+            return
+        print("Serviço Ollama acessível em", ai.language.host)
+
+    ai.language.refresh_models()
+    if target_model not in ai.language.installed_models:
+        print("Modelo solicitado:", target_model)
+        print("Modelos locais:", ai.language.installed_models or "nenhum")
+        if not _confirm_action("Autoriza baixar o modelo Qwen 2.5 0.5B?"):
+            print("Download não autorizado; nenhum modelo foi baixado.")
+            return
+        result = manager.pull_model(target_model)
+        if not result.get("ok"):
+            print("ERRO no download/verificação do modelo:", result.get("error"))
+            return
+
+    try:
+        ai.language.select_model(target_model)
+    except ValueError as exc:
+        print("ERRO ao selecionar o modelo:", exc)
+        return
+
+    print("Executando teste real de geração no modelo solicitado...")
+    answer = ai.language.generate("Responda somente com a palavra OK.")
+    if answer and ai.language.last_used_model == target_model:
+        print("SUCESSO: Ollama gerou uma resposta com", ai.language.last_used_model)
+        print("Resposta de teste:", answer)
+        print("Geração verificada em:", ai.language.last_generation)
+    else:
+        print("ERRO: não foi possível confirmar o uso do modelo.")
+        print("Detalhe:", ai.language.last_error or "modelo retornado não corresponde ao solicitado.")
+        print("Status:", ai.ollama.status())
+
+
 def main():
     ai = NixLMsNeuralCore()
     print("NixLMs Neural Core 0.7 | Episodic Memory")
-    print("LLM local:", "disponível" if ai.language.available() else "não detectado; fallback para memória")
+    initial_models = ai.language.refresh_models()
+    print("Ollama:", "API acessível" if ai.language.reachable else "não detectado/indisponível")
+    if not ai.language.reachable or "qwen2.5:0.5b" not in initial_models:
+        print("Para configurar Ollama e Qwen com autorização, execute /llm preparar.")
     print("Digite /ajuda para comandos.")
     ai.scheduler.start()
     while True:
@@ -155,9 +224,13 @@ def main():
             available = ai.language.available()
             print("Ollama:", "disponível" if available else "indisponível")
             print(ai.language.status())
+            print("Gerenciador:", ai.ollama.status())
             if not available:
                 print("Diagnóstico:", ai.language.last_error or "Nenhum modelo local disponível.")
-            print("Encoder de recuperação:", ai.status()["retrieval_encoder"])
+                print("Use /llm preparar para instalar/iniciar e baixar o Qwen, sempre com confirmação.")
+            continue
+        if low == "/llm preparar":
+            _prepare_ollama(ai)
             continue
         if low.startswith("/llm usar "):
             model = msg[len("/llm usar "):].strip()

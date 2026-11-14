@@ -7,7 +7,6 @@ import os
 import platform
 import shutil
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 from urllib.request import urlopen
@@ -58,6 +57,8 @@ class OllamaManager:
             "installed_models": list(self.language.installed_models),
             "last_action": self.last_action,
             "last_error": self.last_error or self.language.last_error,
+            "last_used_model": self.language.last_used_model,
+            "last_generation": self.language.last_generation,
         }
 
     def install(self):

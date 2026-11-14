@@ -737,6 +737,9 @@ class LearningEngine:
         losses = []
         updates = 0
         lif_losses = []
+        lif_recurrent_losses = []
+        lif_pair_losses = []
+        lif_pair_updates = 0
         decoder_losses = []
         for _ in range(epochs):
             batch = list(pairs)
@@ -747,10 +750,34 @@ class LearningEngine:
                 )
                 losses.append(result["loss"])
                 updates += int(result["updated"])
-            # Treina a leitura depois da atualização contrastiva do encoder,
-            # mantendo os alvos semânticos alinhados aos embeddings atuais.
+                lif_pair_result = self.agent.network.train_recurrent_pair(
+                    self.agent.encoder.encode(pair["text_a"]),
+                    self.agent.encoder.encode(pair["text_b"]),
+                    pair.get("label", 1),
+                    learning_rate=self.agent.config.lif_recurrent_learning_rate,
+                    margin=self.agent.config.lif_contrastive_margin,
+                    surrogate_width=self.agent.config.lif_surrogate_width,
+                )
+                lif_pair_losses.append(lif_pair_result["loss"])
+                lif_pair_updates += int(lif_pair_result["updated"])
+            # Treina a dinâmica recorrente com o alvo semântico antes de ajustar
+            # o readout; o readout permanece congelado durante BPTT substituto.
             qa_batch = list(qa_rows)
             rng.shuffle(qa_batch)
+            for row in qa_batch:
+                vector = self.agent.encoder.encode(row["question"])
+                target = self.agent._compress_neural_target(
+                    self.agent.encoder.encode(row["answer"])
+                )
+                recurrent_result = self.agent.network.train_recurrent(
+                    vector, target,
+                    learning_rate=self.agent.config.lif_recurrent_learning_rate,
+                    surrogate_width=self.agent.config.lif_surrogate_width,
+                )
+                lif_recurrent_losses.append(recurrent_result["loss"])
+            # Treina a leitura depois da atualização recorrente,
+            # mantendo os alvos semânticos alinhados aos embeddings atuais.
+            # mantendo os alvos semânticos alinhados aos embeddings atuais.
             for row in qa_batch:
                 _, hidden, _, _ = self.agent._lif_forward(row["question"])
                 target = self.agent._compress_neural_target(
@@ -779,6 +806,17 @@ class LearningEngine:
             "epochs": epochs,
             "mean_contrastive_loss": sum(losses) / len(losses) if losses else None,
             "lif_output_updates": self.agent.network.output_updates,
+            "lif_recurrent_updates": self.agent.network.recurrent_updates,
+            "lif_recurrent_examples_trained": len(qa_rows),
+            "mean_lif_recurrent_loss": (
+                sum(lif_recurrent_losses) / len(lif_recurrent_losses)
+                if lif_recurrent_losses else None
+            ),
+            "lif_pair_updates": lif_pair_updates,
+            "mean_lif_pair_loss": (
+                sum(lif_pair_losses) / len(lif_pair_losses)
+                if lif_pair_losses else None
+            ),
             "lif_qa_examples_trained": len(qa_rows),
             "mean_lif_readout_loss": sum(lif_losses) / len(lif_losses) if lif_losses else None,
             "decoder_trained_steps": self.agent.decoder.trained_steps,

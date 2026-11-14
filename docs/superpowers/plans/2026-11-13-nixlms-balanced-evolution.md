@@ -131,3 +131,15 @@
 
 ## Commit strategy
 Use small, reviewable commits per task. The final handoff must report exact commits, CI job results, files changed, and remaining limitations. A green CI run is not a substitute for local Windows/Colab validation.
+
+
+## Execution record — 2026-11-14
+
+- Branch: `feature/nixlms-0.5-balanced-evolution`.
+- Pull request: [#2](https://github.com/SANTZSPAXX/NixLMs/pull/2), draft, base `feature/semantic-learning-0.4`; not merged.
+- GitHub Actions run: [#66](https://github.com/SANTZSPAXX/NixLMs/actions/runs/43544452554).
+- Matrix result: Ubuntu Python 3.10, 3.11, 3.12 and Windows Python 3.12 — all four jobs completed successfully.
+- The unit-test step reported **34 tests, OK** in the inspected Ubuntu 3.11 and Windows 3.12 logs; the other two matrix jobs also completed successfully.
+- The optional E5 backend was validated with an injected test model. Actual loading of downloaded E5 weights was not exercised because no model files were provisioned in CI.
+- The test suite was authored before the implementation, but a failing CI run was not captured before the implementation commits. The final green run is verified; a strict red-green trace is not claimed.
+- Remaining validation: run on the user's Windows machine, provision the optional model locally, profile CPU/RAM, and evaluate on a licensed held-out Portuguese benchmark such as ASSIN/ASSIN2 or MTEB-BR with leakage controls.

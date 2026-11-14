@@ -328,6 +328,14 @@ class NeuralTextDecoder:
         terminated = False
         for _ in range(limit):
             hidden, probabilities = self._step(current, hidden)
+            # Penaliza repetição imediata para evitar colapsos de geração greedy.
+            if tokens:
+                previous_id = self.vocab.get(tokens[-1])
+                if previous_id is not None and len(probabilities) > 1:
+                    probabilities[previous_id] = 0.0
+                    remaining = sum(probabilities)
+                    if remaining > 0:
+                        probabilities = [value / remaining for value in probabilities]
             next_id = max(range(len(probabilities)), key=probabilities.__getitem__)
             next_token = next(token for token, index in self.vocab.items() if index == next_id)
             if next_token == "<eos>":

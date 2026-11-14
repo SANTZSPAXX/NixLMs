@@ -1165,11 +1165,13 @@ class LearningEngine:
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def evaluate_lif_representations(self):
-        """Avalia similaridade das representações ocultas LIF em pares validation."""
+    def evaluate_lif_representations(self, split="validation"):
+        """Avalia pares ocultos LIF em validation (gate) ou test (benchmark final)."""
+        if split not in {"validation", "test"}:
+            raise ValueError("split deve ser validation ou test.")
         rows = [
             row for row in self.dataset.load()
-            if row.get("type") == "pair" and row.get("split") == "validation"
+            if row.get("type") == "pair" and row.get("split") == split
         ]
         positive = []
         negative = []
@@ -1208,8 +1210,8 @@ class LearningEngine:
             },
             "cases": cases,
             "protocol": {
-                "validation_split_used": True,
-                "test_split_used": False,
+                "validation_split_used": split == "validation",
+                "test_split_used": split == "test",
                 "weights_updated": False,
             },
         }
@@ -1569,6 +1571,7 @@ class LearningEngine:
             "decision_threshold": threshold,
         }
         representations = self.evaluate_representations()
+        lif_representations = self.evaluate_lif_representations(split="test")
         decoder = self.evaluate_decoder(qa_test)
         cognition = self.evaluate_cognition(qa_test, include_llm=include_llm)
 
@@ -1576,6 +1579,7 @@ class LearningEngine:
             "retrieval": retrieval,
             "contrastive": contrastive,
             "representations": representations,
+            "lif_representations": lif_representations,
             "decoder": decoder,
             "cognition": cognition,
             "protocol": {

@@ -62,7 +62,7 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 
 ## Arquitetura atual
 
-- **Semantic Encoder:** embeddings treináveis de palavras e bigramas, inicialização determinística e aprendizado contrastivo.
+- **Semantic Encoder:** embeddings treináveis de palavras, bigramas e subwords de caracteres (n-gramas 3–5), inicialização determinística e aprendizado contrastivo. A sobreposição de subwords permite generalização para flexões e tokens OOV sem expandir o vocabulário durante a inferência; a expansão é limitada a 128 tokens e 32 caracteres por token.
 - **LIF/STDP + Readout supervisionado:** a rede recorrente produz uma representação de saída treinada com pares pergunta→resposta. Essa leitura recupera candidatos semânticos e condiciona o LLM local; sem LLM, pode fornecer diretamente a resposta associativa acima do limiar configurado.
 - **Memory:** recuperação híbrida lexical/semântica, memória QA e episódios persistentes.
 - **Attention:** memória de trabalho e priorização de contexto.

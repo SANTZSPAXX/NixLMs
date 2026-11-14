@@ -56,6 +56,23 @@ class CoreTests(unittest.TestCase):
     def test_person_answer_must_mention_requested_entity(self):
         self.assertEqual(NixLMsNeuralCore._validate_llm_answer('Quem foi Pedro Alvares', 'O nome de NixLMs é uma abreviação para Nix Language Models.'), (False, 'requested_person_not_mentioned'))
         self.assertTrue(NixLMsNeuralCore._validate_llm_answer('Quem foi Pedro Alvares', 'Pedro Álvares Cabral foi um navegador português.')[0])
+    def test_runtime_rejects_generic_llm_greeting_for_information_question(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            with mock.patch.object(ai.language, 'generate', return_value='Olá! Sou a NixLMs. Como posso ajudar hoje?'):
+                answer = ai.respond('O que é uma sombra na piscina?')
+            self.assertNotIn('Olá!', answer)
+            self.assertEqual(ai.last_trace['response_source'], 'fallback')
+            self.assertEqual(ai.last_trace['llm_rejection_reason'], 'irrelevant_greeting')
+
+    def test_runtime_rejects_answer_about_wrong_person(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            with mock.patch.object(ai.language, 'generate', return_value='O nome de NixLMs é uma abreviação para Nix Language Models.'):
+                answer = ai.respond('Quem foi Pedro Alvares')
+            self.assertIn('Pedro Álvares Cabral', answer)
+            self.assertEqual(ai.last_trace['response_source'], 'entity_abstention')
+            self.assertEqual(ai.last_trace['llm_rejection_reason'], 'requested_person_not_mentioned')
     def test_temporal_queries_use_runtime_clock_without_ollama(self):
         from datetime import datetime
         with tempfile.TemporaryDirectory() as tmp:

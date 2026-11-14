@@ -223,6 +223,16 @@ class LearningEngine:
         updates = 0
         lif_losses = []
         for _ in range(epochs):
+            batch = list(pairs)
+            rng.shuffle(batch)
+            for pair in batch:
+                result = self.agent.encoder.fit_pair(
+                    pair["text_a"], pair["text_b"], pair.get("label", 1)
+                )
+                losses.append(result["loss"])
+                updates += int(result["updated"])
+            # Treina a leitura depois da atualização contrastiva do encoder,
+            # mantendo os alvos semânticos alinhados aos embeddings atuais.
             qa_batch = list(qa_rows)
             rng.shuffle(qa_batch)
             for row in qa_batch:
@@ -235,14 +245,6 @@ class LearningEngine:
                     hidden, target,
                     learning_rate=self.agent.config.lif_output_learning_rate
                 ))
-            batch = list(pairs)
-            rng.shuffle(batch)
-            for pair in batch:
-                result = self.agent.encoder.fit_pair(
-                    pair["text_a"], pair["text_b"], pair.get("label", 1)
-                )
-                losses.append(result["loss"])
-                updates += int(result["updated"])
 
         self.agent._save_encoder()
         save_json(self.agent.data_dir / "neural_weights.json",

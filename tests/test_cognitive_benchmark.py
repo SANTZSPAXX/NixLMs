@@ -47,6 +47,27 @@ class CognitiveBenchmarkTests(unittest.TestCase):
             self.assertTrue(report["cognition"]["protocol"]["exact_test_questions_excluded"])
             self.assertFalse(report["cognition"]["protocol"]["historical_weight_provenance_verified"])
 
+    def test_lif_readout_excludes_exact_held_out_questions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            question = "Consulta reservada para teste LIF QX-42?"
+            ai.memory.remember(question, "Resposta reservada QX-42.")
+            ai.config.lif_retrieval_threshold = 0.0
+            ai.network.output_updates = 1
+            ai.network.w_out = [
+                [0.0] * ai.network.hidden_size
+                for _ in range(ai.network.output_size)
+            ]
+
+            candidates = ai._lif_recall(
+                [0.0] * ai.network.output_size,
+                exclude_questions={question},
+            )
+
+            self.assertFalse(any(
+                candidate["question"] == question for candidate in candidates
+            ))
+
     def test_evaluate_does_not_persist_benchmark_interactions_as_episodes(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = NixLMsNeuralCore(Path(tmp))

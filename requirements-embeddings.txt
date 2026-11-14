@@ -1,0 +1,3 @@
+# Dependência opcional: o núcleo NixLMs não precisa deste pacote.
+# Instale PyTorch CPU primeiro conforme a documentação oficial para Windows.
+sentence-transformers>=3.0,<6.0

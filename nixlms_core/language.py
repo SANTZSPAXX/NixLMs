@@ -1,6 +1,7 @@
 """LLM opcional via Ollama local; conexões remotas são recusadas."""
 import json
 import os
+from datetime import datetime
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -14,26 +15,80 @@ class LanguageEngine:
         self.enabled = os.getenv("NIXLMS_LLM_ENABLED", "1").lower() not in {"0", "false", "no"}
         parsed = urlparse(self.host)
         self.local_host = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        self.last_error = None
+        self.installed_models = []
+        self.last_check = None
+
+    def _get_tags(self):
+        if not self.local_host:
+            raise RuntimeError("Ollama bloqueado: OLLAMA_HOST deve apontar para loopback local.")
+        with urlopen(self.host + "/api/tags", timeout=3) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        models = data.get("models", [])
+        if not isinstance(models, list):
+            raise ValueError("Resposta inválida de /api/tags.")
+        return [str(item.get("name", "")).strip() for item in models
+                if isinstance(item, dict) and str(item.get("name", "")).strip()]
+
+    def refresh_models(self):
+        """Consulta os modelos locais sem baixar ou instalar nenhum."""
+        self.last_check = datetime.now().astimezone().isoformat()
+        if not self.enabled:
+            self.last_error = "Integração Ollama desativada por NIXLMS_LLM_ENABLED."
+            self.installed_models = []
+            return []
+        try:
+            self.installed_models = self._get_tags()
+            self.last_error = None
+            if self.model not in self.installed_models and self.installed_models:
+                # Não baixa modelos: seleciona um modelo que já existe localmente.
+                self.model = self.installed_models[0]
+            elif not self.installed_models:
+                self.last_error = "Ollama respondeu, mas não há modelos instalados. Instale um modelo local."
+            return list(self.installed_models)
+        except (URLError, HTTPError, TimeoutError, ValueError, OSError, RuntimeError) as exc:
+            self.installed_models = []
+            self.last_error = f"{type(exc).__name__}: {exc}"
+            return []
+
+    def select_model(self, model):
+        model = str(model or "").strip()
+        if not model:
+            raise ValueError("Informe o nome exato de um modelo instalado.")
+        installed = self.refresh_models()
+        if model not in installed:
+            raise ValueError(f"Modelo '{model}' não encontrado. Instalados: {', '.join(installed) or 'nenhum'}")
+        self.model = model
+        self.last_error = None
+        return self.model
 
     def status(self):
-        return {"enabled": self.enabled, "provider": "ollama_local", "model": self.model,
-                "host": self.host, "local_endpoint": self.local_host}
+        return {
+            "enabled": self.enabled, "provider": "ollama_local", "model": self.model,
+            "host": self.host, "local_endpoint": self.local_host,
+            "installed_models": list(self.installed_models),
+            "reachable": self.last_check is not None and self.last_error is None,
+            "last_error": self.last_error, "last_check": self.last_check,
+        }
 
     def available(self):
-        if not self.enabled or not self.local_host:
-            return False
-        try:
-            with urlopen(self.host + "/api/tags", timeout=2) as response:
-                data = json.loads(response.read().decode("utf-8"))
-            return any(m.get("name") == self.model for m in data.get("models", []))
-        except (URLError, HTTPError, TimeoutError, ValueError, OSError):
-            return False
+        models = self.refresh_models()
+        return self.enabled and self.local_host and self.model in models
 
     def generate(self, message, memories=None, concepts=None, history=None,
                  world_facts=None, goals=None):
-        if not self.enabled or not self.local_host:
+        if not self.enabled:
+            self.last_error = "Integração Ollama desativada."
+            return None
+        if not self.local_host:
+            self.last_error = "Endpoint recusado: somente Ollama em localhost/loopback é permitido."
+            return None
+        # Atualiza a lista e escolhe um modelo já instalado, sem efetuar pull.
+        models = self.refresh_models()
+        if not models:
             return None
         context = {
+            "data_hora_local": datetime.now().astimezone().isoformat(),
             "memorias_relevantes": memories or [],
             "conceitos_associados": concepts or [],
             "memoria_de_trabalho": history or [],
@@ -41,25 +96,34 @@ class LanguageEngine:
             "objetivos_ativos_e_proximas_etapas": goals or [],
         }
         prompt = (
-            "Responda em português brasileiro, com clareza. Use o contexto como pistas, "
-            "não como fatos garantidos. Fatos do modelo de mundo incluem fonte e confiança; "
-            "não invente proveniência e sinalize conflitos. Objetivos são registros, não "
-            "permissão para executar ações. Admita quando não souber. Não afirme consciência, "
-            "sentimentos reais ou acesso a sensores.\n\nCONTEXTO:\n"
+            "Responda em português brasileiro, com clareza. A data e hora local atual "
+            "estão no contexto; use-as para perguntas temporais como 'que dia é hoje'. "
+            "Use o contexto como pistas, não como fatos garantidos. Fatos do modelo de mundo "
+            "incluem fonte e confiança; não invente proveniência e sinalize conflitos. "
+            "Objetivos são registros, não permissão para executar ações. Admita quando não souber. "
+            "Não afirme consciência, sentimentos reais ou acesso a sensores.\n\nCONTEXTO:\n"
             + json.dumps(context, ensure_ascii=False)
             + "\n\nMENSAGEM:\n" + str(message)
         )
-        payload = json.dumps({"model": self.model, "stream": False, "messages": [
-            {"role": "system", "content": "Você é o mecanismo linguístico local da NixLMs, uma IA experimental."},
-            {"role": "user", "content": prompt}],
-            "options": {"temperature": .35, "num_ctx": 2048, "num_predict": 256}},
-            ensure_ascii=False).encode("utf-8")
+        payload = json.dumps({
+            "model": self.model, "stream": False,
+            "messages": [
+                {"role": "system", "content": "Você é o mecanismo linguístico local da NixLMs, uma IA experimental."},
+                {"role": "user", "content": prompt},
+            ],
+            "options": {"temperature": .35, "num_ctx": 2048, "num_predict": 256},
+        }, ensure_ascii=False).encode("utf-8")
         req = Request(self.host + "/api/chat", data=payload,
                       headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urlopen(req, timeout=self.timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
             answer = result.get("message", {}).get("content", "").strip()
-            return answer or None
-        except (URLError, HTTPError, TimeoutError, ValueError, OSError):
+            if not answer:
+                self.last_error = "Ollama respondeu sem conteúdo."
+                return None
+            self.last_error = None
+            return answer
+        except (URLError, HTTPError, TimeoutError, ValueError, OSError) as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return None

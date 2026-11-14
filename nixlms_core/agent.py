@@ -105,7 +105,8 @@ class NixLMsNeuralCore:
             sum(bucket) / len(bucket) if bucket else 0.0
             for bucket in buckets
         ]
-        return normalize(compressed)
+        magnitude = sum(value * value for value in compressed) ** .5
+        return [value / magnitude for value in compressed] if magnitude else compressed
 
     @staticmethod
     def _cosine_similarity(left, right):

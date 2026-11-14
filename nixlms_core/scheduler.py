@@ -8,6 +8,7 @@ import json
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 import uuid
 from pathlib import Path
 
@@ -29,11 +30,19 @@ class TaskScheduler:
         self._worker_id = "worker-" + uuid.uuid4().hex
         self._initialize()
 
+    @contextmanager
     def _connect(self):
         connection = sqlite3.connect(str(self.path), timeout=10)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout=10000")
-        return connection
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def _initialize(self):
         with self._connect() as db:
@@ -235,6 +244,19 @@ class TaskScheduler:
                     """, (message, now, job_id))
                     self._event(db, job_id, "failed", {"error": message})
 
+    def _renew_lease(self, job_id, stop_event):
+        interval = max(1.0, self.lease_seconds / 3.0)
+        while not stop_event.wait(interval):
+            now = time.time()
+            try:
+                with self._connect() as db:
+                    db.execute("""
+                        UPDATE scheduled_jobs SET lease_until=?, updated_at=?
+                        WHERE id=? AND status='running'
+                    """, (now + self.lease_seconds, now, job_id))
+            except sqlite3.Error:
+                continue
+
     def run_once(self):
         job = self._claim()
         if job is None:
@@ -243,12 +265,21 @@ class TaskScheduler:
         if handler is None:
             self._finish(job, error=f"Handler indisponível após reinício: {job['handler']}")
             return True
+        heartbeat_stop = threading.Event()
+        heartbeat = threading.Thread(
+            target=self._renew_lease, args=(job["id"], heartbeat_stop),
+            name="nixlms-job-lease", daemon=True
+        )
+        heartbeat.start()
         try:
             payload = json.loads(job["payload_json"])
             result = handler(payload)
             self._finish(job, result=result)
         except Exception as exc:
             self._finish(job, error=f"{type(exc).__name__}: {exc}")
+        finally:
+            heartbeat_stop.set()
+            heartbeat.join(timeout=1.0)
         return True
 
     def run_due(self, limit=100):

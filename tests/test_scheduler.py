@@ -86,8 +86,12 @@ class TaskSchedulerTests(unittest.TestCase):
             job = scheduler.list_jobs()[0]
             self.assertEqual(job["status"], "pending")
             self.assertIn("expected", job["last_error"])
-            with sqlite3.connect(scheduler.path) as db:
+            db = sqlite3.connect(scheduler.path)
+            try:
                 db.execute("UPDATE scheduled_jobs SET run_at=? WHERE id=?", (time.time() - 1, job_id))
+                db.commit()
+            finally:
+                db.close()
             self.assertTrue(scheduler.run_once())
             self.assertEqual(scheduler.list_jobs()[0]["status"], "failed")
             events = [event["event"] for event in scheduler.events(job_id)]

@@ -139,7 +139,7 @@ Sem essa configuração, o núcleo continua funcionando sem PyTorch, Transformer
 
 O dataset inicial está em `datasets/starter_ptbr.jsonl`. Ele contém exemplos QA e pares contrastivos:
 
-- QA: `question`, `answer`, `split`.
+- QA: `question`, `answer`, `split` (`train`, `validation` ou `test`).
 - Par: `type: "pair"`, `text_a`, `text_b`, `label` (1 = similar; 0 = diferente), `split`.
 
 No terminal:
@@ -147,10 +147,11 @@ No terminal:
 ```text
 /importar datasets/starter_ptbr.jsonl
 /treinar 5
+/calibrar-lif
 /avaliar
 ```
 
-O treinamento QA também ajusta a leitura de saída LIF para associar a representação recorrente da pergunta à representação semântica da resposta.
+O treinamento QA também ajusta a leitura de saída LIF para associar a representação recorrente da pergunta à representação semântica da resposta. O split `validation` não participa do treinamento: use `/calibrar-lif` depois de treinar para selecionar o limiar de aceitação do readout com base no acerto do melhor candidato LIF. A calibração exige exemplos suficientes com candidatos corretos e incorretos; se a evidência for insuficiente, o limiar atual é preservado. A calibração é persistida e vinculada às contagens/ao vocabulário do modelo, sendo invalidada quando novos pesos são treinados.
 
 A auditoria pode ser consultada pela API:
 

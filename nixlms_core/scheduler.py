@@ -310,7 +310,8 @@ class TaskScheduler:
         for row in rows:
             item = dict(row)
             item["payload"] = json.loads(item.pop("payload_json"))
-            item["last_result"] = json.loads(item.pop("last_result_json")) if item.get("last_result_json") else None
+            raw_result = item.pop("last_result_json")
+            item["last_result"] = json.loads(raw_result) if raw_result else None
             result.append(item)
         return result
 

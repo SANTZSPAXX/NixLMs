@@ -60,7 +60,10 @@ class MemorySystem:
         qvec = self._encode_query(encoder, query)
         ranked = []
         version = getattr(encoder, "updates", 0)
-        semantic_weight = .35 + .50 * min(1.0, version / 30.0)
+        semantic_weight = getattr(
+            encoder, "semantic_weight",
+            .35 + .50 * min(1.0, version / 30.0)
+        )
         for item in self.knowledge:
             text = item.get("question", "")
             tokens = set(tokenize(text))

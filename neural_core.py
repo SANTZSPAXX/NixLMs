@@ -167,7 +167,10 @@ def main():
         if low.startswith("/importar "):
             source = Path(msg[len("/importar "):].strip()).expanduser()
             try:
-                print("Registros importados:", ai.learning.dataset.import_jsonl(source))
+                imported = ai.learning.dataset.import_jsonl(source)
+                if imported:
+                    ai.invalidate_lif_calibration()
+                print("Registros importados:", imported)
             except (OSError, ValueError) as exc:
                 print("Falha ao importar:", exc)
             continue
@@ -202,6 +205,7 @@ def main():
                 continue
             try:
                 ai.learning.dataset.add_pair(parts[0], parts[1], int(parts[2]), "train")
+                ai.invalidate_lif_calibration()
                 ai.encoder.fit_vocabulary(parts[:2])
                 ai._save_encoder()
                 print("Par contrastivo salvo. Execute /treinar para ajustar as representações.")

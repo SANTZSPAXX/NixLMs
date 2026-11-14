@@ -1,5 +1,14 @@
 # Changelog
 
+## Integrated cognitive benchmark
+
+- Adds end-to-end evaluation of held-out QA responses through the normal NixLMs response pipeline.
+- Reports exact match, token F1, abstention and question-echo rates, response-source distribution, and LIF candidate/use metrics.
+- Excludes exact held-out questions from QA and episodic memory during evaluation to prevent direct answer leakage.
+- Adds a non-persistent response mode so benchmark runs do not append episodes or working-memory turns.
+- Keeps evaluation offline by default and adds an explicit opt-in Ollama benchmark mode.
+
+
 ## LIF-conditioned language generation
 
 - Added a supervised LIF output readout trained from QA question-to-answer examples.

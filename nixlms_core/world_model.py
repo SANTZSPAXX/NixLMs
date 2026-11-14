@@ -82,12 +82,8 @@ class WorldModel:
 
     def possible_conflicts(self, subject, predicate):
         rows = self.query(subject=subject, predicate=predicate, limit=self.max_facts)
-        distinct = {}
-        for fact in rows:
-            distinct.setdefault(normalize(fact.get("object", "")), []).append(fact)
-        if len(distinct) < 2:
-            return []
-        return [[deepcopy(fact) for fact in group] for group in distinct.values()]
+        objects = {normalize(fact.get("object", "")) for fact in rows}
+        return [[deepcopy(fact) for fact in rows]] if len(objects) > 1 else []
 
     def _save(self):
         save_json(self.path, {"facts": self.facts})
@@ -95,9 +91,11 @@ class WorldModel:
     def stats(self):
         entities = {normalize(f.get(field, "")) for f in self.facts
                     for field in ("subject", "object") if f.get(field)}
+        predicates = {}
+        for fact in self.facts:
+            key = (normalize(fact.get("subject", "")),
+                   normalize(fact.get("predicate", "")))
+            predicates.setdefault(key, set()).add(normalize(fact.get("object", "")))
+        conflicts = sum(len(objects) > 1 for objects in predicates.values())
         return {"facts": len(self.facts), "entities": len(entities),
-                "possible_conflict_groups": sum(
-                    1 for f in self.facts
-                    if len(self.possible_conflicts(f.get("subject", ""),
-                                                   f.get("predicate", ""))) > 0
-                )}
+                "possible_conflict_groups": conflicts}

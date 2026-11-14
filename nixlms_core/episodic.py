@@ -59,6 +59,7 @@ class EpisodicMemory:
         }
         self.items.append(item)
         self._trim_and_save()
+        save_json(self.path, self.items)
         return item
 
     def set_feedback(self, question, positive, *, episode_id=None):
@@ -84,7 +85,10 @@ class EpisodicMemory:
         if not query or limit <= 0:
             return []
         query_tokens = set(tokenize(query))
-        query_vector = encoder.encode_query(query) if encoder is not None else None
+        query_vector = None
+        if encoder is not None:
+            encode_query = getattr(encoder, "encode_query", None)
+            query_vector = encode_query(query) if callable(encode_query) else encoder.encode(query)
         now = datetime.now(timezone.utc)
         ranked = []
         for item in self.items:
@@ -97,7 +101,9 @@ class EpisodicMemory:
             semantic = 0.0
             if encoder is not None and query_vector is not None:
                 text = item.get("user_input", "") + " " + item.get("assistant_output", "")
-                semantic = max(0.0, min(1.0, cosine(query_vector, encoder.encode_passage(text))))
+                encode_passage = getattr(encoder, "encode_passage", None)
+                passage_vector = encode_passage(text) if callable(encode_passage) else encoder.encode(text)
+                semantic = max(0.0, min(1.0, cosine(query_vector, passage_vector)))
             relevance = 0.65 * semantic + 0.35 * lexical if encoder is not None else lexical
             try:
                 stamp = datetime.fromisoformat(item.get("timestamp", "").replace("Z", "+00:00"))

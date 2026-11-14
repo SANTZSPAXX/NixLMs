@@ -1,4 +1,5 @@
 import os
+import math
 from datetime import datetime
 from pathlib import Path
 from .config import CoreConfig
@@ -31,8 +32,11 @@ DEFAULTS = [
 
 class NixLMsNeuralCore:
     def __init__(self, data_dir=None, config=None, llm_model=None):
+        self._explicit_config = config is not None
         self.config = config or CoreConfig()
+        self._base_lif_retrieval_threshold = float(self.config.lif_retrieval_threshold)
         self.data_dir = Path(data_dir or Path(__file__).resolve().parents[1] / "data")
+        self.lif_calibration_path = self.data_dir / "lif_calibration.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
@@ -84,10 +88,13 @@ class NixLMsNeuralCore:
         for item in self.memory.knowledge:
             corpus.extend([item.get("question", ""), item.get("answer", "")])
         for row in self.learning.dataset.load():
+            if row.get("split", "train") != "train":
+                continue
             corpus.extend([row.get("question", ""), row.get("answer", ""),
                            row.get("text_a", ""), row.get("text_b", "")])
         self.encoder.fit_vocabulary(corpus)
         self._save_encoder()
+        self._load_lif_calibration()
 
         self.last_trace = {}
         self.last_question = ""
@@ -117,9 +124,9 @@ class NixLMsNeuralCore:
         right_norm = sum(float(b) ** 2 for b in right) ** .5
         return dot / (left_norm * right_norm) if left_norm and right_norm else 0.0
 
-    def _lif_recall(self, neural_output, limit=3, exclude_questions=None):
-        """Recupera respostas pela representação produzida pela rede LIF treinada."""
-        if self.network.output_updates <= 0:
+    def _lif_ranked_candidates(self, neural_output, limit=3, exclude_questions=None):
+        """Retorna candidatos LIF ranqueados sem aplicar o limiar de aceitação."""
+        if self.network.output_updates <= 0 or limit <= 0:
             return []
         excluded = {normalize(text) for text in (exclude_questions or [])}
         ranked = []
@@ -136,13 +143,51 @@ class NixLMsNeuralCore:
             score = self._cosine_similarity(neural_output, target)
             ranked.append((score, item))
         ranked.sort(key=lambda pair: pair[0], reverse=True)
-        threshold = float(self.config.lif_retrieval_threshold)
         return [
             {"question": item.get("question", ""), "answer": item.get("answer", ""),
              "score": float(score), "source": "lif_associative_readout"}
             for score, item in ranked[:max(0, int(limit))]
-            if score >= threshold
         ]
+
+    def _lif_recall(self, neural_output, limit=3, exclude_questions=None):
+        """Recupera respostas LIF que superam o limiar de aceitação calibrado."""
+        threshold = float(self.config.lif_retrieval_threshold)
+        return [
+            candidate for candidate in self._lif_ranked_candidates(
+                neural_output, limit=limit, exclude_questions=exclude_questions
+            )
+            if candidate["score"] >= threshold
+        ]
+
+    def _load_lif_calibration(self):
+        if self._explicit_config:
+            return False
+        state = load_json(self.lif_calibration_path, None)
+        if not isinstance(state, dict) or state.get("schema_version") != 1:
+            return False
+        try:
+            threshold = float(state["threshold"])
+            readout_updates = int(state["readout_updates"])
+            encoder_updates = int(state["encoder_updates"])
+            vocab_size = int(state["encoder_vocab_size"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if not math.isfinite(threshold) or not -1.000001 <= threshold <= 1.000001:
+            return False
+        if readout_updates != self.network.output_updates:
+            return False
+        if encoder_updates != self.encoder.updates or vocab_size != len(self.encoder.vocab):
+            return False
+        self.config.lif_retrieval_threshold = threshold
+        return True
+
+    def invalidate_lif_calibration(self):
+        """Remove calibração obsoleta após mudanças nos pesos ou embeddings."""
+        self.config.lif_retrieval_threshold = self._base_lif_retrieval_threshold
+        try:
+            self.lif_calibration_path.unlink()
+        except FileNotFoundError:
+            pass
 
     def _active_retrieval_encoder(self):
         if self.retrieval_encoder is self.encoder:
@@ -293,9 +338,14 @@ class NixLMsNeuralCore:
         output, hidden = self.network.forward(
             vector, modulation=.8 + eeg_state["focus"] * .4
         )
-        lif_ranked = self._lif_recall(
+        lif_raw_ranked = self._lif_ranked_candidates(
             output, limit=3, exclude_questions=excluded_questions
         )
+        lif_threshold = float(self.config.lif_retrieval_threshold)
+        lif_ranked = [
+            candidate for candidate in lif_raw_ranked
+            if candidate["score"] >= lif_threshold
+        ]
 
         if record:
             self.mental_map.observe(text)
@@ -428,6 +478,8 @@ class NixLMsNeuralCore:
             "lif_output_updates": self.network.output_updates,
             "lif_retrieval_candidates": len(lif_ranked),
             "lif_retrieval_score": lif_ranked[0]["score"] if lif_ranked else None,
+            "lif_top_candidate_score": lif_raw_ranked[0]["score"] if lif_raw_ranked else None,
+            "lif_top_candidate_answer": lif_raw_ranked[0]["answer"] if lif_raw_ranked else None,
             "lif_candidate_conditioned_generation": bool(lif_ranked and llm_answer),
             "neural_generation_path": (
                 "lif_conditioned_llm" if lif_ranked and llm_answer else
@@ -466,6 +518,7 @@ class NixLMsNeuralCore:
         if remember:
             self.memory.remember(question, answer)
         if reinforce:
+            self.invalidate_lif_calibration()
             vector = self.encoder.encode(question)
             _, hidden = self.network.forward(vector, track_plasticity=True)
             target = self._compress_neural_target(self.encoder.encode(answer))
@@ -507,6 +560,11 @@ class NixLMsNeuralCore:
             },
             "retrieval_encoder": retrieval_status,
             "retrieval_encoder_error": self._retrieval_encoder_error,
+            "lif_calibration": {
+                "active_threshold": self.config.lif_retrieval_threshold,
+                "saved": self.lif_calibration_path.exists(),
+                "loaded": self._load_lif_calibration(),
+            },
             "llm": self.language.status(), "last_trace": self.last_trace,
             "config": self.config.__dict__
         }

@@ -152,6 +152,7 @@ class LIFCalibrationTests(unittest.TestCase):
                 "encoder_updates": 7,
                 "encoder_vocab_size": len(ai.encoder.vocab),
                 "validation_fingerprint": ai.learning.validation_fingerprint(),
+                "candidate_memory_fingerprint": ai.learning.lif_candidate_fingerprint(),
             })
 
             restored = NixLMsNeuralCore(data_dir)
@@ -178,6 +179,7 @@ class LIFCalibrationTests(unittest.TestCase):
                 "encoder_updates": 7,
                 "encoder_vocab_size": len(ai.encoder.vocab),
                 "validation_fingerprint": ai.learning.validation_fingerprint(),
+                "candidate_memory_fingerprint": ai.learning.lif_candidate_fingerprint(),
             })
 
             ai.learning.dataset.add("validation question two", "validation answer two", "validation")

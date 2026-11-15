@@ -1,5 +1,13 @@
 # Changelog
 
+## Validação comparativa da recuperação episódica
+
+- Compara cache desabilitado, cache frio e cache aquecido com o mesmo conjunto determinístico de episódios e encoder.
+- Verifica equivalência de IDs/ordenação e scores por ID com tolerância absoluta de `1e-5`.
+- Confirma que `recall()` não altera o JSON persistido e que feedback, importância e recência continuam sendo recalculados sem re-encoding.
+- Mede mediana e p95 em repetições para 100, 500 e 2.000 episódios; a CI publica o relatório JSON sintético como artefato.
+- Mantém E5 opcional e local-only; nenhum modelo é baixado automaticamente.
+
 ## Recuperação episódica otimizada — cache LRU e codificação em lote
 
 - Adiciona cache LRU volátil e limitado para embeddings de passagens episódicas, armazenados em float32 e sem alterar o JSON persistido.

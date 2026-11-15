@@ -1,7 +1,7 @@
 name: NixLMs tests
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "test/**"]
   pull_request:
   workflow_dispatch:
 jobs:

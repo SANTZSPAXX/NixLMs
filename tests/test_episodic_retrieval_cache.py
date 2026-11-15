@@ -1,4 +1,6 @@
+import hashlib
 import json
+from datetime import datetime, timedelta, timezone
 import subprocess
 import sys
 import tempfile
@@ -270,6 +272,131 @@ class EpisodicBenchmarkSmokeTests(unittest.TestCase):
         self.assertEqual(result["cold_encoded_passages"], 10)
         self.assertEqual(result["warm_additional_encoded_passages"], 0)
         self.assertEqual(result["warm_additional_encoder_calls"], 0)
+
+
+class EpisodicCacheParityTests(unittest.TestCase):
+    def _paired_memories(self, tmp):
+        source_path = Path(tmp) / "source.json"
+        source = EpisodicMemory(source_path)
+        source.record("Como usar Python", "Python é uma linguagem.")
+        source.record("Como usar Java", "Java executa na JVM.")
+
+        payload = source_path.read_bytes()
+        baseline_path = Path(tmp) / "baseline.json"
+        cached_path = Path(tmp) / "cached.json"
+        baseline_path.write_bytes(payload)
+        cached_path.write_bytes(payload)
+
+        baseline = EpisodicMemory(baseline_path, embedding_cache_size=0)
+        cached = EpisodicMemory(cached_path, embedding_cache_size=2)
+        return baseline, cached
+
+    def _assert_equivalent(self, expected, actual):
+        expected_ids = [item["id"] for _, item in expected]
+        actual_ids = [item["id"] for _, item in actual]
+        self.assertEqual(expected_ids, actual_ids)
+
+        expected_scores = {item["id"]: score for score, item in expected}
+        actual_scores = {item["id"]: score for score, item in actual}
+        self.assertEqual(set(expected_scores), set(actual_scores))
+        for episode_id, expected_score in expected_scores.items():
+            self.assertLessEqual(
+                abs(expected_score - actual_scores[episode_id]),
+                1e-5,
+                msg="Diferença de score acima da tolerância float32 para " + episode_id,
+            )
+
+    def test_cache_disabled_and_enabled_preserve_ids_order_scores_and_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            baseline, cached = self._paired_memories(tmp)
+            baseline_encoder = CountingEncoder()
+            cached_encoder = CountingEncoder()
+            baseline_hash = hashlib.sha256(baseline.path.read_bytes()).hexdigest()
+            cached_hash = hashlib.sha256(cached.path.read_bytes()).hexdigest()
+
+            baseline_first = baseline.recall(
+                "usar Python", baseline_encoder, limit=10, min_score=0
+            )
+            baseline_second = baseline.recall(
+                "usar Python", baseline_encoder, limit=10, min_score=0
+            )
+            cached_cold = cached.recall(
+                "usar Python", cached_encoder, limit=10, min_score=0
+            )
+            cached_warm = cached.recall(
+                "usar Python", cached_encoder, limit=10, min_score=0
+            )
+
+            self._assert_equivalent(baseline_first, cached_cold)
+            self._assert_equivalent(baseline_second, cached_warm)
+            self.assertEqual(baseline_encoder.encoded_passages, 4)
+            self.assertEqual(cached_encoder.encoded_passages, 2)
+            self.assertEqual(
+                cached.stats()["episodic_embedding_cache_hits"], 2
+            )
+            self.assertEqual(
+                baseline.stats()["episodic_embedding_cache_entries"], 0
+            )
+            self.assertEqual(
+                hashlib.sha256(baseline.path.read_bytes()).hexdigest(),
+                baseline_hash,
+            )
+            self.assertEqual(
+                hashlib.sha256(cached.path.read_bytes()).hexdigest(),
+                cached_hash,
+            )
+
+    def test_feedback_importance_and_recency_are_recalculated_without_reencoding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            baseline, cached = self._paired_memories(tmp)
+            baseline_encoder = CountingEncoder()
+            cached_encoder = CountingEncoder()
+
+            baseline_initial = baseline.recall(
+                "usar Python", baseline_encoder, limit=10, min_score=0
+            )
+            cached_initial = cached.recall(
+                "usar Python", cached_encoder, limit=10, min_score=0
+            )
+            self._assert_equivalent(baseline_initial, cached_initial)
+            target_id = baseline.items[0]["id"]
+
+            for memory in (baseline, cached):
+                target = next(item for item in memory.items if item["id"] == target_id)
+                target["feedback"] = "positive"
+                target["importance"] = 0.95
+
+            baseline_positive = baseline.recall(
+                "usar Python", baseline_encoder, limit=10, min_score=0
+            )
+            cached_positive = cached.recall(
+                "usar Python", cached_encoder, limit=10, min_score=0
+            )
+            self._assert_equivalent(baseline_positive, cached_positive)
+
+            score_before = next(score for score, item in baseline_initial if item["id"] == target_id)
+            score_positive = next(score for score, item in baseline_positive if item["id"] == target_id)
+            self.assertGreater(score_positive, score_before)
+
+            old_timestamp = (
+                datetime.now(timezone.utc) - timedelta(days=180)
+            ).isoformat()
+            for memory in (baseline, cached):
+                target = next(item for item in memory.items if item["id"] == target_id)
+                target["timestamp"] = old_timestamp
+
+            baseline_aged = baseline.recall(
+                "usar Python", baseline_encoder, limit=10, min_score=0
+            )
+            cached_aged = cached.recall(
+                "usar Python", cached_encoder, limit=10, min_score=0
+            )
+            self._assert_equivalent(baseline_aged, cached_aged)
+
+            score_aged = next(score for score, item in baseline_aged if item["id"] == target_id)
+            self.assertLess(score_aged, score_positive)
+            self.assertEqual(cached_encoder.encoded_passages, 2)
+            self.assertEqual(baseline_encoder.encoded_passages, 6)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from nixlms_core.episodic import EpisodicMemory
@@ -260,6 +260,7 @@ class EpisodicBenchmarkSmokeTests(unittest.TestCase):
                 sys.executable, str(script),
                 "--sizes", "10",
                 "--batch-size", "4",
+                "--repeats", "3",
             ],
             cwd=str(root),
             check=True,
@@ -272,6 +273,16 @@ class EpisodicBenchmarkSmokeTests(unittest.TestCase):
         self.assertEqual(result["cold_encoded_passages"], 10)
         self.assertEqual(result["warm_additional_encoded_passages"], 0)
         self.assertEqual(result["warm_additional_encoder_calls"], 0)
+        self.assertEqual(result["repeats"], 3)
+        self.assertEqual(result["cache_disabled_encoded_passages_per_run"], 10)
+        self.assertEqual(result["warm_cache_hits_per_run"], 10)
+        self.assertTrue(result["parity"]["same_ids_and_order"])
+        self.assertLessEqual(result["parity"]["max_abs_score_delta"], 1e-5)
+        for scenario in ("cache_disabled", "cache_cold", "cache_warm"):
+            latency = result["latency_ms"][scenario]
+            self.assertEqual(latency["samples"], 3)
+            self.assertIn("median_ms", latency)
+            self.assertIn("p95_ms", latency)
 
 
 class EpisodicCacheParityTests(unittest.TestCase):

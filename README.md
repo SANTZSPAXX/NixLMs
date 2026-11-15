@@ -43,7 +43,15 @@ Para medir o backend E5, use um modelo que já esteja disponível localmente:
 
     python benchmarks/episodic_retrieval.py --model-path models/multilingual-e5-small --batch-size 8
 
-O benchmark compara latência fria/aquecida, ordenação, passagens codificadas e chamadas ao encoder. O modo sintético mede o custo do cache, não a qualidade nem a latência de um modelo pré-treinado. O modo E5 não baixa pesos.
+O benchmark compara três cenários: cache desabilitado (`embedding_cache_size=0`), cache frio e cache aquecido. Por padrão, executa 7 repetições por cenário e informa mediana e p95, além de verificar IDs, ordenação e scores (tolerância absoluta de `1e-5`). O cenário desabilitado usa a mesma revisão do código com cache em zero; não é uma execução do código anterior à implementação do cache.
+
+A CI executa o benchmark sintético completo para 100, 500 e 2.000 episódios, com 5 repetições, e publica o JSON como artefato da execução do GitHub Actions. O encoder sintético mede o caminho de recuperação, não a qualidade nem a latência de um modelo pré-treinado.
+
+Para medir o backend E5, use um modelo que já esteja disponível localmente:
+
+    python benchmarks/episodic_retrieval.py --model-path models/multilingual-e5-small --batch-size 8 --repeats 7
+
+O modo E5 usa somente arquivos locais/cache, não baixa pesos e exclui o carregamento inicial do modelo dos tempos medidos. Os tempos variam por hardware e não são limites absolutos de aceitação.
 
 
 ## Agendador persistente (0.6)

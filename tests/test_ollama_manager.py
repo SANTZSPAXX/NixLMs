@@ -78,8 +78,7 @@ class OllamaManagerTests(unittest.TestCase):
     def test_start_does_not_spawn_duplicate_service(self):
         language = FakeLanguage(reachable=True)
         manager = OllamaManager(language)
-        with patch.object(manager, "executable") as executable, \
-             patch("nixlms_core.ollama_manager.subprocess.Popen") as popen:
+        with patch.object(manager, "executable") as executable, patch("nixlms_core.ollama_manager.subprocess.Popen") as popen:
             result = manager.start_service()
         self.assertTrue(result["ok"])
         self.assertTrue(result["already_running"])

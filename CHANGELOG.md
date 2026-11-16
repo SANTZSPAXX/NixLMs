@@ -1,5 +1,13 @@
 # Changelog
 
+## Ollama — limpeza limitada após falha de inicialização
+
+- Após falha de prontidão, tenta encerrar somente o processo `Popen` criado pela instância: `terminate()` + espera de até 2 segundos, seguida de `kill()` + nova espera de até 2 segundos.
+- Expõe `last_cleanup` no diagnóstico e no resultado da inicialização, distinguindo encerramento confirmado de limpeza não confirmada.
+- Preserva a referência do processo quando o encerramento não pode ser confirmado e recusa uma nova inicialização duplicada enquanto esse processo continuar ativo.
+- Não encerra serviços preexistentes nem tenta finalizar a árvore de processos; descendentes podem exigir tratamento específico por sistema operacional.
+
+
 ## Ollama — isolamento do serviço gerenciado
 
 - Inicia o processo Ollama com uma cópia explícita do ambiente e OLLAMA_HOST fixado ao endereço loopback correspondente ao endpoint local; o ambiente do processo pai não é alterado.

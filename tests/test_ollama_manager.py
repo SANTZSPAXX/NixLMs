@@ -1,5 +1,8 @@
+import os
+import tempfile
 import unittest
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from nixlms_core.ollama_manager import OllamaManager
 
@@ -37,8 +40,46 @@ class OllamaManagerTests(unittest.TestCase):
             result = manager.start_service()
         self.assertTrue(result["ok"])
         self.assertTrue(result["already_running"])
+        self.assertEqual(result["bind_scope"], "unverified_preexisting")
         executable.assert_not_called()
         popen.assert_not_called()
+
+    def test_managed_service_overrides_inherited_wildcard_bind(self):
+        language = FakeLanguage(reachable=False)
+        manager = OllamaManager(language)
+        process = Mock()
+        process.poll.return_value = None
+
+        def spawn(*args, **kwargs):
+            language.reachable = True
+            return process
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"OLLAMA_HOST": "0.0.0.0:11434"}):
+                with patch.object(Path, "home", return_value=Path(tmp)):
+                    with patch.object(manager, "executable", return_value="/usr/bin/ollama"):
+                        with patch(
+                            "nixlms_core.ollama_manager.subprocess.Popen",
+                            side_effect=spawn,
+                        ) as popen:
+                            result = manager.start_service()
+                            child_env = popen.call_args.kwargs["env"]
+                            self.assertEqual(os.environ["OLLAMA_HOST"], "0.0.0.0:11434")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(child_env["OLLAMA_HOST"], "127.0.0.1:11434")
+        self.assertEqual(result["bind_scope"], "configured_loopback")
+        self.assertEqual(result["bind_address"], "127.0.0.1:11434")
+
+    def test_loopback_bind_preserves_port_and_formats_ipv6(self):
+        language = FakeLanguage()
+        manager = OllamaManager(language)
+
+        language.host = "http://localhost:12345"
+        self.assertEqual(manager._loopback_bind_address(), "127.0.0.1:12345")
+
+        language.host = "http://[::1]:12346"
+        self.assertEqual(manager._loopback_bind_address(), "[::1]:12346")
 
     def test_start_refuses_non_loopback_endpoint(self):
         language = FakeLanguage(reachable=False, local_host=False)

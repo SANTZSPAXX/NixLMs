@@ -244,6 +244,8 @@ class OllamaManagerTests(unittest.TestCase):
         self.assertTrue(any("terminate denied" in error for error in result["cleanup"]["errors"]))
         self.assertTrue(any("kill denied" in error for error in result["cleanup"]["errors"]))
         self.assertIs(manager.process, process)
+        with patch.object(manager, "executable", return_value=None):
+            self.assertEqual(manager.status()["last_cleanup"], result["cleanup"])
 
         retry = manager.start_service()
         self.assertFalse(retry["ok"])

@@ -124,6 +124,7 @@ Resultado: 4/4 jobs concluídos com sucesso. Os logs confirmam os novos testes d
 - Testes locais: não executados neste ambiente.
 - Instalação real, inicialização de servidor real e inspeção de sockets no Windows/Linux: não executadas.
 - O serviço preexistente permanece com bind não verificado; a PR não altera um servidor já iniciado por outro processo.
+- Em timeout após `Popen`, o processo gerenciado não é encerrado explicitamente; uma revisão COMMENT em #29 recomenda tratar o lifecycle em tarefa separada, sem encerrar serviços preexistentes.
 
 ### Consentimento Linux — observação adicional
 

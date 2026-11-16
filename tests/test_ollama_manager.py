@@ -149,7 +149,7 @@ class OllamaManagerTests(unittest.TestCase):
                     ) as popen:
                         with patch(
                             "nixlms_core.ollama_manager.time.monotonic",
-                            side_effect=[0.0, 2.0],
+                            side_effect=[0.0, 0.0, 2.0],
                         ):
                             with patch("nixlms_core.ollama_manager.time.sleep"):
                                 result = manager.start_service()

@@ -31,6 +31,7 @@ class OllamaManagerTests(unittest.TestCase):
         self.assertTrue(status["installed"])
         self.assertTrue(status["model_installed"])
         self.assertEqual(status["executable"], "/usr/bin/ollama")
+        self.assertEqual(status["bind_scope"], "unverified_preexisting")
 
     def test_start_does_not_spawn_duplicate_service(self):
         language = FakeLanguage(reachable=True)
@@ -80,6 +81,10 @@ class OllamaManagerTests(unittest.TestCase):
 
         language.host = "http://[::1]:12346"
         self.assertEqual(manager._loopback_bind_address(), "[::1]:12346")
+
+        language.host = "http://127.0.0.1:0"
+        with self.assertRaises(RuntimeError):
+            manager._loopback_bind_address()
 
     def test_start_refuses_non_loopback_endpoint(self):
         language = FakeLanguage(reachable=False, local_host=False)

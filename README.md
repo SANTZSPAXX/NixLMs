@@ -73,6 +73,18 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 
 Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm preparar` para executar o assistente de configuração: ele detecta o executável, solicita autorização antes de instalar o Ollama, solicita autorização separada antes de iniciar o serviço e antes de baixar `qwen2.5:0.5b`, verifica `/api/tags` e executa uma geração de teste. A confirmação de uso exige que `/api/chat` retorne o nome exato do modelo e `done=true`. Nenhuma instalação, inicialização ou transferência é executada sem confirmação explícita. Use `/llm usar NOME_EXATO` para selecionar outro modelo já instalado. Saudações e perguntas simples de data/hora são tratadas por regras determinísticas; perguntas sobre o nome do usuário não inventam um perfil ausente. A recuperação QA exige relevância mínima antes de usar uma lembrança como resposta. Respostas do LLM que apenas repetem a pergunta, desviam para uma saudação ou omitem a pessoa perguntada são recusadas. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
 
+## Ciclo de vida do serviço Ollama gerenciado
+
+Quando a NixLMs inicia `ollama serve` por meio de `OllamaManager` e a verificação de prontidão falha, o gerenciador tenta encerrar somente o objeto de processo `Popen` criado por aquela instância:
+
+1. Solicita `terminate()` e aguarda até 2 segundos.
+2. Se a espera expirar, solicita `kill()` e aguarda mais 2 segundos.
+3. Registra o resultado em `last_cleanup`, também exposto por `OllamaManager.status()` e no retorno de falha de `start_service()`.
+
+Os estados distinguem `terminated`, `killed`, `already_exited`, `not_managed` e `unconfirmed`. Se o encerramento não puder ser confirmado, a referência ao processo é preservada e uma nova inicialização pela mesma instância é recusada enquanto ele continuar ativo. O erro original de inicialização permanece disponível em `startup_error`.
+
+Serviços que já estavam acessíveis antes da inicialização não são encerrados. A limpeza cobre somente o processo diretamente criado por `Popen`; não confirma nem encerra processos descendentes. O comportamento portátil usa a API padrão de `subprocess`: em POSIX, `terminate()` envia SIGTERM e `kill()` envia SIGKILL; no Windows, ambos usam TerminateProcess. Consulte a [documentação oficial de subprocess do Python 3.10](https://docs.python.org/3.10/library/subprocess.html#popen-objects).
+
 ## Limitações importantes
 
 O readout LIF continua sendo um mapeador associativo supervisionado para representações semânticas, não um gerador de tokens. Os pesos recorrentes internos da LIF ainda não recebem BPTT end-to-end nesta versão; o treinamento supervisionado ajusta o readout, e um módulo RNN separado realiza a geração linguística condicionada. A geração token a token é feita por um RNN autoregressivo pequeno, supervisionado por respostas QA e condicionado pelo vetor de saída LIF. Ele é treinado apenas com o split `train`, usa vocabulário limitado e pode sobreajustar datasets pequenos; não é um Transformer, não é pré-treinado e não oferece conhecimento geral. A NixLMs só o prioriza quando a sequência gerada passa pelos critérios mínimos de confiança e consistência; caso contrário, tenta Ollama quando habilitado ou usa os caminhos de recuperação/abstenção. A confiança atual é a média das probabilidades dos tokens escolhidos e ainda é heurística, não uma probabilidade calibrada; sua calibração deve usar o split `validation`.

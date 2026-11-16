@@ -35,7 +35,7 @@ class OllamaManager:
         try:
             parsed = urlsplit(self.language.host)
             hostname = (parsed.hostname or "").lower()
-            port = parsed.port or 11434
+            port = parsed.port if parsed.port is not None else 11434
         except ValueError as exc:
             raise RuntimeError("Endpoint Ollama local inválido; não é possível fixar o bind.") from exc
 
@@ -70,6 +70,9 @@ class OllamaManager:
         return None
 
     def status(self):
+        bind_scope = self.bind_scope
+        if bind_scope == "not_started" and self.language.reachable:
+            bind_scope = "unverified_preexisting"
         return {
             "installed": self.executable() is not None,
             "executable": self.executable(),
@@ -79,7 +82,7 @@ class OllamaManager:
             "model_installed": self.language.model in self.language.installed_models,
             "installed_models": list(self.language.installed_models),
             "last_action": self.last_action,
-            "bind_scope": self.bind_scope,
+            "bind_scope": bind_scope,
             "managed_bind_address": self.managed_bind_address,
             "last_error": self.last_error or self.language.last_error,
             "last_used_model": self.language.last_used_model,

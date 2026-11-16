@@ -16,6 +16,8 @@ from urllib.request import urlopen
 class OllamaManager:
     DEFAULT_MODEL = "qwen2.5:0.5b"
     INSTALL_URL = "https://ollama.com/install.sh"
+    CLEANUP_TERMINATE_TIMEOUT = 2.0
+    CLEANUP_KILL_TIMEOUT = 2.0
 
     def __init__(self, language_engine, readiness_timeout=45):
         self.language = language_engine
@@ -25,6 +27,7 @@ class OllamaManager:
         self.last_action = None
         self.bind_scope = "not_started"
         self.managed_bind_address = None
+        self.last_cleanup = None
 
     @staticmethod
     def _platform():
@@ -84,10 +87,126 @@ class OllamaManager:
             "last_action": self.last_action,
             "bind_scope": bind_scope,
             "managed_bind_address": self.managed_bind_address,
+            "last_cleanup": dict(self.last_cleanup) if self.last_cleanup is not None else None,
             "last_error": self.last_error or self.language.last_error,
             "last_used_model": self.language.last_used_model,
             "last_generation": self.language.last_generation,
         }
+
+    def _record_cleanup(self, status, confirmed, returncode=None, errors=None):
+        result = {"status": status, "confirmed": bool(confirmed)}
+        if returncode is not None:
+            result["returncode"] = returncode
+        if errors:
+            result["errors"] = list(errors)
+        self.last_cleanup = result
+        return result
+
+    def _cleanup_managed_process(self):
+        """Encerra somente o Popen criado por esta instância, com esperas limitadas."""
+        process = self.process
+        if process is None:
+            return self._record_cleanup("not_managed", True)
+
+        errors = []
+        try:
+            returncode = process.poll()
+        except (OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"poll: {type(exc).__name__}: {exc}")
+            return self._record_cleanup("unconfirmed", False, errors=errors)
+
+        if returncode is not None:
+            self.process = None
+            return self._record_cleanup("already_exited", True, returncode=returncode)
+
+        terminate_sent = False
+        terminate_raced = False
+        try:
+            process.terminate()
+            terminate_sent = True
+        except ProcessLookupError:
+            # O filho pode ter terminado entre poll() e terminate().
+            terminate_raced = True
+        except (OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"terminate: {type(exc).__name__}: {exc}")
+
+        needs_kill = False
+        try:
+            returncode = process.wait(timeout=self.CLEANUP_TERMINATE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            needs_kill = True
+        except (OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"wait após terminate: {type(exc).__name__}: {exc}")
+            try:
+                returncode = process.poll()
+            except (OSError, subprocess.SubprocessError) as poll_exc:
+                errors.append(f"poll após wait: {type(poll_exc).__name__}: {poll_exc}")
+                returncode = None
+            needs_kill = returncode is None
+        else:
+            if returncode is None:
+                try:
+                    returncode = process.poll()
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(f"poll após wait: {type(exc).__name__}: {exc}")
+                    returncode = None
+            if returncode is not None:
+                self.process = None
+                status = "terminated" if terminate_sent else "already_exited"
+                return self._record_cleanup(
+                    status, True, returncode=returncode, errors=errors
+                )
+            needs_kill = True
+
+        if not needs_kill:
+            return self._record_cleanup("unconfirmed", False, errors=errors)
+
+        kill_sent = False
+        try:
+            process.kill()
+            kill_sent = True
+        except ProcessLookupError:
+            # O processo terminou na corrida entre wait() e kill().
+            pass
+        except (OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"kill: {type(exc).__name__}: {exc}")
+
+        try:
+            returncode = process.wait(timeout=self.CLEANUP_KILL_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            try:
+                returncode = process.poll()
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(f"poll após timeout de kill: {type(exc).__name__}: {exc}")
+                returncode = None
+            if returncode is None:
+                errors.append(
+                    f"processo não terminou em {self.CLEANUP_KILL_TIMEOUT:.1f}s após kill"
+                )
+                return self._record_cleanup("unconfirmed", False, errors=errors)
+        except (OSError, subprocess.SubprocessError) as exc:
+            errors.append(f"wait após kill: {type(exc).__name__}: {exc}")
+            try:
+                returncode = process.poll()
+            except (OSError, subprocess.SubprocessError) as poll_exc:
+                errors.append(f"poll final: {type(poll_exc).__name__}: {poll_exc}")
+                returncode = None
+            if returncode is None:
+                return self._record_cleanup("unconfirmed", False, errors=errors)
+        else:
+            if returncode is None:
+                try:
+                    returncode = process.poll()
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(f"poll final: {type(exc).__name__}: {exc}")
+                    returncode = None
+            if returncode is None:
+                errors.append("wait após kill não confirmou o encerramento")
+                return self._record_cleanup("unconfirmed", False, errors=errors)
+
+        self.process = None
+        status = "killed" if kill_sent else "already_exited"
+        return self._record_cleanup(status, True, returncode=returncode, errors=errors)
 
     def install(self):
         """Instala Ollama; deve ser chamado somente após consentimento do usuário."""
@@ -172,8 +291,37 @@ class OllamaManager:
             self.managed_bind_address = None
             return {"ok": False, "error": self.last_error}
 
+        if self.process is not None:
+            try:
+                managed_returncode = self.process.poll()
+            except (OSError, subprocess.SubprocessError) as exc:
+                self.last_error = (
+                    "Não foi possível verificar o processo Ollama gerenciado: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                self.last_action = "start_failed"
+                self.bind_scope = "start_failed"
+                return {
+                    "ok": False,
+                    "error": self.last_error,
+                    "managed_process": "unverified",
+                }
+            if managed_returncode is not None:
+                self.process = None
+
         self.language.refresh_models()
         if self.language.reachable:
+            if self.process is not None:
+                self.last_action = "already_running"
+                self.last_error = None
+                self.bind_scope = "configured_loopback"
+                return {
+                    "ok": True,
+                    "already_running": True,
+                    "managed": True,
+                    "bind_scope": self.bind_scope,
+                    "bind_address": self.managed_bind_address,
+                }
             self.last_action = "already_running"
             self.last_error = None
             self.bind_scope = "unverified_preexisting"
@@ -182,6 +330,19 @@ class OllamaManager:
                 "ok": True,
                 "already_running": True,
                 "bind_scope": self.bind_scope,
+            }
+
+        if self.process is not None:
+            self.last_error = (
+                "O processo Ollama iniciado por esta instância continua ativo, mas "
+                "/api/tags não está pronto; nova inicialização recusada para evitar duplicação."
+            )
+            self.last_action = "start_failed"
+            self.bind_scope = "start_failed"
+            return {
+                "ok": False,
+                "error": self.last_error,
+                "managed_process_alive": True,
             }
 
         binary = self.executable()
@@ -200,17 +361,17 @@ class OllamaManager:
             log_dir = Path.home() / ".nixlms"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_path = log_dir / "ollama.log"
-            log_handle = open(log_path, "ab")
             kwargs = {}
             if self._platform() == "windows":
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             self.bind_scope = "starting"
             self.managed_bind_address = bind_address
-            self.process = subprocess.Popen(
-                [binary, "serve"], stdout=log_handle, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL, env=child_env, **kwargs,
-            )
-            log_handle.close()
+            with open(log_path, "ab") as log_handle:
+                self.process = subprocess.Popen(
+                    [binary, "serve"], stdout=log_handle, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL, env=child_env, **kwargs,
+                )
+
             deadline = time.monotonic() + self.readiness_timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
@@ -228,16 +389,28 @@ class OllamaManager:
                         "bind_address": bind_address,
                     }
                 time.sleep(1)
+
             detail = self.language.last_error or "tempo limite aguardando /api/tags."
             raise RuntimeError(
                 f"Ollama não ficou pronto em {self.readiness_timeout}s: {detail} "
                 f"Consulte {log_path}."
             )
-        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
-            self.last_error = f"{type(exc).__name__}: {exc}"
+        except Exception as exc:
+            startup_error = f"{type(exc).__name__}: {exc}"
+            cleanup = self._cleanup_managed_process()
             self.last_action = "start_failed"
             self.bind_scope = "start_failed"
-            return {"ok": False, "error": self.last_error}
+            self.last_error = f"{startup_error} [cleanup: {cleanup['status']}]"
+            if cleanup.get("errors"):
+                self.last_error += " (" + "; ".join(cleanup["errors"]) + ")"
+            elif not cleanup["confirmed"]:
+                self.last_error += " (encerramento não confirmado)"
+            return {
+                "ok": False,
+                "error": self.last_error,
+                "startup_error": startup_error,
+                "cleanup": cleanup,
+            }
 
     def pull_model(self, model=None):
         """Baixa um modelo após consentimento; valida presença via /api/tags."""

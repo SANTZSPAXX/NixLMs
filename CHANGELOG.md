@@ -1,5 +1,11 @@
 # Changelog
 
+## Ollama — isolamento do serviço gerenciado
+
+- Inicia o processo Ollama com uma cópia explícita do ambiente e OLLAMA_HOST fixado ao endereço loopback correspondente ao endpoint local; o ambiente do processo pai não é alterado.
+- Expõe bind_scope no diagnóstico: processos iniciados pelo gerenciador usam configured_loopback, enquanto serviços preexistentes são marcados como unverified_preexisting porque o bind do processo externo não é inspecionado.
+- Adiciona regressões para ambiente herdado wildcard, preservação da porta e formatação IPv6.
+
 ## Consent-gated Ollama setup and runtime verification
 
 - Adds an explicit `/llm preparar` CLI workflow with separate confirmation before installation, service startup, and Qwen model download.

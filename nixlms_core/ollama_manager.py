@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 
@@ -22,10 +23,32 @@ class OllamaManager:
         self.process = None
         self.last_error = None
         self.last_action = None
+        self.bind_scope = "not_started"
+        self.managed_bind_address = None
 
     @staticmethod
     def _platform():
         return platform.system().lower()
+
+    def _loopback_bind_address(self):
+        """Retorna o bind loopback correspondente ao endpoint HTTP configurado."""
+        try:
+            parsed = urlsplit(self.language.host)
+            hostname = (parsed.hostname or "").lower()
+            port = parsed.port or 11434
+        except ValueError as exc:
+            raise RuntimeError("Endpoint Ollama local inválido; não é possível fixar o bind.") from exc
+
+        if parsed.scheme != "http" or hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise RuntimeError("Inicialização recusada: o endpoint precisa ser HTTP loopback.")
+        if not 1 <= port <= 65535:
+            raise RuntimeError("Porta loopback do Ollama inválida.")
+
+        if hostname == "localhost":
+            hostname = "127.0.0.1"
+        if ":" in hostname:
+            hostname = f"[{hostname}]"
+        return f"{hostname}:{port}"
 
     def executable(self):
         found = shutil.which("ollama")
@@ -56,6 +79,8 @@ class OllamaManager:
             "model_installed": self.language.model in self.language.installed_models,
             "installed_models": list(self.language.installed_models),
             "last_action": self.last_action,
+            "bind_scope": self.bind_scope,
+            "managed_bind_address": self.managed_bind_address,
             "last_error": self.last_error or self.language.last_error,
             "last_used_model": self.language.last_used_model,
             "last_generation": self.language.last_generation,
@@ -136,23 +161,39 @@ class OllamaManager:
             return {"ok": False, "error": self.last_error}
 
     def start_service(self):
-        """Inicia 'ollama serve' se a API local ainda não responder."""
+        """Inicia 'ollama serve' com bind loopback explícito e ambiente isolado."""
         if not self.language.local_host:
             self.last_error = "Inicialização recusada: o endpoint precisa ser loopback local."
             self.last_action = "start_refused"
+            self.bind_scope = "refused_non_loopback"
+            self.managed_bind_address = None
             return {"ok": False, "error": self.last_error}
+
         self.language.refresh_models()
         if self.language.reachable:
             self.last_action = "already_running"
             self.last_error = None
-            return {"ok": True, "already_running": True}
+            self.bind_scope = "unverified_preexisting"
+            self.managed_bind_address = None
+            return {
+                "ok": True,
+                "already_running": True,
+                "bind_scope": self.bind_scope,
+            }
 
         binary = self.executable()
         if not binary:
             self.last_error = "Executável Ollama não instalado."
             self.last_action = "start_failed"
+            self.bind_scope = "not_started"
+            self.managed_bind_address = None
             return {"ok": False, "error": self.last_error}
+
         try:
+            bind_address = self._loopback_bind_address()
+            child_env = os.environ.copy()
+            child_env["OLLAMA_HOST"] = bind_address
+
             log_dir = Path.home() / ".nixlms"
             log_dir.mkdir(parents=True, exist_ok=True)
             log_path = log_dir / "ollama.log"
@@ -160,20 +201,29 @@ class OllamaManager:
             kwargs = {}
             if self._platform() == "windows":
                 kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            self.bind_scope = "starting"
+            self.managed_bind_address = bind_address
             self.process = subprocess.Popen(
                 [binary, "serve"], stdout=log_handle, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL, **kwargs,
+                stdin=subprocess.DEVNULL, env=child_env, **kwargs,
             )
             log_handle.close()
             deadline = time.monotonic() + self.readiness_timeout
             while time.monotonic() < deadline:
+                if self.process.poll() is not None:
+                    break
                 self.language.refresh_models()
                 if self.language.reachable:
                     self.last_action = "started"
                     self.last_error = None
-                    return {"ok": True, "already_running": False, "log": str(log_path)}
-                if self.process.poll() is not None:
-                    break
+                    self.bind_scope = "configured_loopback"
+                    return {
+                        "ok": True,
+                        "already_running": False,
+                        "log": str(log_path),
+                        "bind_scope": self.bind_scope,
+                        "bind_address": bind_address,
+                    }
                 time.sleep(1)
             detail = self.language.last_error or "tempo limite aguardando /api/tags."
             raise RuntimeError(
@@ -183,6 +233,7 @@ class OllamaManager:
         except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
             self.last_error = f"{type(exc).__name__}: {exc}"
             self.last_action = "start_failed"
+            self.bind_scope = "start_failed"
             return {"ok": False, "error": self.last_error}
 
     def pull_model(self, model=None):

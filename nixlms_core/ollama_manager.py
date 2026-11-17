@@ -395,6 +395,18 @@ class OllamaManager:
                 f"Ollama não ficou pronto em {self.readiness_timeout}s: {detail} "
                 f"Consulte {log_path}."
             )
+        except KeyboardInterrupt:
+            cleanup = self._cleanup_managed_process()
+            self.last_action = "start_cancelled"
+            self.bind_scope = "start_failed"
+            self.last_error = (
+                f"Inicialização interrompida pelo usuário [cleanup: {cleanup['status']}]"
+            )
+            if cleanup.get("errors"):
+                self.last_error += " (" + "; ".join(cleanup["errors"]) + ")"
+            elif not cleanup["confirmed"]:
+                self.last_error += " (encerramento não confirmado)"
+            raise
         except Exception as exc:
             startup_error = f"{type(exc).__name__}: {exc}"
             cleanup = self._cleanup_managed_process()

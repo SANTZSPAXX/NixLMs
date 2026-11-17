@@ -8,7 +8,6 @@
 - Gera relatório JSON com hash do conjunto e IDs, sem gravar na memória pessoal nem incluir conteúdo textual das consultas/passagens.
 - Adiciona testes de métricas, integridade dos qrels, determinismo, não mutação do conjunto, checkpoint local e execução offline.
 
-# Changelog
 
 ## Validação comparativa da recuperação episódica
 

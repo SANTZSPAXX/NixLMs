@@ -171,6 +171,38 @@ class OllamaManagerTests(unittest.TestCase):
         self.assertIsNone(manager.process)
         popen.assert_called_once()
 
+    def test_start_interruption_cleans_up_managed_process_and_reraises(self):
+        language = FakeLanguage(reachable=False)
+        manager = OllamaManager(language, readiness_timeout=45)
+        process = FakeProcess(wait_outcomes=[-15])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(Path, "home", return_value=Path(tmp)):
+                with patch.object(manager, "executable", return_value="/usr/bin/ollama"):
+                    with patch(
+                        "nixlms_core.ollama_manager.subprocess.Popen",
+                        return_value=process,
+                    ) as popen:
+                        with patch(
+                            "nixlms_core.ollama_manager.time.monotonic",
+                            side_effect=[0.0, 0.0],
+                        ):
+                            with patch(
+                                "nixlms_core.ollama_manager.time.sleep",
+                                side_effect=KeyboardInterrupt,
+                            ):
+                                with self.assertRaises(KeyboardInterrupt):
+                                    manager.start_service()
+
+        self.assertEqual(process.terminate_calls, 1)
+        self.assertEqual(process.kill_calls, 0)
+        self.assertIsNone(manager.process)
+        self.assertEqual(manager.last_cleanup["status"], "terminated")
+        self.assertTrue(manager.last_cleanup["confirmed"])
+        self.assertEqual(manager.last_action, "start_cancelled")
+        self.assertIn("interrompida pelo usuário", manager.last_error)
+        popen.assert_called_once()
+
     def test_start_timeout_kills_process_when_terminate_wait_expires(self):
         language = FakeLanguage(reachable=False)
         manager = OllamaManager(language, readiness_timeout=1)

@@ -75,7 +75,7 @@ Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último 
 
 ## Ciclo de vida do serviço Ollama gerenciado
 
-Quando a NixLMs inicia `ollama serve` por meio de `OllamaManager` e a verificação de prontidão falha, o gerenciador tenta encerrar somente o objeto de processo `Popen` criado por aquela instância:
+Quando a NixLMs inicia `ollama serve` por meio de `OllamaManager` e a verificação de prontidão falha ou o usuário interrompe a espera com Ctrl+C, o gerenciador tenta encerrar somente o objeto de processo `Popen` criado por aquela instância. A interrupção é propagada ao chamador após a tentativa de limpeza:
 
 1. Solicita `terminate()` e aguarda até 2 segundos.
 2. Se a espera expirar, solicita `kill()` e aguarda mais 2 segundos.

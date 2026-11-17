@@ -43,7 +43,7 @@ class EpisodicRetrievalQualityMetricTests(unittest.TestCase):
         )
         expected_ndcg = (
             (3.0 / math.log2(3.0))
-            / (3.0 + 1.0 / __import__("math").log2(3.0))
+            / (3.0 + 1.0 / math.log2(3.0))
         )
         self.assertAlmostEqual(metrics["ndcg_at_k"], expected_ndcg, places=12)
         self.assertEqual(metrics["mrr_at_k"], 0.5)
@@ -70,10 +70,6 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
             sum(bool(row["expects_no_answer"]) for row in queries),
             6,
         )
-        self.assertEqual(
-            set(first["metrics"]["by_category"]),
-            {"parafrase", "coloquial", "variacao_ortografica", "contextual", "sem_resposta"},
-        )
 
     def test_answerable_query_without_qrels_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
@@ -85,6 +81,13 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
         invalid_qrels = list(qrels) + [dict(qrels[0])]
         with self.assertRaisesRegex(ValueError, "qrel duplicado"):
             validate_dataset(episodes, queries, invalid_qrels)
+
+    def test_no_answer_category_must_match_expectation_flag(self):
+        episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
+        changed_queries = [dict(row) for row in queries]
+        changed_queries[-1]["expects_no_answer"] = False
+        with self.assertRaisesRegex(ValueError, "inconsistentes"):
+            validate_dataset(episodes, changed_queries, qrels)
 
     def test_qrel_for_unanswerable_query_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
@@ -106,6 +109,10 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(first["dataset"]["sha256"], before)
         self.assertEqual(first["metrics"]["overall"]["query_count"], 30)
+        self.assertEqual(
+            set(first["metrics"]["by_category"]),
+            {"parafrase", "coloquial", "variacao_ortografica", "contextual", "sem_resposta"},
+        )
         self.assertEqual(
             first["metrics"]["overall"]["abstention"]["no_answer_query_count"],
             6,

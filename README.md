@@ -259,3 +259,28 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 ## Arquitetura
 
 `nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, agendador SQLite, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.
+
+
+## Benchmark piloto de qualidade da recuperação episódica em PT-BR
+
+A qualidade do ranking agora pode ser medida com um corpus sintético nativo de português brasileiro, sem tocar em data/episodic_memory.json ou em qualquer memória pessoal. O piloto contém 50 episódios, 30 consultas e 32 julgamentos graduados, incluindo paráfrases, linguagem coloquial, variações ortográficas, referências contextuais e seis consultas sem resposta.
+
+Execute o baseline lexical offline, sem instalar dependências:
+
+    python benchmarks/episodic_retrieval_quality_ptbr.py
+
+Métricas publicadas em JSON: nDCG@5, MRR@5, Recall@5, Precision@5, cobertura de recuperação e métricas de abstenção/falsos positivos. O relatório inclui SHA-256 dos três arquivos do conjunto, resultados por categoria e split, IDs recuperados e identidade do encoder; não inclui textos de consulta, passagens ou caminhos absolutos.
+
+A fórmula de ranking de EpisodicMemory não foi alterada. O benchmark cria uma memória temporária a partir do corpus sintético e desabilita o cache para isolar a qualidade do ranking. Os resultados são uma linha de base do conjunto piloto, não um limiar de aceitação nem uma alegação de qualidade geral.
+
+Encoders opcionais só são carregados quando solicitados explicitamente. Para o encoder nativo, informe um checkpoint JSON local:
+
+    python benchmarks/episodic_retrieval_quality_ptbr.py --native-checkpoint data/semantic_encoder.json
+
+Para multilingual E5, informe um diretório de modelo que já exista localmente:
+
+    python benchmarks/episodic_retrieval_quality_ptbr.py --e5-model-path models/multilingual-e5-small --batch-size 8
+
+O modo E5 usa CPU e local_files_only; não baixa pesos nem aceita um identificador remoto como substituto de um diretório local. O checkpoint nativo também não é carregado automaticamente. O CI executa somente o modo lexical, sem PyTorch, Sentence Transformers ou rede.
+
+O conjunto é sintético e os qrels são uma curadoria editorial inicial sem anotação independente. Não é uma implementação de MTEB-BR/BEIR e seus números não são diretamente comparáveis a esses benchmarks. Consulte datasets/episodic_retrieval_ptbr/README.md para a rubrica, os limites e as referências.

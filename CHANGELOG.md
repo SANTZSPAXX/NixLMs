@@ -1,5 +1,15 @@
 # Changelog
 
+## Benchmark piloto de qualidade da recuperação episódica em PT-BR
+
+- Adiciona corpus sintético offline com 50 episódios, 30 consultas e qrels graduados, incluindo paráfrases, coloquialismos, variações ortográficas, referências contextuais e consultas sem resposta.
+- Adiciona avaliador determinístico com nDCG@k, MRR@k, Recall@k, Precision@k, cobertura e métricas de abstenção/falsos positivos, além de resultados por categoria e split.
+- Mantém o modo lexical sem dependências; encoder nativo e multilingual E5 são opcionais e exigem checkpoint/diretório local explicitamente informado.
+- Gera relatório JSON com hash do conjunto e IDs, sem gravar na memória pessoal nem incluir conteúdo textual das consultas/passagens.
+- Adiciona testes de métricas, integridade dos qrels, determinismo, não mutação do conjunto, checkpoint local e execução offline.
+
+# Changelog
+
 ## Validação comparativa da recuperação episódica
 
 - Compara cache desabilitado, cache frio e cache aquecido com o mesmo conjunto determinístico de episódios e encoder.

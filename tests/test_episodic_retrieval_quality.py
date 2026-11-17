@@ -1,4 +1,5 @@
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -41,7 +42,7 @@ class EpisodicRetrievalQualityMetricTests(unittest.TestCase):
             k=2,
         )
         expected_ndcg = (
-            (3.0 / __import__("math").log2(3.0))
+            (3.0 / math.log2(3.0))
             / (3.0 + 1.0 / __import__("math").log2(3.0))
         )
         self.assertAlmostEqual(metrics["ndcg_at_k"], expected_ndcg, places=12)
@@ -69,11 +70,21 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
             sum(bool(row["expects_no_answer"]) for row in queries),
             6,
         )
+        self.assertEqual(
+            set(first["metrics"]["by_category"]),
+            {"parafrase", "coloquial", "variacao_ortografica", "contextual", "sem_resposta"},
+        )
 
     def test_answerable_query_without_qrels_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
         with self.assertRaisesRegex(ValueError, "sem qrels"):
-            validate_dataset(episodes, queries, qrels[:-1])
+            validate_dataset(episodes, queries, qrels[:-2])
+
+    def test_duplicate_qrel_is_rejected(self):
+        episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
+        invalid_qrels = list(qrels) + [dict(qrels[0])]
+        with self.assertRaisesRegex(ValueError, "qrel duplicado"):
+            validate_dataset(episodes, queries, invalid_qrels)
 
     def test_qrel_for_unanswerable_query_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)

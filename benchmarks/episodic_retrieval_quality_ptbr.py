@@ -121,6 +121,8 @@ def validate_dataset(episodes, queries, qrels):
             raise ValueError("Split inválido na consulta " + query_id + ".")
         if not isinstance(query.get("expects_no_answer"), bool):
             raise ValueError("expects_no_answer deve ser booleano em " + query_id + ".")
+        if (query.get("category") == "sem_resposta") != query["expects_no_answer"]:
+            raise ValueError("Categoria e expectativa de resposta inconsistentes em " + query_id + ".")
         query_ids.add(query_id)
         normalized_queries.add(normalized)
         query_by_id[query_id] = query

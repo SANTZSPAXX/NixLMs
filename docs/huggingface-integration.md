@@ -21,7 +21,7 @@ Público e gratuito não significa custo zero de infraestrutura pessoal: downloa
 | Registro local | Integrado | Manifesto JSON sob `data/huggingface/` |
 | Geração com Transformers | Integrada, opcional | Safetensors local, CPU, sem rede |
 | Geração GGUF | Integrada, opcional | llama.cpp CPU, arquivo GGUF local |
-| Embeddings | Integrada, opcional | Sentence Transformers local, CPU e cache de recuperação invalidado ao trocar encoder |
+| Embeddings | Integrada, opcional | Sentence Transformers local, CPU e cache de recuperação invalidado ao trocar encoder |\n| Visão e fala | Integradas, opcionais | Modelos image-to-text e automatic-speech-recognition baixados localmente e conectados ao PerceptionManager |
 | Datasets/Evaluate/PEFT/TRL/Diffusers/Gradio | Inventário e perfis opcionais | Instalação manual, apenas quando necessário |
 | Upload/publicação | Não integrado | Sem token e sem escrita no Hub |
 | Repositórios privados/gated | Bloqueados | A NixLMs não solicita nem contorna acesso |
@@ -66,9 +66,9 @@ O limite pode ser reduzido na chamada da API, mas não aumentado acima do teto. 
 
 ## Inferência local
 
-A geração usa Ollama local primeiro quando disponível; o backend Hugging Face é fallback local. A ativação exige um modelo `text-generation` baixado no registro. O carregamento é lazy, CPU-only, com número de threads e contexto/saída limitados. O gerador Transformers usa `local_files_only=True`, `trust_remote_code=False`, `use_safetensors=True` e `torch.float32`. GGUF usa `llama-cpp-python` em CPU.
+A geração usa Ollama local primeiro quando disponível; o backend Hugging Face é fallback local. A ativação de geração exige um modelo `text-generation`; embeddings exigem `sentence-similarity`/`feature-extraction`; percepção exige `image-to-text` ou `automatic-speech-recognition`, todos baixados no registro local. O carregamento é lazy, CPU-only, com número de threads e contexto/saída limitados. O gerador Transformers usa `local_files_only=True`, `trust_remote_code=False`, `use_safetensors=True` e `torch.float32`. GGUF usa `llama-cpp-python` em CPU.
 
-Nenhum pedido de geração é enviado ao Hub. Depois da ativação, a inferência lê somente o diretório local.
+Nenhum pedido de geração/percepção é enviado ao Hub. Depois da ativação, a inferência lê somente o diretório local.
 
 Para embeddings, ative um modelo com tarefa `sentence-similarity` ou `feature-extraction` que seja compatível com Sentence Transformers. A referência multilíngue leve é [intfloat/multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small), com suporte declarado a português e licença MIT. O encoder nativo é restaurado ao desativar.
 

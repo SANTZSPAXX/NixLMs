@@ -132,7 +132,7 @@ class HuggingFaceHubTests(unittest.TestCase):
         hub._save_registry([{
             "repo_id": "intfloat/multilingual-e5-small", "repo_type": "model",
             "path": str(model_path), "revision": "a" * 40,
-            "pipeline_tag": "sentence-similarity",
+            "pipeline_tag": "sentence-similarity", "library_name": "sentence-transformers",
         }])
         active = hub.activate_encoder("intfloat/multilingual-e5-small")
         self.assertEqual(active["repo_id"], "intfloat/multilingual-e5-small")

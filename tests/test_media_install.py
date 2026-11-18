@@ -117,5 +117,20 @@ class MediaInstallTests(unittest.TestCase):
         self.assertIn("Python 3.10", plan["blocked_reason"])
 
 
+    def test_blocked_plan_never_prompts_or_runs_pip(self):
+        plan = {
+            "automatic_install": False, "blocked": True,
+            "blocked_reason": "Este perfil exige Python 3.10 ou superior.",
+            "torch": {"installed": False}, "missing_requirements": ["diffusers>=0.30"],
+        }
+        with patch.object(media_install, "is_virtual_environment", return_value=True), \
+             patch.object(media_install, "build_install_plan", return_value=plan), \
+             patch("builtins.input") as prompt, \
+             patch.object(media_install.subprocess, "run") as run:
+            self.assertEqual(media_install.main(["--install"]), 2)
+        prompt.assert_not_called()
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

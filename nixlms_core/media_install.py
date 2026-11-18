@@ -204,7 +204,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Somente consulta; nenhuma instalação foi executada.")
         return 0
     if plan["blocked"]:
-        print("Instalação bloqueada até preparar PyTorch compatível nesta plataforma.")
+        print("Instalação bloqueada: " + str(
+            plan.get("blocked_reason") or "compatibilidade não confirmada."
+        ))
         return 2
 
     torch_missing = not plan["torch"]["installed"]

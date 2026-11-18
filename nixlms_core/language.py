@@ -211,7 +211,7 @@ class LanguageEngine:
         if self.hf_local_generator is not None:
             answer = self.hf_local_generator.generate(system_prompt, prompt)
             if answer:
-                self.last_used_model = "huggingface:" + self.hf_local_generator.repo_id
+                self.last_used_model = "huggingface:" + str(self.hf_local_generator.repo_id)
                 self.last_used_provider = "huggingface_local"
                 self.last_generation = datetime.now().astimezone().isoformat()
                 self.last_error = None

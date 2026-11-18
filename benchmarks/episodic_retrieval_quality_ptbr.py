@@ -37,6 +37,28 @@ VALID_SPLITS = {"validation", "test"}
 METRIC_NAMES = ("ndcg_at_k", "mrr_at_k", "recall_at_k", "precision_at_k")
 
 
+def validate_output_path(output_path, data_dir=DEFAULT_DATA_DIR):
+    """Reject output paths that could overwrite production memory or benchmark inputs."""
+    output = Path(output_path).expanduser().resolve()
+    protected_paths = {
+        (ROOT / "data" / "episodic_memory.json").resolve(),
+    }
+    dataset_directories = {
+        DEFAULT_DATA_DIR.expanduser().resolve(),
+        Path(data_dir).expanduser().resolve(),
+    }
+    for directory in dataset_directories:
+        protected_paths.update(
+            (directory / filename).resolve() for filename in DATA_FILES
+        )
+    if output in protected_paths:
+        raise ValueError(
+            "O arquivo de saída não pode sobrescrever a memória episódica de "
+            "produção nem os arquivos do conjunto de benchmark."
+        )
+    return output
+
+
 def _read_jsonl(path):
     rows = []
     with Path(path).open("r", encoding="utf-8") as handle:
@@ -150,7 +172,7 @@ def validate_dataset(episodes, queries, qrels):
     for query_id, query in query_by_id.items():
         has_qrels = bool(qrels_by_query.get(query_id))
         if query["expects_no_answer"] and has_qrels:
-            raise ValueError("Consulta sem resposta possui julgamento: " + query_id + ".")
+            raise ValueError("Consulta sem resposta possui qrels: " + query_id + ".")
         if not query["expects_no_answer"] and not has_qrels:
             raise ValueError("Consulta respondível sem qrels: " + query_id + ".")
 
@@ -409,6 +431,10 @@ def main():
         parser.error("batch-size deve estar entre 1 e 32.")
 
     try:
+        output_path = (
+            validate_output_path(args.output, args.dataset_dir)
+            if args.output is not None else None
+        )
         encoder, encoder_info = load_encoder(
             native_checkpoint=args.native_checkpoint,
             e5_model_path=args.e5_model_path,
@@ -425,9 +451,9 @@ def main():
         parser.error(str(exc))
 
     rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    if args.output:
-        args.output.expanduser().parent.mkdir(parents=True, exist_ok=True)
-        args.output.expanduser().write_text(rendered, encoding="utf-8")
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered, encoding="utf-8")
     sys.stdout.write(rendered)
 
 

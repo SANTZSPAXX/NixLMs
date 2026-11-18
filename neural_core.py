@@ -110,7 +110,7 @@ def _huggingface_command(ai, message):
         print("Use /hf status|buscar|detalhes|baixar|ativar|desativar ...")
         return
     action = parts[1].lower()
-    payload = parts[2] if len(parts) > 2 else ""
+    payload = " ".join(parts[2:]) if len(parts) > 2 else ""
     hub = ai.huggingface
     try:
         if action == "status":

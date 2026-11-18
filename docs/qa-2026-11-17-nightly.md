@@ -18,7 +18,7 @@ Arquivos revisados: workflow de testes, README, CHANGELOG, avaliador, três arqu
 ### Aspectos aprovados por inspeção
 
 - O avaliador usa memória temporária e desabilita o cache para isolar o ranking.
-- O conjunto de 50 episódios, 30 consultas e 32 qrels é sintético e separado da memória de produção.
+- O conjunto contém 50 episódios, 30 consultas e 32 qrels e está rotulado como sintético. Contudo, a proveniência independente não foi demonstrada: parte dos exemplos contextuais tem formulação/encadeamento muito específico e alinhado a uma conversa individual recente. Não tratar o rótulo `benchmark_sintetico_ptbr` como prova de origem independente.
 - Os qrels rejeitam referências inexistentes, pares duplicados, relevância fora de 1/2 e consultas sem resposta.
 - O relatório contém IDs, hashes e métricas, sem texto das consultas/passagens ou caminhos absolutos.
 - O modo lexical usa biblioteca padrão; E5 e checkpoint nativo são opt-in.
@@ -98,16 +98,18 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 5. Windows CI não equivale ao hardware i5/8 GB do operador.
 6. Linux ARM64 não foi executado.
 7. Não foi identificado vazamento de treino/teste novo na PR #36; o benchmark não treina encoder nem pesos.
+8. **Proveniência/privacidade:** origem independente de parte dos exemplos contextuais não foi confirmada. Como o repositório é público, substituir por casos sintéticos independentes ou documentar proveniência e autorização antes de tornar a PR #36 integrável.
 
 ## Próximos passos priorizados
 
-1. Revisar manualmente qrels ambíguos, sobretudo a categoria contextual, antes de usar o baseline como gate.
-2. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
-3. Registrar proveniência/fingerprint do encoder E5 local no relatório para reprodutibilidade.
-4. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
-5. Preparar runner Linux ARM64 quando houver ambiente real.
-6. Revisar consentimento e integridade do instalador Linux do Ollama nas PRs #23/#29.
-7. Manter todas as PRs em draft; sem merge automático.
+1. Resolver a proveniência dos exemplos contextuais da PR #36; substituir qualquer conteúdo potencialmente derivado de conversa individual ou documentar autorização explícita antes de integrar.
+2. Revisar manualmente qrels ambíguos, sobretudo a categoria contextual, antes de usar o baseline como gate.
+3. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
+4. Registrar proveniência/fingerprint do encoder E5 local no relatório para reprodutibilidade.
+5. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
+6. Preparar runner Linux ARM64 quando houver ambiente real.
+7. Revisar consentimento e integridade do instalador Linux do Ollama nas PRs #23/#29.
+8. Manter todas as PRs em draft; sem merge automático.
 
 ## Referências
 
@@ -134,3 +136,10 @@ A diferença entre validation e test é relevante e reforça que o conjunto aind
 A revisão também identificou que `--min-score nan` ou `inf` era aceito: NaN fazia todas as comparações de score falharem e podia gerar JSON com valores não padrão em outras saídas. A branch desta PR agora rejeita limiares não finitos tanto em `evaluate_dataset()` quanto no CLI, com testes de regressão para NaN e ±infinito.
 
 CI da correção finalizada: run #44211940434, 6/6 jobs success. O código e os testes foram validados no commit `b7350afde8830a875dc0911e737ed412b569c929`; os commits posteriores alteraram somente esta documentação. Nenhuma aprovação da PR #36 foi atribuída aos commits desta correção.
+
+
+## Adendo — proveniência e privacidade do dataset
+
+Foi publicada uma segunda revisão COMMENT na PR #36 (review ID 5949230088). Parte dos exemplos contextuais tem formulação/encadeamento muito específico e alinhado a uma conversa individual recente. O repositório marca os registros como sintéticos, mas não fornece evidência de criação independente. Não foi encontrada informação identificadora ou segredo no conjunto; o risco é de proveniência não comprovada e possível derivação de contexto de operador.
+
+Recomendação: manter a PR #36 em draft e substituir os exemplos potencialmente derivados por casos independentes/genéricos, ou documentar a origem e obter autorização explícita antes de publicar conteúdo derivado de conversas. O comentário evita reproduzir frases ou detalhes da conversa.

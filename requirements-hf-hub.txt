@@ -1,0 +1,2 @@
+# Catálogo e downloads públicos anônimos do Hugging Face Hub.
+huggingface-hub>=0.30,<2

@@ -32,6 +32,8 @@ class LanguageEngine:
         self.reachable = False
         self.last_used_model = None
         self.last_generation = None
+        self.last_used_provider = None
+        self.hf_local_generator = None
 
     def _get_tags(self):
         if not self.local_host:
@@ -89,7 +91,25 @@ class LanguageEngine:
             "reachable": self.reachable,
             "last_error": self.last_error, "last_check": self.last_check,
             "last_used_model": self.last_used_model, "last_generation": self.last_generation,
+            "last_used_provider": self.last_used_provider,
+            "huggingface_local": (
+                self.hf_local_generator.status() if self.hf_local_generator else None
+            ),
         }
+
+    def configure_huggingface_local(self, model_path, repo_id=""):
+        """Configura um gerador Transformers que só lê arquivos locais."""
+        if not model_path:
+            self.hf_local_generator = None
+            return False
+        from .huggingface import HuggingFaceLocalGenerator
+        self.hf_local_generator = HuggingFaceLocalGenerator(
+            model_path, repo_id=repo_id,
+            max_input_tokens=int(os.getenv("NIXLMS_HF_MAX_INPUT_TOKENS", "1024")),
+            max_new_tokens=int(os.getenv("NIXLMS_HF_MAX_NEW_TOKENS", "160")),
+            threads=int(os.getenv("NIXLMS_HF_CPU_THREADS", "2")),
+        )
+        return True
 
     def available(self):
         models = self.refresh_models()
@@ -98,17 +118,18 @@ class LanguageEngine:
     def generate(self, message, memories=None, concepts=None, history=None,
                  world_facts=None, goals=None, neural_state=None):
         self.last_used_model = None
+        self.last_used_provider = None
         self.last_generation = None
+        ollama_ready = False
         if not self.enabled:
             self.last_error = "Integração Ollama desativada."
-            return None
-        if not self.local_host:
-            self.last_error = "Endpoint recusado: somente Ollama em localhost/loopback é permitido."
-            return None
-        # Atualiza a lista e escolhe um modelo já instalado, sem efetuar pull.
-        models = self.refresh_models()
-        if not models:
-            return None
+        elif not self.local_host:
+            self.last_error = (
+                "Endpoint recusado: somente Ollama em localhost/loopback é permitido."
+            )
+        else:
+            ollama_ready = bool(self.refresh_models())
+
         message_text = str(message).strip()
         if len(message_text) > self.MESSAGE_CHAR_LIMIT:
             self.last_error = f"Mensagem excede o limite de {self.MESSAGE_CHAR_LIMIT} caracteres."
@@ -146,37 +167,58 @@ class LanguageEngine:
             + json.dumps(context, ensure_ascii=False)
             + "\n\nPERGUNTA_ATUAL_DO_USUARIO:\n" + message_text
         )
-        payload = json.dumps({
-            "model": self.model, "stream": False,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            "options": {"temperature": .2, "num_ctx": 3072, "num_predict": 384},
-        }, ensure_ascii=False).encode("utf-8")
-        req = Request(self.host + "/api/chat", data=payload,
-                      headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urlopen(req, timeout=self.timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
-            if not isinstance(result, dict) or not isinstance(result.get("message"), dict):
-                raise ValueError("Resposta inválida de /api/chat.")
-            returned_model = str(result.get("model", "")).strip()
-            if returned_model != self.model:
-                raise ValueError(
-                    "Modelo não confirmado: /api/chat retornou "
-                    f"{returned_model or 'campo model ausente'}, esperado {self.model}."
-                )
-            if result.get("done") is not True:
-                raise ValueError("Geração não confirmada: a resposta de /api/chat não informou done=true.")
-            answer = str(result["message"].get("content", "")).strip()
-            if not answer:
+
+        if ollama_ready:
+            payload = json.dumps({
+                "model": self.model, "stream": False,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "options": {"temperature": .2, "num_ctx": 3072, "num_predict": 384},
+            }, ensure_ascii=False).encode("utf-8")
+            req = Request(
+                self.host + "/api/chat", data=payload,
+                headers={"Content-Type": "application/json"}, method="POST"
+            )
+            try:
+                with urlopen(req, timeout=self.timeout) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                if not isinstance(result, dict) or not isinstance(result.get("message"), dict):
+                    raise ValueError("Resposta inválida de /api/chat.")
+                returned_model = str(result.get("model", "")).strip()
+                if returned_model != self.model:
+                    raise ValueError(
+                        "Modelo não confirmado: /api/chat retornou "
+                        f"{returned_model or 'campo model ausente'}, esperado {self.model}."
+                    )
+                if result.get("done") is not True:
+                    raise ValueError(
+                        "Geração não confirmada: a resposta de /api/chat não informou done=true."
+                    )
+                answer = str(result["message"].get("content", "")).strip()
+                if answer:
+                    self.last_used_model = returned_model
+                    self.last_used_provider = "ollama_local"
+                    self.last_generation = datetime.now().astimezone().isoformat()
+                    self.last_error = None
+                    return answer
                 self.last_error = "Ollama respondeu sem conteúdo."
-                return None
-            self.last_used_model = returned_model
-            self.last_generation = datetime.now().astimezone().isoformat()
-            self.last_error = None
-            return answer
-        except (URLError, HTTPError, TimeoutError, ValueError, OSError) as exc:
-            self.last_error = f"{type(exc).__name__}: {exc}"
-            return None
+            except (URLError, HTTPError, TimeoutError, ValueError, OSError) as exc:
+                self.last_error = f"{type(exc).__name__}: {exc}"
+
+        # Fallback local, sem HTTP: o gerador lê apenas o snapshot já baixado.
+        if self.hf_local_generator is not None:
+            answer = self.hf_local_generator.generate(system_prompt, prompt)
+            if answer:
+                self.last_used_model = "huggingface:" + str(self.hf_local_generator.repo_id)
+                self.last_used_provider = "huggingface_local"
+                self.last_generation = datetime.now().astimezone().isoformat()
+                self.last_error = None
+                return answer
+            self.last_error = (
+                self.hf_local_generator.last_error
+                or self.last_error
+                or "Falha na geração local Hugging Face."
+            )
+        return None

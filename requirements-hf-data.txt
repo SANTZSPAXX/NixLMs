@@ -1,0 +1,3 @@
+# Leitura e processamento local de datasets públicos.
+-r requirements-hf-hub.txt
+datasets>=3,<5

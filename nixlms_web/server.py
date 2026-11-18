@@ -13,7 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import metadata
 from pathlib import Path
-from urllib.parse import urlparse, urlsplit
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
@@ -22,7 +22,7 @@ MAX_BODY = 5 * 1024 * 1024
 ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
-from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core import NixLMsNeuralCore  # noqa: E402\nfrom nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 
 
 def inspect_frameworks():
@@ -38,6 +38,14 @@ def inspect_frameworks():
         ("ONNX Runtime", "onnxruntime", "Inferência otimizada", "onnxruntime"),
         ("Safetensors", "safetensors", "Armazenamento de pesos", "safetensors"),
         ("Tokenizers", "tokenizers", "Tokenização", "tokenizers"),
+        ("Hugging Face Hub", "huggingface_hub", "Catálogo e download público anônimo", "huggingface-hub"),
+        ("Hugging Face Datasets", "datasets", "Leitura e processamento de datasets", "datasets"),
+        ("Hugging Face Evaluate", "evaluate", "Métricas e avaliação local", "evaluate"),
+        ("Accelerate", "accelerate", "Treinamento local", "accelerate"),
+        ("PEFT", "peft", "Fine-tuning LoRA/PEFT", "peft"),
+        ("TRL", "trl", "Treinamento alinhado opcional", "trl"),
+        ("Diffusers", "diffusers", "Geração local multimodal", "diffusers"),
+        ("Gradio", "gradio", "Interfaces locais para ML", "gradio"),
         ("TensorFlow", "tensorflow", "Treinamento e inferência", "tensorflow"),
         ("llama-cpp-python", "llama_cpp", "Inferência local GGUF", "llama-cpp-python"),
     ]
@@ -136,6 +144,33 @@ class Handler(BaseHTTPRequestHandler):
                 "stats": library.stats(),
                 "documents": library.list_documents(100),
             })
+        if path.startswith("/api/huggingface/"):
+            query = parse_qs(urlsplit(self.path).query)
+            try:
+                if path == "/api/huggingface/status":
+                    return self.send_json(assistant.huggingface.status())
+                if path == "/api/huggingface/search":
+                    repo_type = query.get("type", ["model"])[0]
+                    search_text = query.get("q", [""])[0]
+                    limit = query.get("limit", ["12"])[0]
+                    return self.send_json({
+                        "results": assistant.huggingface.search(
+                            repo_type, search_text, limit=limit
+                        )
+                    })
+                if path == "/api/huggingface/details":
+                    repo_type = query.get("type", ["model"])[0]
+                    repo_id = query.get("repo_id", [""])[0]
+                    return self.send_json(
+                        assistant.huggingface.details(repo_type, repo_id)
+                    )
+            except HuggingFaceError as exc:
+                return self.send_json({"error": str(exc)}, 400)
+            except Exception as exc:
+                if type(exc).__name__ == "HuggingFaceError":
+                    return self.send_json({"error": str(exc)}, 400)
+                return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
+            return self.send_json({"error": "Endpoint Hugging Face não encontrado."}, 404)
         if path == "/api/diagnostics":
             diagnostic = assistant.run_startup_diagnostics()
             checks = {
@@ -247,6 +282,60 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = self.read_json()
             path = urlparse(self.path).path
+            if path == "/api/huggingface/download":
+                result = assistant.huggingface.download(
+                    str(data.get("repo_type", "model")),
+                    str(data.get("repo_id", "")),
+                    max_bytes=data.get("max_bytes"),
+                )
+                return self.send_json({"download": result})
+            if path == "/api/huggingface/activate":
+                role = str(data.get("role", "generator")).lower()
+                repo_id = str(data.get("repo_id", ""))
+                if role == "generator":
+                    active = assistant.huggingface.activate_model(repo_id)
+                    assistant.language.configure_huggingface_local(
+                        active["path"], active["repo_id"]
+                    )
+                    return self.send_json({"role": role, "active_model": active})
+                if role == "embeddings":
+                    active = assistant.huggingface.activate_encoder(repo_id)
+                    from nixlms_core.pretrained_encoder import TransformersSentenceEncoder
+                    assistant.retrieval_encoder = TransformersSentenceEncoder(
+                        active["path"], device="cpu", local_files_only=True
+                    )
+                    assistant._retrieval_encoder_error = None
+                    assistant.memory._embedding_cache.clear()
+                    return self.send_json({"role": role, "active_encoder": active})
+                if role in {"vision", "speech"}:
+                    active = assistant.huggingface.activate_perception(repo_id, role)
+                    if role == "vision":
+                        assistant.perception.vision_model_path = Path(active["path"])
+                    else:
+                        assistant.perception.speech_model_path = Path(active["path"])
+                    assistant.perception._pipelines.clear()
+                    return self.send_json({"role": role, "active_perception": active})
+                raise HuggingFaceError("Use role=generator, embeddings, vision ou speech.")
+            if path == "/api/huggingface/deactivate":
+                role = str(data.get("role", "generator")).lower()
+                if role == "generator":
+                    assistant.huggingface.deactivate_model()
+                    assistant.language.configure_huggingface_local(None)
+                elif role == "embeddings":
+                    assistant.huggingface.deactivate_encoder()
+                    assistant.retrieval_encoder = assistant.encoder
+                    assistant._retrieval_encoder_error = None
+                    assistant.memory._embedding_cache.clear()
+                elif role in {"vision", "speech"}:
+                    assistant.huggingface.deactivate_perception(role)
+                    if role == "vision":
+                        assistant.perception.vision_model_path = None
+                    else:
+                        assistant.perception.speech_model_path = None
+                    assistant.perception._pipelines.clear()
+                else:
+                    raise HuggingFaceError("Use role=generator, embeddings, vision ou speech.")
+                return self.send_json({"active": False, "role": role})
             if path == "/api/chat":
                 msg = str(data.get("message", "")).strip()
                 if not msg or len(msg) > 8000:
@@ -282,9 +371,13 @@ class Handler(BaseHTTPRequestHandler):
                 target.write_text(content, encoding="utf-8")
                 return self.send_json(library.import_path(target))
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
-        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        except HuggingFaceError as exc:
             return self.send_json({"error": str(exc)}, 400)
         except Exception as exc:
+            if type(exc).__name__ == "HuggingFaceError":
+                return self.send_json({"error": str(exc)}, 400)
+            if isinstance(exc, (ValueError, UnicodeError, json.JSONDecodeError)):
+                return self.send_json({"error": str(exc)}, 400)
             return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
 
 

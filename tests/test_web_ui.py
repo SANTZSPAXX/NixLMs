@@ -77,6 +77,14 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertTrue(isinstance(data, list))
         self.assertTrue(any(item["name"] == "PyTorch" for item in data))
 
+    def test_huggingface_status_is_anonymous_and_never_paid(self):
+        data = self.get_json("/api/huggingface/status")
+        self.assertTrue(data["anonymous_public_access"])
+        self.assertFalse(data["token_required"])
+        self.assertFalse(data["paid_remote_inference"])
+        self.assertIn("download_support", data)
+        self.assertIn("inference_support", data)
+
     def test_chat_endpoint_uses_neural_core(self):
         import json
         request = urllib.request.Request(
@@ -109,6 +117,11 @@ class WebInterfaceTests(unittest.TestCase):
         base = ROOT / "nixlms_web" / "static"
         for name in ("index.html", "style.css", "app.js"):
             self.assertTrue((base / name).is_file())
+        html = (base / "index.html").read_text(encoding="utf-8")
+        js = (base / "app.js").read_text(encoding="utf-8")
+        self.assertIn('data-view="huggingface"', html)
+        self.assertIn("/api/huggingface/search", js)
+        self.assertIn("/api/huggingface/download", js)
         css = (base / "style.css").read_text(encoding="utf-8")
         self.assertTrue(css.startswith(":root"))
 

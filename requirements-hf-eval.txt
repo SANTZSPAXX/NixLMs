@@ -1,0 +1,4 @@
+# Avaliação local e métricas.
+-r requirements-hf-data.txt
+evaluate>=0.4,<1
+scikit-learn

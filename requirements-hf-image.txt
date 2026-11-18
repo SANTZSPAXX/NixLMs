@@ -1,0 +1,4 @@
+# Pipelines locais de imagem; modelos são grandes e podem exigir GPU.
+-r requirements-hf-local.txt
+diffusers>=0.30,<1
+Pillow>=10

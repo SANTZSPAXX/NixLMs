@@ -20,6 +20,15 @@ class FrameworkRegistryTests(unittest.TestCase):
         payload = json.dumps(inspect_frameworks(), ensure_ascii=False)
         self.assertIsInstance(json.loads(payload), list)
 
+    def test_huggingface_capability_groups_are_optional(self):
+        by_name = {item.name: item for item in FRAMEWORKS}
+        self.assertIn("Hugging Face Hub", by_name)
+        self.assertIn("Hugging Face Datasets", by_name)
+        self.assertIn("PEFT", by_name)
+        self.assertIn("Diffusers", by_name)
+        self.assertFalse(by_name["Hugging Face Hub"].default_recommendation)
+        self.assertEqual(by_name["Hugging Face Hub"].install_group, "hf-hub")
+
     def test_default_recommendations_are_cpu_focused(self):
         recommended = {item.name for item in FRAMEWORKS if item.default_recommendation}
         self.assertIn("PyTorch", recommended)

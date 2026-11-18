@@ -132,6 +132,21 @@ Ou dê duplo clique em `iniciar.bat`. A interface escuta somente em `127.0.0.1:8
 
 Os testes da interface usam um diretório temporário e uma porta livre; não escrevem no diretório de dados pessoal.
 
+## Hugging Face público, gratuito e local
+
+A aba **Hugging Face** do painel e os comandos `/hf` integram busca anônima de modelos, datasets e Spaces públicos, leitura de cards/licenças, download explícito e registro local. Não exige token ou login e não chama Inference Providers, Endpoints, Jobs, Sandboxes, GPU remota ou inferência hospedada. Spaces são apenas catalogados, nunca executados.
+
+Downloads exigem confirmação, são fixados ao SHA do repositório, limitados a 1,5 GiB por modelo e 512 MiB por dataset, e excluem scripts remotos e pesos pickle/`.bin`. Geração local usa Transformers/Safetensors ou llama.cpp/GGUF em CPU; embeddings podem usar Sentence Transformers. Nada é baixado no startup e nenhum pacote é instalado automaticamente. O núcleo continua sem dependências obrigatórias.
+
+Exemplos CLI: `/hf buscar model Qwen`, `/hf buscar dataset Portuguese`, `/hf detalhes model Qwen/Qwen2.5-0.5B-Instruct`, `/hf baixar model Qwen/Qwen2.5-0.5B-Instruct`, `/hf ativar Qwen/Qwen2.5-0.5B-Instruct` e `/hf ativar-embedding intfloat/multilingual-e5-small`, `/hf ativar-visao AUTOR/MODELO` e `/hf ativar-audio AUTOR/MODELO`.
+
+Instale somente o perfil necessário:
+- `requirements-hf-hub.txt`: catálogo e download.
+- `requirements-hf-local.txt`: Transformers/Safetensors; PyTorch CPU é separado.
+- `requirements-hf-data.txt`, `requirements-hf-eval.txt`, `requirements-hf-finetune.txt`, `requirements-hf-image.txt`, `requirements-hf-audio.txt` e `requirements-hf-apps.txt`: capacidades opcionais separadas.
+
+No computador de 8 GB RAM, comece pelo catálogo e multilingual E5 small. Fine-tuning e Diffusers podem consumir recursos demais. Downloads usam banda, disco e energia locais, mas não criam cobrança no Hugging Face. Confira sempre a licença do repositório. Guia completo: [docs/huggingface-integration.md](docs/huggingface-integration.md).
+
 ## Google Colab
 
 Abra [NixLMs_Colab.ipynb](https://colab.research.google.com/github/SANTZSPAXX/NixLMs/blob/main/NixLMs_Colab.ipynb). A sessão do Colab é temporária; copie o diretório `data/` para armazenamento persistente se quiser preservar pesos, vocabulário e memória.

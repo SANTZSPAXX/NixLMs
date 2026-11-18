@@ -27,6 +27,7 @@ from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
 from .ollama_manager import OllamaManager
+from .huggingface import HuggingFaceHub
 from .learning import LearningEngine
 from .utils import save_json, load_json, normalize
 
@@ -58,6 +59,7 @@ class NixLMsNeuralCore:
         self.decoder_path = self.data_dir / "neural_decoder.json"
         self.decoder_calibration_path = self.data_dir / "decoder_calibration.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.huggingface = HuggingFaceHub(self.data_dir)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
         encoder_state = load_json(self.data_dir / "semantic_encoder.json", None)
@@ -66,7 +68,11 @@ class NixLMsNeuralCore:
 
         # O encoder nativo continua responsável pelo vetor de entrada LIF e pelo
         # aprendizado contrastivo. O backend pré-treinado é apenas para recuperação.
-        model_path = os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
+        active_hf_encoder = self.huggingface.active_encoder()
+        model_path = (
+            active_hf_encoder["path"] if active_hf_encoder
+            else os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
+        )
         self.retrieval_encoder = (
             TransformersSentenceEncoder(model_path, device="cpu", local_files_only=True)
             if model_path else self.encoder
@@ -113,7 +119,17 @@ class NixLMsNeuralCore:
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
         self.world_model = WorldModel(self.data_dir / "world_model.json")
         self.simulator = WorldSimulator(self.world_model)
-        self.perception = PerceptionManager()
+        active_hf_perception = self.huggingface.active_perception()
+        self.perception = PerceptionManager(
+            vision_model_path=(
+                active_hf_perception.get("vision", {}).get("path")
+                if active_hf_perception else None
+            ),
+            speech_model_path=(
+                active_hf_perception.get("speech", {}).get("path")
+                if active_hf_perception else None
+            ),
+        )
         self.goals = GoalManager(self.data_dir / "goals.json")
         self.scheduler = TaskScheduler(self.data_dir / "scheduler.sqlite3")
         self.autonomy = AutonomyEngine(self.data_dir / "autonomy.sqlite3")
@@ -123,6 +139,11 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
+        active_hf_model = self.huggingface.active_model()
+        if active_hf_model:
+            self.language.configure_huggingface_local(
+                active_hf_model["path"], active_hf_model.get("repo_id", "")
+            )
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
         self.starter_dataset_seeded = False
@@ -830,7 +851,8 @@ class NixLMsNeuralCore:
             "response_source": source, "concepts": concepts,
             "llm_error": self.language.last_error if llm_attempted else None,
             "llm_model_used": self.language.last_used_model if llm_attempted else None,
-            "llm_generation_verified": bool(llm_attempted and self.language.last_used_model == self.language.model),
+            "llm_generation_verified": bool(llm_attempted and self.language.last_used_provider in {"ollama_local", "huggingface_local"}),
+            "llm_provider_used": self.language.last_used_provider,
             "llm_answer_used": source in {"lif_conditioned_llm", "local_llm"},
             "llm_rejection_reason": llm_rejection_reason,
             "relevant_memories_used": len(relevant_ranked),
@@ -951,5 +973,6 @@ class NixLMsNeuralCore:
                 "load_error": self.decoder_load_error,
             },
             "llm": self.language.status(), "last_trace": self.last_trace,
-            "config": self.config.__dict__
+            "config": self.config.__dict__,
+            "huggingface": self.huggingface.status()
         }

@@ -1,3 +1,17 @@
+## Integração Hugging Face gratuita e local
+
+- Adiciona descoberta anônima de modelos, datasets e Spaces públicos sem token.
+- Adiciona inspeção de Model/Dataset Cards, licenças, tags, revisão SHA e arquivos.
+- Adiciona download explícito, limitado e sem sobrescrita, com allowlist; bloqueia gated/private, scripts remotos e pesos pickle.
+- Adiciona registro local e ativação de geração CPU via Transformers/Safetensors ou llama.cpp/GGUF.
+- Adiciona ativação de embeddings locais via Sentence Transformers, sem chamadas de rede na inferência.
+- Conecta modelos locais image-to-text e automatic-speech-recognition ao PerceptionManager, com CPU e bloqueio de código remoto.
+- Adiciona links públicos para Papers, documentação e Collections no painel.
+- Adiciona API loopback, aba Hugging Face no painel e comandos `/hf` na CLI.
+- Adiciona perfis de instalação opcionais para Hub, datasets, avaliação, fine-tuning, imagem, áudio e apps; o núcleo continua sem dependências obrigatórias.
+- Não utiliza tokens, Inference Providers, Endpoints, Jobs, Sandboxes, GPU remota ou Spaces executados.
+- Adiciona testes de acesso anônimo, limites, segurança de downloads, ativação local e API.
+
 ## Biblioteca opcional de frameworks de IA
 
 - Adiciona inventário de frameworks sem dependências, importações pesadas ou downloads.

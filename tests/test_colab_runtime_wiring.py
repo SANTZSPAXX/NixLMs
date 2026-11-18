@@ -23,6 +23,14 @@ class ColabRuntimeWiringTests(unittest.TestCase):
         self.assertLess(setup.index("NixLMsNeuralCore"), setup.index("ia.start_runtime()"))
         compile(setup, "<colab-runtime-setup>", "exec")
 
+    def test_notebook_exposes_anonymous_huggingface_commands(self):
+        notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
+        session = "".join(notebook["cells"][7]["source"])
+        self.assertIn("elif low == '/hf' or low.startswith('/hf '):", session)
+        self.assertIn("ia.huggingface.search", session)
+        self.assertIn("ia.huggingface.download", session)
+        compile(session, "<colab-huggingface-session>", "exec")
+
     def test_notebook_stops_scheduler_after_chat_session(self):
         notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
         session = "".join(notebook["cells"][7]["source"])

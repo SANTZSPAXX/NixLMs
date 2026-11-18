@@ -115,7 +115,7 @@ def _prepare_ollama(ai):
 
     if manager.executable() is None:
         print("Ollama não está instalado.")
-        if not _confirm_action("Autoriza instalar o Ollama neste computador?"):
+        if not _confirm_action("Autoriza instalar o Ollama? No Linux, isso pode atualizar índices do apt, instalar zstd e baixar/executar o instalador oficial remoto de ollama.com."):
             print("Instalação não autorizada; nenhuma alteração foi realizada.")
             return
         result = manager.install()

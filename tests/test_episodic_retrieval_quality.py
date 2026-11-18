@@ -75,7 +75,7 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
     def test_answerable_query_without_qrels_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)
         with self.assertRaisesRegex(ValueError, "sem qrels"):
-            validate_dataset(episodes, queries, qrels[:-2])
+            validate_dataset(episodes, queries, [row for row in qrels if row["query_id"] != "q024"])
 
     def test_duplicate_qrel_is_rejected(self):
         episodes, queries, qrels, _, _ = load_dataset(DATA_DIR)

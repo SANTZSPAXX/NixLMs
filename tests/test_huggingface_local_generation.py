@@ -38,6 +38,32 @@ class HuggingFaceLocalGenerationTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 generator._load()
 
+    def test_gguf_uses_llama_cpp_on_cpu_without_torch_or_network(self):
+        import sys
+        import types
+
+        with tempfile.TemporaryDirectory(prefix="nixlms-hf-gguf-") as temp:
+            root = Path(temp)
+            (root / "model.gguf").write_bytes(b"gguf")
+            calls = {}
+
+            class FakeLlama:
+                def __init__(self, **kwargs):
+                    calls.update(kwargs)
+
+                def create_completion(self, **kwargs):
+                    return {"choices": [{"text": "Resposta GGUF local."}]}
+
+            module = types.ModuleType("llama_cpp")
+            module.Llama = FakeLlama
+            generator = HuggingFaceLocalGenerator(root, "org/model", threads=2)
+            with patch.dict(sys.modules, {"llama_cpp": module}):
+                answer = generator.generate("Seja útil.", "Explique a NixLMs.")
+            self.assertEqual(answer, "Resposta GGUF local.")
+            self.assertEqual(generator.status()["backend"], "llama.cpp_cpu")
+            self.assertEqual(calls["n_threads"], 2)
+            self.assertEqual(calls["model_path"], str(root / "model.gguf"))
+
     def test_language_engine_can_use_hf_local_when_ollama_is_disabled(self):
         engine = LanguageEngine()
         engine.enabled = False

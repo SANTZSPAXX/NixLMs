@@ -126,14 +126,6 @@ class NixLMsNeuralCore:
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
         self.starter_dataset_seeded = False
-        if not self.learning.dataset.path.exists() and os.getenv("NIXLMS_DISABLE_STARTER_DATASET") != "1":
-            starter_dataset = (
-                Path(__file__).resolve().parents[1]
-                / "datasets" / "starter_ptbr.jsonl"
-            )
-            if starter_dataset.is_file():
-                self.learning.dataset.import_jsonl(starter_dataset)
-                self.starter_dataset_seeded = True
         self.idle_learning = IdleLearningManager(self)
         self.scheduler.register_handler("idle_learning_cycle", self._scheduled_idle_learning)
 
@@ -255,8 +247,42 @@ class NixLMsNeuralCore:
     def _scheduled_idle_learning(self, payload):
         return self.idle_learning.run_if_idle(payload)
 
+    def _seed_starter_dataset(self):
+        """Seed curated examples only when an actual runtime starts on a clean install."""
+        if self.learning.dataset.path.exists():
+            return False
+        if os.getenv("NIXLMS_DISABLE_STARTER_DATASET") == "1":
+            return False
+        starter_dataset = (
+            Path(__file__).resolve().parents[1]
+            / "datasets" / "starter_ptbr.jsonl"
+        )
+        if not starter_dataset.is_file():
+            return False
+        self.learning.dataset.import_jsonl(starter_dataset)
+        rows = self.learning.dataset.load()
+        corpus = []
+        for row in rows:
+            if row.get("split", "train") != "train":
+                continue
+            corpus.extend([
+                row.get("question", ""), row.get("answer", ""),
+                row.get("text_a", ""), row.get("text_b", ""),
+            ])
+        self.encoder.fit_vocabulary(corpus)
+        self._save_encoder()
+        self.decoder.fit_vocabulary([
+            row.get("answer", "") for row in rows
+            if row.get("type", "qa") == "qa" and row.get("split", "train") == "train"
+        ])
+        if self.decoder_persistence_enabled:
+            self._save_decoder()
+        self.starter_dataset_seeded = True
+        return True
+
     def start_runtime(self):
         """Run diagnostics and start the scheduler with one persistent idle job."""
+        self._seed_starter_dataset()
         self.startup_diagnostics = self.run_startup_diagnostics()
         job_id = "nixlms-idle-learning-v1"
         existing = self.scheduler.list_jobs(limit=1000)

@@ -1,3 +1,9 @@
+## QA 2026-11-18 — exportação segura da biblioteca privada
+
+- A exportação de candidatos QA aprovados agora cria o destino em modo exclusivo.
+- Arquivos de dataset existentes são preservados; o operador precisa escolher outro caminho.
+- Adiciona teste de regressão para impedir sobrescrita silenciosa.
+
 ## Integração Hugging Face gratuita e local
 
 - Adiciona descoberta anônima de modelos, datasets e Spaces públicos sem token.

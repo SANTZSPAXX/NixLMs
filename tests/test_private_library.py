@@ -50,6 +50,18 @@ class PrivateKnowledgeLibraryTests(unittest.TestCase):
         self.assertEqual(exported["exported"], 1)
         self.assertIn('"split": "train"', (self.root / "train.jsonl").read_text(encoding="utf-8"))
 
+    def test_export_refuses_to_overwrite_existing_dataset(self):
+        candidate = self.library.add_candidate("Q", "A")
+        self.library.review_candidate(candidate["id"], True)
+        destination = self.root / "existing-train.jsonl"
+        destination.write_text("keep existing data\n", encoding="utf-8")
+
+        result = self.library.export_approved_qa(destination)
+
+        self.assertEqual(result["reason"], "destination_exists")
+        self.assertEqual(result["exported"], 0)
+        self.assertEqual(destination.read_text(encoding="utf-8"), "keep existing data\n")
+
     def test_rejected_candidate_cannot_be_approved_again(self):
         candidate = self.library.add_candidate("Q", "A")
         self.library.review_candidate(candidate["id"], False)

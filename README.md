@@ -385,3 +385,8 @@ python -m nixlms_core.framework_registry --json
 ```
 
 Para instalar o stack opcional CPU no Windows, use um ambiente virtual e execute `scripts/install-ml-cpu.ps1 -InstallTorch`. TensorFlow e llama-cpp-python são alternativas separadas e opcionais.
+
+
+## Runtime autônomo governado
+
+O runtime agenda ciclos recorrentes de autonomia, executa tarefas internas registradas e conclui etapas automatizadas somente após verificação explícita do resultado. Etapas sem handler confiável permanecem manuais; texto livre nunca é executado como código. O planejamento geral por linguagem natural e integrações externas ainda exigem módulos específicos. Consulte [docs/autonomous-runtime.md](docs/autonomous-runtime.md) para configuração e limites.

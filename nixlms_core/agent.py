@@ -139,6 +139,7 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
+        self.autonomy_planner.set_language_engine(self.language)
         active_hf_model = self.huggingface.active_model()
         if active_hf_model:
             self.language.configure_huggingface_local(
@@ -149,6 +150,7 @@ class NixLMsNeuralCore:
         self.starter_dataset_seeded = False
         self.idle_learning = IdleLearningManager(self)
         self.scheduler.register_handler("idle_learning_cycle", self._scheduled_idle_learning)
+        self.scheduler.register_handler("autonomy_cycle", self._scheduled_autonomy_cycle)
 
         if not self.memory.knowledge:
             self.memory.knowledge.extend(DEFAULTS)
@@ -247,7 +249,7 @@ class NixLMsNeuralCore:
             record(
                 "scheduler_handlers",
                 {"memory_housekeeping", "dataset_audit", "goal_review",
-                 "idle_learning_cycle"}.issubset(
+                 "idle_learning_cycle", "autonomy_cycle"}.issubset(
                     set(scheduler_stats.get("registered_handlers", []))
                 ),
                 scheduler_stats.get("registered_handlers", []),
@@ -267,6 +269,20 @@ class NixLMsNeuralCore:
 
     def _scheduled_idle_learning(self, payload):
         return self.idle_learning.run_if_idle(payload)
+
+    def _scheduled_autonomy_cycle(self, payload):
+        """Advance only trusted, dependency-ready internal goal steps."""
+        payload = payload if isinstance(payload, dict) else {}
+        requested_limit = payload.get("limit", self.autonomy.policy.max_actions_per_cycle)
+        try:
+            limit = max(1, min(
+                int(requested_limit),
+                self.autonomy.policy.max_actions_per_cycle,
+                100,
+            ))
+        except (TypeError, ValueError):
+            limit = 1
+        return self.run_autonomy_cycle(limit=limit)
 
     def _seed_starter_dataset(self):
         """Seed curated examples only when an actual runtime starts on a clean install."""
@@ -317,11 +333,52 @@ class NixLMsNeuralCore:
                 max_attempts=1,
                 job_id=job_id,
             )
+        autonomy_enabled = os.getenv("NIXLMS_AUTONOMY_ENABLED", "1").strip().lower() not in {
+            "0", "false", "no", "off"
+        }
+        try:
+            autonomy_interval = int(os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300"))
+        except ValueError:
+            autonomy_interval = 300
+        autonomy_interval = max(60, min(3600, autonomy_interval))
+        existing_jobs = self.scheduler.list_jobs(limit=1000)
+        autonomy_jobs = [
+            job for job in existing_jobs
+            if job.get("handler") == "autonomy_cycle"
+        ]
+        if autonomy_enabled:
+            active_job = next(
+                (job for job in autonomy_jobs if job.get("status") in {"pending", "running"}),
+                None,
+            )
+            if active_job is None:
+                used_ids = {job.get("id") for job in autonomy_jobs}
+                version = 1
+                autonomy_job_id = "nixlms-autonomy-cycle-v" + str(version)
+                while autonomy_job_id in used_ids:
+                    version += 1
+                    autonomy_job_id = "nixlms-autonomy-cycle-v" + str(version)
+                self.scheduler.schedule_interval(
+                    "autonomy_cycle",
+                    autonomy_interval,
+                    payload={"limit": self.autonomy.policy.max_actions_per_cycle},
+                    first_delay_seconds=min(60, autonomy_interval),
+                    priority=-5,
+                    max_attempts=3,
+                    job_id=autonomy_job_id,
+                )
+        else:
+            for job in autonomy_jobs:
+                if job.get("status") == "pending":
+                    self.scheduler.cancel(job["id"])
         started = self.scheduler.start()
         return {
             "diagnostics": self.startup_diagnostics,
             "scheduler_started": self.scheduler.running,
             "scheduler_started_now": started,
+            "autonomy_enabled": autonomy_enabled,
+            "autonomy_interval_seconds": autonomy_interval,
+            "autonomy_planner": self.autonomy_planner.status(),
             "idle_learning": self.idle_learning.status(),
             "private_library": self.private_library.stats(),
         }
@@ -877,7 +934,7 @@ class NixLMsNeuralCore:
         return answer
 
     def run_autonomy_cycle(self, limit=None):
-        """Seleciona e inicia etapas prontas de objetivos; não conclui tarefas."""
+        """Executa tarefas internas verificadas; etapas manuais apenas iniciam."""
         return self.autonomy_planner.run_cycle(limit=limit)
 
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,
@@ -927,6 +984,16 @@ class NixLMsNeuralCore:
                 "registered_actions": self.autonomy.registered_actions(),
                 "pending_approval": len(self.autonomy.list_requests(status="pending_approval")),
                 "planner": self.autonomy_planner.status(),
+                "runtime_loop": {
+                    "enabled": os.getenv("NIXLMS_AUTONOMY_ENABLED", "1").strip().lower()
+                    not in {"0", "false", "no", "off"},
+                    "interval_seconds": max(60, min(
+                        3600, int(os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300"))
+                    )) if os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300").lstrip("-").isdigit() else 300,
+                    "handler_registered": "autonomy_cycle" in self.scheduler.stats().get("registered_handlers", []),
+                    "scope": "internal",
+                    "behavior": "executes registered internal tasks with result verifiers; manual steps remain in_progress",
+                },
             },
             "scheduler": self.scheduler.stats(),
             "startup_diagnostics": self.startup_diagnostics,

@@ -1,4 +1,5 @@
-"""Gestão persistente de objetivos e etapas; não executa ações externas."""
+"""Gestão persistente de objetivos e etapas; execução apenas por tarefas registradas."""
+import json
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -8,7 +9,7 @@ from .utils import load_json, save_json
 
 
 class GoalManager:
-    VALID_STEP_STATUSES = {"pending", "in_progress", "completed", "cancelled"}
+    VALID_STEP_STATUSES = {"pending", "in_progress", "completed", "cancelled", "failed"}
 
     def __init__(self, path, max_goals=500):
         self.path = Path(path)
@@ -54,7 +55,7 @@ class GoalManager:
         self._save()
         return deepcopy(goal)
 
-    def add_step(self, goal_id, title, depends_on=None):
+    def add_step(self, goal_id, title, depends_on=None, task=None):
         goal = self._find_goal(goal_id)
         title = str(title).strip()
         if not title:
@@ -63,9 +64,26 @@ class GoalManager:
         known = {step.get("id") for step in goal.get("steps", [])}
         if any(item not in known for item in dependencies):
             raise ValueError("Toda dependência deve identificar uma etapa existente do objetivo.")
+        task_spec = None
+        if task is not None:
+            if not isinstance(task, dict):
+                raise ValueError("A tarefa precisa ser um objeto.")
+            name = str(task.get("name", "")).strip()
+            payload = task.get("payload", {})
+            if not name or len(name) > 80 or not isinstance(payload, dict):
+                raise ValueError("Tarefa precisa de nome e payload JSON objeto.")
+            try:
+                encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Payload da tarefa precisa ser JSON válido.") from exc
+            if len(encoded.encode("utf-8")) > 8192:
+                raise ValueError("Payload da tarefa excede 8 KiB.")
+            task_spec = {"name": name, "payload": json.loads(encoded)}
         step = {"id": "step-" + uuid.uuid4().hex[:12], "title": title,
                 "status": "pending", "depends_on": dependencies,
                 "created_at": self._now(), "updated_at": self._now()}
+        if task_spec is not None:
+            step["task"] = task_spec
         goal.setdefault("steps", []).append(step)
         goal["updated_at"] = self._now()
         self._refresh_goal_status(goal)

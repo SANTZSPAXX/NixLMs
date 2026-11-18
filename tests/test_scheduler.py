@@ -124,7 +124,8 @@ class TaskSchedulerTests(unittest.TestCase):
             ai = NixLMsNeuralCore(Path(tmp))
             self.assertEqual(
                 set(ai.scheduler.stats()["registered_handlers"]),
-                {"memory_housekeeping", "dataset_audit", "goal_review", "idle_learning_cycle"},
+                {"memory_housekeeping", "dataset_audit", "goal_review",
+                 "idle_learning_cycle", "autonomy_cycle"},
             )
             job_id = ai.scheduler.schedule_once("dataset_audit")
             self.assertTrue(ai.scheduler.run_once())

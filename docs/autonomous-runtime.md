@@ -19,6 +19,45 @@ O ciclo de autonomia é limitado e idempotente quanto à criação do agendament
 - `NIXLMS_AUTONOMY_ENABLED=0`: não cria um novo ciclo automático.
 - `NIXLMS_AUTONOMY_INTERVAL_SECONDS=300`: intervalo entre ciclos; limitado a 60–3600 segundos.
 
+## Inicialização automática com o sistema operacional (opcional)
+
+A inicialização no login é uma configuração explícita de uma única vez. Ela usa somente o usuário atual, sem privilégios elevados e sem persistência oculta.
+
+### Windows 10/11
+
+No PowerShell, na pasta do repositório:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install-autostart.ps1
+```
+
+Se as dependências estiverem em um ambiente virtual, informe o executável desse ambiente:
+
+```powershell
+.\scripts\install-autostart.ps1 -Python ".\venv\Scripts\python.exe"
+```
+
+A tarefa inicia a interface local no login do usuário. Para remover:
+
+```powershell
+.\scripts\remove-autostart.ps1
+```
+
+### Linux com systemd de usuário
+
+```bash
+PYTHON="$PWD/.venv/bin/python" ./scripts/install-autostart.sh
+```
+
+Para remover:
+
+```bash
+./scripts/remove-autostart.sh
+```
+
+O processo roda enquanto a sessão do usuário estiver ativa. O computador precisa estar ligado; isso não depende de uma sessão do ChatGPT. Os scripts não instalam Python, dependências ou modelos e não concedem permissões adicionais. Em ambientes sem systemd de usuário, o script Linux não se aplica.
+
 ## Limites funcionais atuais
 
 O planner existente não é um executor geral de tarefas. Ele apenas seleciona etapas já criadas pelo operador, verifica dependências e muda uma etapa liberada de `pending` para `in_progress`. Não inventa objetivos, não interpreta qualquer pedido em plano executável, não realiza pesquisa externa, não executa comandos, não modifica arquivos arbitrários e não conclui uma etapa por conta própria. O estado `in_progress` não significa que o trabalho foi realizado.

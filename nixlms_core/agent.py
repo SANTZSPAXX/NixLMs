@@ -139,6 +139,7 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
+        self.autonomy_planner.set_language_engine(self.language)
         active_hf_model = self.huggingface.active_model()
         if active_hf_model:
             self.language.configure_huggingface_local(

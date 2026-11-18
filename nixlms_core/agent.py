@@ -59,6 +59,7 @@ class NixLMsNeuralCore:
         self.decoder_path = self.data_dir / "neural_decoder.json"
         self.decoder_calibration_path = self.data_dir / "decoder_calibration.json"
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.huggingface = HuggingFaceHub(self.data_dir)
 
         self.encoder = SemanticEncoder(self.config.input_size, seed=self.config.seed)
         encoder_state = load_json(self.data_dir / "semantic_encoder.json", None)
@@ -68,6 +69,9 @@ class NixLMsNeuralCore:
         # O encoder nativo continua responsável pelo vetor de entrada LIF e pelo
         # aprendizado contrastivo. O backend pré-treinado é apenas para recuperação.
         model_path = os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
+        active_hf_encoder = self.huggingface.active_encoder()
+        if not model_path and active_hf_encoder:
+            model_path = active_hf_encoder["path"]
         self.retrieval_encoder = (
             TransformersSentenceEncoder(model_path, device="cpu", local_files_only=True)
             if model_path else self.encoder
@@ -124,7 +128,6 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
-        self.huggingface = HuggingFaceHub(self.data_dir)
         active_hf_model = self.huggingface.active_model()
         if active_hf_model:
             self.language.configure_huggingface_local(

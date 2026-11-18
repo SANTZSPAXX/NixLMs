@@ -72,9 +72,9 @@ class PerceptionManagerTests(unittest.TestCase):
             module = types.ModuleType("transformers")
             module.pipeline = pipeline
             manager = PerceptionManager(vision_model_path=model)
-            with patch.object(manager, "_transformers_available", return_value=True), \\
-                 patch.object(manager, "_torch_available", return_value=True), \\
-                 patch.dict("sys.modules", {"transformers": module}):
+            with patch.object(manager, "_transformers_available", return_value=True), patch.object(
+                manager, "_torch_available", return_value=True
+            ), patch.dict("sys.modules", {"transformers": module}):
                 result = manager.describe_image(image)
             self.assertEqual(result["description"], "Uma paisagem.")
             self.assertEqual(result["device"], "cpu")

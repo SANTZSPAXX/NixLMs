@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hmac
 import json
 import mimetypes
 import os
@@ -19,6 +20,10 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
 DATA = Path(os.getenv("NIXLMS_DATA_DIR", str(ROOT / "data"))).expanduser()
 MAX_BODY = 5 * 1024 * 1024
+RENDER_MODE = os.getenv("RENDER") == "true"
+ACCESS_TOKEN = os.getenv("NIXLMS_ACCESS_TOKEN", "")
+if RENDER_MODE and len(ACCESS_TOKEN) < 32:
+    raise RuntimeError("NIXLMS_ACCESS_TOKEN precisa ter pelo menos 32 caracteres no Render.")
 ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
@@ -93,6 +98,15 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return host_ok or os.getenv("NIXLMS_COLAB_PROXY") == "1"
 
+    def authorized_api(self, path):
+        if not path.startswith("/api/") or path == "/api/health":
+            return True
+        if not RENDER_MODE:
+            return self.local()
+        supplied = self.headers.get("Authorization", "")
+        expected = "Bearer " + ACCESS_TOKEN
+        return hmac.compare_digest(supplied, expected)
+
     def send_json(self, obj, status=200):
         raw = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
         self.send_response(status)
@@ -119,9 +133,13 @@ class Handler(BaseHTTPRequestHandler):
         return value
 
     def do_GET(self):
-        if not self.local():
-            return self.send_json({"error": "Somente acesso local."}, 403)
         path = urlparse(self.path).path
+        if RENDER_MODE and path == "/api/health":
+            return self.send_json({"ok": True, "service": "nixlms"})
+        if not RENDER_MODE and not self.local():
+            return self.send_json({"error": "Somente acesso local."}, 403)
+        if not self.authorized_api(path):
+            return self.send_json({"error": "Token de acesso ausente ou inválido."}, 401)
         if path == "/api/status":
             core_status = assistant.status()
             library_stats = library.stats()
@@ -289,8 +307,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_POST(self):
-        if not self.local():
+        path = urlparse(self.path).path
+        if not RENDER_MODE and not self.local():
             return self.send_json({"error": "Somente acesso local."}, 403)
+        if not self.authorized_api(path):
+            return self.send_json({"error": "Token de acesso ausente ou inválido."}, 401)
         origin = self.headers.get("Origin", "")
         if origin:
             try:
@@ -305,7 +326,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Origem não permitida."}, 403)
         try:
             data = self.read_json()
-            path = urlparse(self.path).path
             if path == "/api/media/nsfw":
                 return self.send_json(media.set_nsfw(data.get("enabled") is True))
             if path == "/api/media/download":
@@ -423,15 +443,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))
+    host = "0.0.0.0" if RENDER_MODE else "127.0.0.1"
+    port = int(os.getenv("PORT", os.getenv("NIXLMS_PORT", "8765")))
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
-    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0")
+    bootstrap_default = "0" if RENDER_MODE else "1"
+    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", bootstrap_default) != "0")
     print("Preparação de mídia:", bootstrap)
-    print(f"NixLMs UI: http://127.0.0.1:{port} (somente este computador)")
+    print(f"NixLMs UI: host={host} port={port} remote={RENDER_MODE}")
     print("Motor: NixLMsNeuralCore")
     print("Autodiagnóstico:", runtime["diagnostics"]["status"])
     print("Aprendizagem ociosa:", runtime["idle_learning"])

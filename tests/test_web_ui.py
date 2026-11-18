@@ -125,10 +125,72 @@ class WebInterfaceTests(unittest.TestCase):
         css = (base / "style.css").read_text(encoding="utf-8")
         self.assertTrue(css.startswith(":root"))
 
+    def test_voice_console_and_hands_free_controls_are_present(self):
+        base = ROOT / "nixlms_web" / "static"
+        html = (base / "index.html").read_text(encoding="utf-8")
+        js = (base / "app.js").read_text(encoding="utf-8")
+        css = (base / "style.css").read_text(encoding="utf-8")
+        self.assertIn('id="voice-toggle"', html)
+        self.assertIn('id="voice-state"', html)
+        self.assertIn("webkitSpeechRecognition", js)
+        self.assertIn('recognition.lang="pt-BR"', js)
+        self.assertIn("SpeechSynthesisUtterance", js)
+        self.assertIn("pendingVoiceAction", js)
+        self.assertIn("voice-orb.listening", css)
+
+    def test_render_mode_requires_token_and_exposes_health_check(self):
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        with tempfile.TemporaryDirectory(prefix="nixlms-render-test-") as data_dir:
+            env = os.environ.copy()
+            env.update({
+                "RENDER": "true",
+                "PORT": str(port),
+                "NIXLMS_DATA_DIR": data_dir,
+                "NIXLMS_ACCESS_TOKEN": "test-token-" + ("x" * 40),
+                "NIXLMS_AUTO_INSTALL_MEDIA": "0",
+            })
+            process = subprocess.Popen(
+                [sys.executable, "-m", "nixlms_web.server"],
+                cwd=str(ROOT), env=env,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            base = f"http://127.0.0.1:{port}"
+            try:
+                for _ in range(80):
+                    if process.poll() is not None:
+                        self.fail("Render-mode server exited during startup")
+                    try:
+                        urllib.request.urlopen(base + "/api/health", timeout=1)
+                        break
+                    except (OSError, urllib.error.URLError):
+                        time.sleep(0.25)
+                else:
+                    self.fail("Render-mode server did not become ready")
+                with self.assertRaises(urllib.error.HTTPError) as denied:
+                    urllib.request.urlopen(base + "/api/status", timeout=3)
+                self.assertEqual(denied.exception.code, 401)
+                request = urllib.request.Request(
+                    base + "/api/status",
+                    headers={"Authorization": "Bearer " + env["NIXLMS_ACCESS_TOKEN"]},
+                )
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
     def test_server_is_loopback_only_and_has_no_shell_endpoint(self):
         source = (ROOT / "nixlms_web" / "server.py").read_text(encoding="utf-8")
-        self.assertIn('host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))', source)
-        self.assertNotIn('host,port="0.0.0.0"', source)
+        self.assertIn('host = "0.0.0.0" if RENDER_MODE else "127.0.0.1"', source)
+        self.assertIn("NIXLMS_ACCESS_TOKEN", source)
+        self.assertIn("hmac.compare_digest", source)
+        self.assertIn("/api/health", source)
         self.assertNotIn("subprocess", source)
 
 if __name__ == "__main__":

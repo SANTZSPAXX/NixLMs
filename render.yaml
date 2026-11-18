@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: nixlms-cloud
+    runtime: python
+    plan: starter
+    region: virginia
+    branch: feature/render-cloud-runtime
+    buildCommand: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+    startCommand: python -m nixlms_web.server
+    healthCheckPath: /api/health
+    disk:
+      name: nixlms-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: RENDER
+        value: "true"
+      - key: NIXLMS_DATA_DIR
+        value: /var/data
+      - key: NIXLMS_AUTO_INSTALL_MEDIA
+        value: "0"
+      - key: NIXLMS_ACCESS_TOKEN
+        sync: false

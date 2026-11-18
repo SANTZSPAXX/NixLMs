@@ -21,7 +21,8 @@ Público e gratuito não significa custo zero de infraestrutura pessoal: downloa
 | Registro local | Integrado | Manifesto JSON sob `data/huggingface/` |
 | Geração com Transformers | Integrada, opcional | Safetensors local, CPU, sem rede |
 | Geração GGUF | Integrada, opcional | llama.cpp CPU, arquivo GGUF local |
-| Embeddings | Integrada, opcional | Sentence Transformers local, CPU e cache de recuperação invalidado ao trocar encoder |\n| Visão e fala | Integradas, opcionais | Modelos image-to-text e automatic-speech-recognition baixados localmente e conectados ao PerceptionManager |
+| Embeddings | Integrada, opcional | Sentence Transformers local, CPU e cache de recuperação invalidado ao trocar encoder |
+| Visão e fala | Integradas, opcionais | Modelos image-to-text e automatic-speech-recognition baixados localmente e conectados ao PerceptionManager |
 | Datasets/Evaluate/PEFT/TRL/Diffusers/Gradio | Inventário e perfis opcionais | Instalação manual, apenas quando necessário |
 | Upload/publicação | Não integrado | Sem token e sem escrita no Hub |
 | Repositórios privados/gated | Bloqueados | A NixLMs não solicita nem contorna acesso |

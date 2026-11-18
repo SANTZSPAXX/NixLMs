@@ -742,6 +742,16 @@ class NixLMsNeuralCore:
                 for fact in world_facts
             ]
             answer, source = "Encontrei estes registros no modelo de mundo: " + "; ".join(statements), "world_model"
+        elif library_results:
+            excerpt = str(library_results[0].get("content", "")).strip()
+            title = str(library_results[0].get("title", "documento sem título"))
+            answer = (
+                f"Encontrei este trecho na sua biblioteca privada, no documento "
+                f"“{title}”:\n\n“{excerpt[:1200]}”\n\n"
+                "Esta resposta foi extraída do documento local; confira o contexto "
+                "original antes de tratá-la como fato."
+            )
+            source = "private_offline_library"
         elif llm_rejection_reason == 'requested_person_not_mentioned':
             answer = ('Não consegui identificar essa pessoa com segurança. Você se refere a Pedro Álvares Cabral ou a outra pessoa?'
                       if 'pedro' in normalize(text) else 'Não consegui identificar essa pessoa com segurança. Pode informar o nome completo?')

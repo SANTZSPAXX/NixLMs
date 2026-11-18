@@ -1,0 +1,5 @@
+# Opcional e pesado: treinamento/adaptadores apenas em recursos locais.
+# Não instalar em máquinas com pouca RAM sem avaliar o consumo.
+-r requirements-hf-local.txt
+peft>=0.13,<1
+trl>=0.12,<1

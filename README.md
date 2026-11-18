@@ -60,6 +60,24 @@ Segurança e semântica:
 
 O agendador não treina modelos automaticamente, não altera pesos neurais, não acessa a rede, não executa ações externas e não transforma fatos em conhecimento sem validação. Para programar uma nova capacidade, implemente um handler explícito, idempotente e coberto por testes.
 
+## Autonomia governada (0.2)
+
+O `AutonomyPlanner` conecta o `GoalManager` ao `AutonomyEngine`. Ele seleciona
+somente etapas já cadastradas pelo operador cujas dependências foram concluídas.
+Por padrão, inicia no máximo uma etapa por ciclo:
+
+```python
+resultado = ai.run_autonomy_cycle()
+previa = ai.autonomy_planner.preview()
+estado = ai.autonomy_planner.status()
+```
+
+O ciclo é explícito e síncrono. A ação interna permitida apenas muda a etapa de
+`pending` para `in_progress`, com auditoria SQLite. Não marca tarefas como
+concluídas, não inventa objetivos, não executa shell/rede, não treina modelos e
+não inicia worker em segundo plano. Execução real, observação e verificação de
+resultados continuam sendo etapas futuras.
+
 ## Arquitetura atual
 
 - **Semantic Encoder:** embeddings treináveis de palavras, bigramas e subwords de caracteres (n-gramas 3–5), inicialização determinística e aprendizado contrastivo. A sobreposição de subwords permite generalização para flexões e tokens OOV sem expandir o vocabulário durante a inferência; a expansão é limitada a 128 tokens e 32 caracteres por token.

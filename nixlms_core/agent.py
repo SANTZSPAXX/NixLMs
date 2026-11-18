@@ -17,6 +17,7 @@ from .mental_map import MentalMap
 from .world_model import WorldModel
 from .planning import GoalManager
 from .autonomy import AutonomyEngine
+from .autonomy_planner import AutonomyPlanner
 from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
@@ -108,6 +109,7 @@ class NixLMsNeuralCore:
         self.goals = GoalManager(self.data_dir / "goals.json")
         self.scheduler = TaskScheduler(self.data_dir / "scheduler.sqlite3")
         self.autonomy = AutonomyEngine(self.data_dir / "autonomy.sqlite3")
+        self.autonomy_planner = AutonomyPlanner(self.goals, self.autonomy)
         self.scheduler.register_handler("memory_housekeeping", self._scheduled_memory_housekeeping)
         self.scheduler.register_handler("dataset_audit", self._scheduled_dataset_audit)
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
@@ -672,6 +674,10 @@ class NixLMsNeuralCore:
             )
         return answer
 
+    def run_autonomy_cycle(self, limit=None):
+        """Seleciona e inicia etapas prontas de objetivos; não conclui tarefas."""
+        return self.autonomy_planner.run_cycle(limit=limit)
+
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,
               remember=True, reinforce=True):
         question, answer = str(question).strip(), str(answer).strip()
@@ -713,6 +719,11 @@ class NixLMsNeuralCore:
             **self.memory.stats(), **self.episodic.stats(), **self.mental_map.stats(), **self.learner.stats(),
             "world_model": self.world_model.stats(),
             "planning": self.goals.stats(),
+            "autonomy": {
+                "registered_actions": self.autonomy.registered_actions(),
+                "pending_approval": len(self.autonomy.list_requests(status="pending_approval")),
+                "planner": self.autonomy_planner.status(),
+            },
             "scheduler": self.scheduler.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",

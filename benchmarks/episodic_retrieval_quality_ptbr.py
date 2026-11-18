@@ -30,7 +30,7 @@ VALID_CATEGORIES = {
     "parafrase",
     "coloquial",
     "variacao_ortografica",
-    "contextual",
+    "consulta_curta",
     "sem_resposta",
 }
 VALID_SPLITS = {"validation", "test"}
@@ -332,7 +332,9 @@ def evaluate_dataset(data_dir=DEFAULT_DATA_DIR, *, encoder=None, encoder_info=No
         },
         "queries": query_results,
         "limitations": [
-            "Corpus piloto sintético; não representa todos os domínios do português brasileiro.",
+            "Corpus sintético v2 criado com exemplos genéricos de software, computação e ciências; não representa todos os domínios do português brasileiro.",
+            "Consultas curtas são autossuficientes; este benchmark não avalia resolução de referências conversacionais.",
+            "Os dados foram substituídos por exemplos genéricos independentes de conversas de operadores.",
             "Qrels são uma curadoria editorial inicial, sem anotação independente.",
             "Resultados não são diretamente comparáveis aos leaderboards MTEB-BR ou BEIR.",
         ],

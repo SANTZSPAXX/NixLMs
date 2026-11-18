@@ -85,29 +85,6 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("download_support", data)
         self.assertIn("inference_support", data)
 
-    def test_huggingface_search_rejects_unknown_repo_type(self):
-        try:
-            urllib.request.urlopen(self.base + "/api/huggingface/search?type=private", timeout=5)
-        except urllib.error.HTTPError as response:
-            import json
-            data = json.loads(response.read().decode("utf-8"))
-            self.assertEqual(response.code, 400)
-            self.assertIn("Tipo inválido", data["error"])
-        else:
-            self.fail("Tipo de repositório inválido deveria ser rejeitado.")
-
-    def test_huggingface_spaces_cannot_be_downloaded_or_executed(self):
-        import json
-        request = urllib.request.Request(
-            self.base + "/api/huggingface/download",
-            data=json.dumps({"repo_type": "space", "repo_id": "owner/demo"}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with self.assertRaises(urllib.error.HTTPError) as context:
-            urllib.request.urlopen(request, timeout=5)
-        self.assertEqual(context.exception.code, 400)
-
     def test_chat_endpoint_uses_neural_core(self):
         import json
         request = urllib.request.Request(

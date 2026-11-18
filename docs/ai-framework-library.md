@@ -7,7 +7,8 @@ embeddings, recuperação e inferência. Esta biblioteca de software é independ
 da biblioteca privada de documentos, da biblioteca de modelos e dos datasets.
 
 O núcleo da NixLMs continua funcionando com a biblioteca padrão do Python.
-Nenhum framework opcional é importado ou instalado automaticamente no startup.
+Nenhum framework opcional é importado ou instalado automaticamente no startup,
+agendador, ciclo ocioso ou execução de tarefas.
 
 ## Quatro acervos separados
 
@@ -16,93 +17,120 @@ Nenhum framework opcional é importado ou instalado automaticamente no startup.
 3. **Model Library** — checkpoints, tokenizadores e pesos disponibilizados localmente.
 4. **Training Dataset Library** — dados de treino, validação, teste e benchmarks.
 
-## Catálogo
+A presença de um pacote na Framework Library não significa que um modelo esteja
+baixado, carregado, treinado ou integrado à NixLMs.
+
+## Catálogo atual
 
 | Grupo | Componentes | Uso |
 |---|---|---|
 | CPU recomendado | PyTorch, NumPy, SciPy, scikit-learn | Redes neurais, matemática e ML clássico |
 | Linguagem e embeddings | Transformers, Sentence Transformers, Tokenizers | Modelos de linguagem e embeddings |
 | Recuperação | FAISS CPU | Busca vetorial local |
-| Inferência | ONNX Runtime CPU | Execução de modelos ONNX |
-| Armazenamento | Safetensors | Pesos de tensores |
+| Inferência | ONNX Runtime CPU | Inferência de modelos ONNX em CPU |
+| Armazenamento | Safetensors | Serialização de tensores |
 | Alternativo | TensorFlow CPU | Framework alternativo, opcional |
 | GGUF | llama-cpp-python | Inferência local, instalação/compilação opcional |
 
 TensorFlow e llama-cpp-python ficam fora do conjunto recomendado padrão para
 evitar duplicação de runtimes, toolchains e pressão sobre o computador modesto.
+A matriz detalhada de licenças, versões, wheels por arquitetura e footprint
+instalado ainda precisa ser catalogada; o inventário atual não estima RAM/CPU.
 
-## Inventário sem dependências
+## Inventário sem dependências pesadas
 
-O inventário usa apenas a biblioteca padrão e não importa frameworks pesados:
+O inventário usa a biblioteca padrão e não importa frameworks, inicializa modelos
+ou consulta a rede:
 
-```powershell
-python -m nixlms_core.framework_registry
-python -m nixlms_core.framework_registry --all
-python -m nixlms_core.framework_registry --json
-```
+- \`python -m nixlms_core.framework_registry\`
+- \`python -m nixlms_core.framework_registry --all\`
+- \`python -m nixlms_core.framework_registry --json\`
 
-A detecção consulta metadados e disponibilidade dos módulos. Não prova que um
-modelo específico pode ser carregado nem executa benchmark de desempenho.
+A detecção de pacotes não prova que um modelo específico possa ser carregado.
+O estado do pacote não é evidência de checkpoint instalado, treinamento ou
+integração funcional.
 
-## Instalação opcional no Windows
+## Instalação opcional e explícita
 
-Use ambiente virtual para isolar dependências:
+Use um ambiente virtual dedicado. O modo de planejamento é offline e não altera
+o ambiente:
 
-```powershell
-python -m venv .venv-ml
-.\.venv-ml\Scripts\Activate.ps1
-powershell -ExecutionPolicy Bypass -File scripts/install-ml-cpu.ps1 -InstallTorch
-```
+- \`python -m venv .venv-ml\`
+- Windows: \`.\\.venv-ml\\Scripts\\Activate.ps1\`
+- Linux: \`source .venv-ml/bin/activate\`
+- \`python -m nixlms_core.framework_install --plan\`
 
-O script instala PyTorch a partir do índice oficial CPU e depois os pacotes
-de `requirements-ml-cpu.txt`. Para instalar os demais pacotes sem PyTorch,
-omita `-InstallTorch`. O stack recomenda Python 3.11+; confira a matriz atual
-de compatibilidade dos projetos antes de atualizar ambientes antigos.
+O PyTorch CPU é uma etapa separada para impedir que Sentence Transformers faça
+uma resolução implícita de uma distribuição PyTorch não selecionada:
 
-TensorFlow e llama.cpp são opções independentes e devem ser instalados em
-ambientes separados quando houver necessidade real:
+- \`python -m nixlms_core.framework_install --install-torch-cpu\`
+- Depois, \`python -m nixlms_core.framework_install --install\`
 
-```powershell
-python -m pip install -r requirements-ml-tensorflow.txt
-python -m pip install -r requirements-ml-llama-cpp.txt
-```
+Cada modo de instalação:
+- exige Python 3.11+ e ambiente virtual ativo;
+- limita a instalação automática a Windows/Linux x86-64;
+- resolve dependências com \`pip install --dry-run --report\` e mostra nomes/versões;
+- exige digitação exata de \`INSTALAR\` depois do relatório;
+- instala somente as versões listadas no relatório, usando \`--no-deps --no-upgrade\`;
+- bloqueia quando o resolvedor propõe alterar uma distribuição já instalada;
+- registra a diferença de \`pip freeze\` antes/depois;
+- não atualiza pip, não baixa modelos/datasets e não é chamado pelo runtime.
 
-A compilação de llama-cpp-python pode exigir compilador C/C++ e configuração
-específica. Não é parte do caminho recomendado para o computador-alvo.
+O relatório do pip é uma previsão de resolução, não um lockfile. A instalação
+usa as versões exatas exibidas no relatório. Se a instalação falhar no meio,
+pode haver pacotes parciais; revise o relatório e o ambiente antes de tentar
+novamente.
+
+### Windows PowerShell
+
+- Somente plano: \`scripts/install-ml-cpu.ps1 -Plan\`
+- Instalar stack, com PyTorch já presente: \`scripts/install-ml-cpu.ps1 -Install\`
+- Instalar somente PyTorch CPU: \`scripts/install-ml-cpu.ps1 -InstallTorchCpu\`
+- Compatibilidade legada: \`scripts/install-ml-cpu.ps1 -InstallTorch\` executa
+  as duas etapas, com confirmação independente para cada uma.
+
+O arquivo Batch continua encaminhando os argumentos ao PowerShell.
 
 ### Perfil multimodal — somente instalação manual
 
-O perfil de imagem/vídeo é opcional, requer Python 3.11+ para o perfil PyTorch stable atual e não é preparado no startup. Em ambiente
-virtual, use `python -m nixlms_core.media_install --plan` para visualizar o
-inventário de pacotes ausentes e `python -m nixlms_core.media_install --install`
-para solicitar a instalação com confirmação explícita. O instalador não baixa
-modelos/datasets e não atualiza módulos já presentes. Linux ARM64 exige que o
-operador selecione e instale PyTorch compatível antes de liberar os demais
-pacotes.
+O perfil de imagem/vídeo é opcional e não é preparado no startup. A inicialização
+do servidor, runtime, agendador, ciclo ocioso e notebook Colab não instala,
+atualiza nem compila pacotes. Em ambiente virtual, use:
+
+- \`python -m nixlms_core.media_install --plan\`
+- \`python -m nixlms_core.media_install --install\`
+
+O instalador multimodal também exige confirmação explícita e não baixa
+modelos/datasets.
+
+### ARM64 e outras plataformas
+
+Linux ARM64 e plataformas não verificadas ficam em modo de inventário/planejamento.
+O instalador não escolhe wheels por tentativa nem compila pacotes. O operador
+deve consultar a documentação oficial de cada projeto e selecionar wheels
+compatíveis manualmente. Não declaramos a stack completa validada em ARM64.
 
 ## Regras de operação e segurança
 
-- Não instalar nem atualizar pacotes em tempo de execução.
+- Nunca instalar, atualizar ou compilar pacotes no startup, agendador, ciclo
+  ocioso ou executor de tarefas.
 - Não baixar modelos, datasets ou checkpoints automaticamente.
 - Não executar comandos de instalação por meio do planejador/agendador.
-- Registrar manualmente versões e origem de modelos adicionados ao acervo.
 - Carregar modelos somente de caminhos locais explicitamente configurados.
 - Preferir CPU e lotes pequenos; medir RAM/tempo antes de ativar treinamento.
 - Não tornar TensorFlow, FAISS, PyTorch ou Transformers dependências obrigatórias.
+- Preservar pacotes existentes; a instalação bloqueia quando o resolvedor propõe
+  alterar uma distribuição já presente.
 - O inventário não carrega pesos nem executa código de modelos.
-
-## Compatibilidade e validação
-
-O núcleo permanece compatível com a matriz de Python já coberta pela CI.
-A instalação opcional deve ser validada separadamente por SO, versão Python e
-arquitetura. O stack de ML recomenda Python 3.11+ e não deve ser incluído na
-matriz unitária básica como dependência obrigatória.
 
 ## Referências oficiais
 
-- PyTorch: https://pytorch.org/get-started/locally/
+- PyTorch e seleção de plataforma/CPU: https://pytorch.org/get-started/locally/
+- pip install report e dry-run: https://pip.pypa.io/en/stable/reference/installation-report/
+- pip install options: https://pip.pypa.io/en/stable/cli/pip_install/
+- Python virtual environments: https://docs.python.org/3/library/venv.html
 - Transformers: https://huggingface.co/docs/transformers/installation
 - Sentence Transformers: https://www.sbert.net/docs/installation.html
 - ONNX Runtime: https://onnxruntime.ai/docs/get-started/with-python.html
 - FAISS: https://github.com/facebookresearch/faiss
-- llama.cpp: https://github.com/abetlen/llama-cpp-python
+- llama-cpp-python: https://github.com/abetlen/llama-cpp-python

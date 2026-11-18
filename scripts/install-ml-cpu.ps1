@@ -1,43 +1,43 @@
 [CmdletBinding()]
 param(
+    [switch]$Plan,
+    [switch]$Install,
+    [switch]$InstallTorchCpu,
     [switch]$InstallTorch,
     [switch]$SkipCorePackages
 )
-
 $ErrorActionPreference = "Stop"
 $Python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $Python) {
-    throw "Python não encontrado no PATH. Instale Python 3.11+ e tente novamente."
+if (-not $Python) { throw "Python não encontrado. Ative o ambiente virtual e tente novamente." }
+$InstallModes = @($Install, $InstallTorchCpu, $InstallTorch) | Where-Object { $_ }
+if ($InstallModes.Count -gt 1 -or ($Plan -and $InstallModes.Count -gt 0)) {
+    throw "Escolha somente um modo: -Plan, -Install, -InstallTorchCpu ou -InstallTorch."
 }
-
-$Version = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-$Parts = $Version.Split('.')
-if ([int]$Parts[0] -lt 3 -or ([int]$Parts[0] -eq 3 -and [int]$Parts[1] -lt 11)) {
-    throw "O stack opcional atual recomenda Python 3.11+. Python detectado: $Version"
+if ($SkipCorePackages -and -not $InstallTorch) {
+    throw "-SkipCorePackages só pode ser usado com -InstallTorch."
 }
-
-Write-Host "NixLMs — instalação opcional de frameworks CPU"
-Write-Host "Ambiente atual: $(& python -c 'import sys; print(sys.executable)')"
-Write-Warning "Use um ambiente virtual. PyTorch e modelos podem ocupar bastante disco/RAM."
-Write-Host "Este script instala pacotes, mas NÃO baixa modelos nem datasets."
-
-& python -m pip install --upgrade pip
-if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip." }
-
+function Invoke-NixFrameworkInstaller {
+    param([string[]]$Arguments)
+    & python -m nixlms_core.framework_install @Arguments
+    return $LASTEXITCODE
+}
 if ($InstallTorch) {
-    Write-Host "Instalando PyTorch CPU pelo índice oficial..."
-    & python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-    if ($LASTEXITCODE -ne 0) { throw "Falha na instalação de PyTorch CPU." }
-} else {
-    Write-Host "PyTorch não será instalado. Use -InstallTorch para autorizar essa etapa."
+    # Compatibilidade legada: duas etapas e duas confirmações independentes.
+    $Code = Invoke-NixFrameworkInstaller @("--install-torch-cpu")
+    if ($Code -ne 0) { exit $Code }
+    if (-not $SkipCorePackages) {
+        $Code = Invoke-NixFrameworkInstaller @("--install")
+        if ($Code -ne 0) { exit $Code }
+    }
+    exit 0
 }
-
-if (-not $SkipCorePackages) {
-    & python -m pip install -r (Join-Path $PSScriptRoot "..\requirements-ml-cpu.txt")
-    if ($LASTEXITCODE -ne 0) { throw "Falha na instalação dos pacotes opcionais CPU." }
+if ($InstallTorchCpu) {
+    $Code = Invoke-NixFrameworkInstaller @("--install-torch-cpu")
+    exit $Code
 }
-
-Write-Host "Verificando inventário..."
-& python -m nixlms_core.framework_registry --all
-if ($LASTEXITCODE -ne 0) { throw "Falha ao executar inventário." }
-Write-Host "Concluído. Nenhum modelo foi baixado."
+if ($Install) {
+    $Code = Invoke-NixFrameworkInstaller @("--install")
+    exit $Code
+}
+$Code = Invoke-NixFrameworkInstaller @("--plan")
+exit $Code

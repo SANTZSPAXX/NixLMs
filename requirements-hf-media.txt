@@ -1,5 +1,5 @@
 # Dependências opcionais para geração local de imagem e vídeo.
-# O bootstrap instala apenas o que estiver ausente; não atualiza pacotes existentes.
+# Instalação somente por comando explícito em ambiente virtual; o runtime nunca instala.
 -r requirements-hf-image.txt
 imageio>=2.34
 imageio-ffmpeg>=0.5

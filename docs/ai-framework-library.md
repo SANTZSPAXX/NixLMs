@@ -70,6 +70,16 @@ python -m pip install -r requirements-ml-llama-cpp.txt
 A compilação de llama-cpp-python pode exigir compilador C/C++ e configuração
 específica. Não é parte do caminho recomendado para o computador-alvo.
 
+### Perfil multimodal — somente instalação manual
+
+O perfil de imagem/vídeo é opcional, requer Python 3.11+ para o perfil PyTorch stable atual e não é preparado no startup. Em ambiente
+virtual, use `python -m nixlms_core.media_install --plan` para visualizar o
+inventário de pacotes ausentes e `python -m nixlms_core.media_install --install`
+para solicitar a instalação com confirmação explícita. O instalador não baixa
+modelos/datasets e não atualiza módulos já presentes. Linux ARM64 exige que o
+operador selecione e instale PyTorch compatível antes de liberar os demais
+pacotes.
+
 ## Regras de operação e segurança
 
 - Não instalar nem atualizar pacotes em tempo de execução.

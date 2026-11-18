@@ -1,8 +1,8 @@
 """Geração multimodal local opcional para a NixLMs.
 
-Modelos são baixados somente por ação explícita. Dependências podem ser
-preparadas em segundo plano na inicialização do servidor, sem atualizar
-pacotes existentes. Toda inferência é local e usa arquivos já baixados.
+Modelos são baixados somente por ação explícita. Dependências também exigem
+comando explícito do operador em ambiente virtual; o runtime nunca instala.
+Toda inferência é local e usa arquivos já baixados.
 """
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
-import sys
 import tempfile
 import threading
 from datetime import datetime, timezone
@@ -112,83 +110,17 @@ class MediaGenerationManager:
             "packages": packages,
             "models": registry,
             "nsfw_enabled": self.settings()["nsfw_enabled"],
-            "auto_install": os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0",
+            "auto_install": False,
             "model_downloads_require_confirmation": True,
             "inference": "local-only",
-            "bootstrap": self._read_json(self.bootstrap_path, {"status": "not_started"}),
+            "bootstrap": {"status": "manual_install_required"},
         }
 
     def bootstrap_async(self, enabled=True):
-        """Instala apenas dependências ausentes em background; não atualiza as existentes."""
+        """Compatibilidade legada: nunca instala dependências em background."""
         if not enabled:
             return {"started": False, "reason": "disabled"}
-        if self._bootstrap_thread_alive():
-            return {"started": False, "reason": "already_running"}
-        state = self._read_json(self.bootstrap_path, {})
-        last = state.get("attempted_at")
-        if last:
-            try:
-                from datetime import timedelta
-                attempted = datetime.fromisoformat(last)
-                if (datetime.now(timezone.utc) - attempted).total_seconds() < 86400:
-                    return {"started": False, "reason": "attempted_within_24h", "state": state}
-            except (TypeError, ValueError):
-                pass
-        self._bootstrap_thread = threading.Thread(
-            target=self._bootstrap_worker, name="nixlms-media-bootstrap", daemon=True
-        )
-        self._bootstrap_thread.start()
-        return {"started": True}
-
-    def _bootstrap_thread_alive(self):
-        thread = getattr(self, "_bootstrap_thread", None)
-        return bool(thread and thread.is_alive())
-
-    def _bootstrap_worker(self):
-        state = {
-            "attempted_at": datetime.now(timezone.utc).isoformat(),
-            "status": "installing",
-        }
-        self._write_json(self.bootstrap_path, state)
-        try:
-            def missing(module):
-                try:
-                    return importlib.util.find_spec(module) is None
-                except (ImportError, ValueError, ModuleNotFoundError):
-                    return True
-
-            # Preserve an existing CUDA/CPU Torch installation. If absent, install
-            # the official CPU wheel instead of guessing a CUDA runtime.
-            if missing("torch"):
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-                     "torch", "--index-url", "https://download.pytorch.org/whl/cpu"],
-                    check=True, timeout=1800, capture_output=True, text=True,
-                )
-            packages = [
-                ("diffusers", "diffusers>=0.30,<1"),
-                ("transformers", "transformers>=4.45,<6"),
-                ("accelerate", "accelerate>=1,<2"),
-                ("safetensors", "safetensors>=0.4"),
-                ("PIL", "Pillow>=10"),
-                ("imageio", "imageio>=2.34"),
-                ("imageio_ffmpeg", "imageio-ffmpeg>=0.5"),
-                ("huggingface_hub", "huggingface-hub>=0.25"),
-            ]
-            missing_specs = [spec for module, spec in packages if missing(module)]
-            if missing_specs:
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", *missing_specs],
-                    check=True, timeout=1800, capture_output=True, text=True,
-                )
-            state.update({"status": "ready", "completed_at": datetime.now(timezone.utc).isoformat()})
-        except Exception as exc:
-            state.update({
-                "status": "failed",
-                "error": type(exc).__name__ + ": " + str(exc)[:500],
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            })
-        self._write_json(self.bootstrap_path, state)
+        return {"started": False, "reason": "manual_install_required"}
 
     def download_model(self, repo_id, mode, confirm=False):
         if confirm is not True:

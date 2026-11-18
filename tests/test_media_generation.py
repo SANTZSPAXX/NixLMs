@@ -1,3 +1,4 @@
+import ast
 import json
 import tempfile
 import unittest
@@ -20,9 +21,18 @@ class MediaGenerationTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_web_server_module_has_valid_python_syntax(self):
+    def test_web_server_module_has_valid_python_syntax_and_no_auto_installer(self):
         server_path = Path(__file__).resolve().parents[1] / "nixlms_web" / "server.py"
-        compile(server_path.read_text(encoding="utf-8"), str(server_path), "exec")
+        source = server_path.read_text(encoding="utf-8")
+        compile(source, str(server_path), "exec")
+        tree = ast.parse(source)
+        calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "bootstrap_async"
+        ]
+        self.assertEqual(calls, [])
 
     def test_nsfw_is_disabled_by_default(self):
         self.assertFalse(self.manager.settings()["nsfw_enabled"])
@@ -77,9 +87,31 @@ class MediaGenerationTests(unittest.TestCase):
         image.write_bytes(b"x")
         self.assertEqual(self.manager._safe_input("source.png"), image.resolve())
 
-    def test_bootstrap_can_be_disabled(self):
-        self.assertEqual(self.manager.bootstrap_async(enabled=False),
-                         {"started": False, "reason": "disabled"})
+    def test_bootstrap_never_installs_automatically(self):
+        self.assertEqual(
+            self.manager.bootstrap_async(enabled=False),
+            {"started": False, "reason": "disabled"},
+        )
+        self.assertEqual(
+            self.manager.bootstrap_async(enabled=True),
+            {"started": False, "reason": "manual_install_required"},
+        )
+        status = self.manager.status()
+        self.assertFalse(status["auto_install"])
+        self.assertEqual(status["bootstrap"]["status"], "manual_install_required")
+
+    def test_colab_notebook_only_reports_manual_install_command(self):
+        notebook_path = Path(__file__).resolve().parents[1] / "NixLMs_Colab.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        sources = [
+            "".join(cell.get("source", []))
+            for cell in notebook.get("cells", [])
+            if cell.get("cell_type") == "code"
+        ]
+        media_cells = [source for source in sources if "MediaGenerationManager" in source]
+        self.assertEqual(len(media_cells), 1)
+        self.assertNotIn("bootstrap_async", media_cells[0])
+        self.assertIn("media_install --plan", media_cells[0])
 
     def test_registry_and_settings_are_local_json(self):
         self.manager.set_nsfw(True)

@@ -36,7 +36,7 @@ class MediaInstallTests(unittest.TestCase):
         self.assertTrue(plan["torch"]["installed"])
         self.assertEqual(
             plan["missing_requirements"],
-            ["diffusers>=0.30,<1", "safetensors>=0.4", "imageio>=2.34"],
+            ["safetensors>=0.4", "diffusers>=0.30,<1", "imageio>=2.34"],
         )
 
     def test_linux_arm64_without_torch_is_blocked_for_manual_selection(self):

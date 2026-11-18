@@ -36,7 +36,10 @@ class ColabRuntimeWiringTests(unittest.TestCase):
         notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
         media_cell = next("".join(cell["source"]) for cell in notebook["cells"]
                           if "MediaGenerationManager" in "".join(cell.get("source", [])))
-        self.assertIn("media.bootstrap_async(enabled=True)", media_cell)
+        self.assertNotIn("media.bootstrap_async(enabled=True)", media_cell)
+        self.assertIn("MEDIA_STATUS = media.status()", media_cell)
+        self.assertIn("media_install --plan", media_cell)
+        self.assertIn("Nenhuma dependência será instalada automaticamente", media_cell)
         self.assertIn("confirm=True", media_cell)
         self.assertIn("nix_media_generate", media_cell)
         compile(media_cell, "<colab-media-setup>", "exec")

@@ -7,7 +7,7 @@ Auditoria do repositório canônico em 18/11/2026, com foco em runtime, aprendiz
 - Repositório: https://github.com/SANTZSPAXX/NixLMs
 - `main` observado: `6b9417f63834d47cb86221827857b99548673119`.
 - PR #48 está merged; a biblioteca de frameworks foi adicionada como inventário/catálogo e requisitos opcionais, não como instalação automática.
-- Nenhum teste local foi executado neste ambiente: a tentativa anterior de checkout falhou por resolução DNS de `github.com`.
+- Nenhum teste local foi executado nesta sessão; a integração disponível permitiu inspeção e alterações remotas, mas não forneceu um checkout local executável.
 - Nenhum pacote ML foi instalado, nenhum modelo/dataset foi baixado e nenhum serviço Ollama, Render ou Supabase foi iniciado.
 - Nenhuma credencial, segredo, permissão ou configuração externa foi alterada.
 
@@ -46,7 +46,7 @@ Isso criava cópias temporárias desnecessárias, podia duplicar grandes pesos e
 
 A branch usa uma allowlist de estado necessário:
 
-- snapshot de `dataset.json`;
+- snapshot de `dataset.json` contendo somente `train` e `validation` (o split `test` fica fora do sandbox);
 - estado do encoder, rede LIF, decoder, conhecimento e mapa mental;
 - calibrações LIF/decoder, quando presentes.
 

@@ -15,7 +15,7 @@ $version = [version]$versionText
 if ($version -lt [version]"3.10") { throw "NixLMs requer Python 3.10+. Encontrado: $version" }
 $action = New-ScheduledTaskAction -Execute $Python -Argument "-m nixlms_web.server" -WorkingDirectory $RepoRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Inicia a interface local e o runtime autônomo governado da NixLMs no login do usuário." -Force | Out-Null
 Write-Host "Inicialização configurada para este usuário."

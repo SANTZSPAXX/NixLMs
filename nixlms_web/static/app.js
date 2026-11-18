@@ -82,3 +82,151 @@ $("#hf-deactivate").onclick=async()=>{try{await api("/api/huggingface/deactivate
 $("#hf-deactivate-embedding").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"embeddings"})});toast("Encoder nativo restaurado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
 $("#hf-deactivate-vision").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"vision"})});toast("Visão local desativada.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
 $("#hf-deactivate-audio").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"speech"})});toast("Áudio local desativado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
+
+
+// Hands-free voice interface: browser STT/TTS, wake phrase and allowlisted UI actions.
+(()=>{
+ const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+ const toggle=$("#voice-toggle"), state=$("#voice-state"), help=$("#voice-help");
+ const orb=$("#voice-orb"), repeat=$("#voice-repeat"), mute=$("#voice-mute");
+ if(!toggle||!state)return;
+ let recognition=null, listening=false, muted=false, speaking=false, lastSpoken="";
+ let pendingVoiceAction=null, restartTimer=null;
+ const say=(message)=>{
+  lastSpoken=String(message||"").trim();
+  if(!lastSpoken||muted||!("speechSynthesis" in window))return;
+  window.speechSynthesis.cancel();
+  if(recognition&&listening){try{recognition.stop()}catch(e){}}
+  const utterance=new SpeechSynthesisUtterance(lastSpoken);
+  utterance.lang="pt-BR"; utterance.rate=1.02; utterance.pitch=1;
+  const voices=window.speechSynthesis.getVoices();
+  utterance.voice=voices.find(v=>/^pt-BR$/i.test(v.lang))||voices.find(v=>/^pt/i.test(v.lang))||null;
+  utterance.onstart=()=>{speaking=true;orb.classList.add("speaking")};
+  const resumeAfterSpeech=()=>{speaking=false;orb.classList.remove("speaking");if(listening&&recognition){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},350)}};
+  utterance.onend=resumeAfterSpeech;
+  utterance.onerror=resumeAfterSpeech;
+  speaking=true;
+  window.speechSynthesis.speak(utterance);
+ };
+ const setState=(label,detail)=>{
+  state.textContent=label;help.textContent=detail;
+  orb.classList.toggle("listening",listening);
+  toggle.textContent=listening?"Desativar microfone":"Ativar microfone";
+  toggle.classList.toggle("danger",listening);
+ };
+ const normalizeVoice=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu," ").replace(/\s+/g," ").trim();
+ const speakAndShow=(message)=>{addBubble("nix",message);say(message)};
+ const postChat=async(message)=>{
+  addBubble("user","🎙️ "+message);
+  try{
+   const d=await api("/api/chat",{method:"POST",body:JSON.stringify({message})});
+   addBubble("nix",d.reply);loadStatus();say(d.reply);
+  }catch(e){speakAndShow("Não consegui processar a solicitação: "+e.message)}
+ };
+ const stopListening=()=>{
+  listening=false;
+  if(restartTimer)clearTimeout(restartTimer);
+  if(recognition){try{recognition.onend=null;recognition.stop()}catch(e){}}
+  setState("Microfone desativado","Diga “Ativar microfone” na interface para iniciar novamente.");
+ };
+ const startListening=()=>{
+  if(!SpeechRecognition){setState("Navegador sem suporte","Use Chrome ou Edge atualizado para reconhecimento de fala.");toast("Reconhecimento de voz não suportado neste navegador.");return}
+  if(listening)return;
+  recognition=new SpeechRecognition();
+  recognition.lang="pt-BR";recognition.continuous=true;recognition.interimResults=false;recognition.maxAlternatives=1;
+  recognition.onstart=()=>setState("Ouvindo a palavra “Nix”","Fale “Nix” e depois sua pergunta ou comando.");
+  recognition.onresult=(event)=>{
+   for(let i=event.resultIndex;i<event.results.length;i++){
+    if(!event.results[i].isFinal)continue;
+    const heard=event.results[i][0]?.transcript||"";
+    const normalized=normalizeVoice(heard);
+    const match=normalized.match(/^(?:oi |ola )?nix(?: lms)?(?:\s+(.*))?$/);
+    if(!match)continue;
+    const command=(match[1]||"").trim();
+    if(!command){say("Estou ouvindo. Pode falar.");continue}
+    handleVoiceCommand(command);
+   }
+  };
+  recognition.onerror=(event)=>{
+   if(event.error==="not-allowed"||event.error==="service-not-allowed"){stopListening();setState("Permissão de microfone negada","Autorize o microfone nas permissões do navegador.");}
+   else if(event.error!=="no-speech"&&event.error!=="aborted")setState("Falha no reconhecimento","Verifique o microfone e a conexão do navegador.");
+  };
+  recognition.onend=()=>{
+   if(listening&&!speaking){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},500)}
+  };
+  listening=true;
+  try{recognition.start()}catch(e){listening=false;setState("Não foi possível iniciar","Verifique as permissões do microfone.");}
+ };
+ const navigateByVoice=(target,label)=>{
+  show(target);speakAndShow("Abrindo "+label+".");
+ };
+ const confirmAction=async()=>{
+  if(!pendingVoiceAction)return false;
+  const role=pendingVoiceAction;pendingVoiceAction=null;
+  try{
+   await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role})});
+   await loadHuggingFaceStatus();
+   speakAndShow("Componente local desativado com sucesso.");
+  }catch(e){speakAndShow("Não consegui desativar o componente: "+e.message)}
+  return true;
+ };
+ async function handleVoiceCommand(raw){
+  const cmd=normalizeVoice(raw);
+  if(pendingVoiceAction){
+   if(/^(confirmar|confirmo|sim|pode confirmar)$/.test(cmd)){await confirmAction();return}
+   if(/^(cancelar|cancela|nao|não)$/.test(cmd)){pendingVoiceAction=null;speakAndShow("Ação cancelada.");return}
+   pendingVoiceAction=null;
+  }
+  if(/^(pare de ouvir|parar de ouvir|desligar microfone|desative o microfone|desativar microfone|encerrar escuta)$/.test(cmd)){
+   say("Vou desligar o microfone.");stopListening();return;
+  }
+  if(/^(pare de falar|parar de falar|silenciar|mudo)$/.test(cmd)){muted=true;window.speechSynthesis?.cancel();speakAndShow("Fala silenciada. Continuo ouvindo.");return}
+  if(/^(voltar a falar|ativar fala|dessilenciar|falar novamente)$/.test(cmd)){muted=false;speakAndShow("Voz de resposta ativada.");return}
+  if(/^(repetir|repita|repetir resposta)$/.test(cmd)){say(lastSpoken||"Ainda não tenho uma resposta para repetir.");return}
+  if(/^(confirmar|confirmo)$/.test(cmd)){speakAndShow("Não há nenhuma ação aguardando confirmação.");return}
+  if(/^(cancelar|cancela)$/.test(cmd)){speakAndShow("Não há nenhuma ação pendente.");return}
+  const pages=[
+   [/\b(visao geral|inicio|painel principal)\b/,"overview","a visão geral"],
+   [/\b(conversa|conversar|chat)\b/,"chat","a conversa"],
+   [/\b(aprendizagem|aprendizado)\b/,"learning","a aprendizagem"],
+   [/\b(biblioteca|biblioteca privada)\b/,"library","a biblioteca privada"],
+   [/\b(frameworks|estruturas de ia)\b/,"frameworks","os frameworks"],
+   [/\b(hugging face|modelos publicos)\b/,"huggingface","o Hugging Face"],
+   [/\b(diagnostico|diagnosticos)\b/,"diagnostics","o diagnóstico"],
+   [/\b(laboratorio de midia|midia|geracao de imagem)\b/,"media","o laboratório de mídia"]
+  ];
+  for(const [pattern,target,label] of pages){if(pattern.test(cmd)){if(target==="media"){window.location.href="/media";return}navigateByVoice(target,label);return}}
+  if(/^(atualizar|atualize|recarregar|recarregue) (painel|status|sistema|visao geral)$/.test(cmd)){
+   await loadStatus();speakAndShow("Painel atualizado. Sistema em execução.");return;
+  }
+  if(/^(executar|rodar|fazer) diagnostico$/.test(cmd)){
+   show("diagnostics");await loadDiagnostics();speakAndShow("Diagnóstico atualizado. Consulte os resultados na tela.");return;
+  }
+  const search=cmd.match(/^(?:pesquisar|buscar|procure) na biblioteca (?:por )?(.+)$/);
+  if(search){
+   try{
+    const d=await api("/api/library/search",{method:"POST",body:JSON.stringify({query:search[1]})});
+    const results=d.results||[];
+    speakAndShow(results.length?("Encontrei "+results.length+" resultados. "+results.slice(0,3).map(x=>(x.title||"Documento")+": "+(x.content||"").slice(0,180)).join(". ")):"Não encontrei resultados na biblioteca.");
+   }catch(e){speakAndShow("A pesquisa falhou: "+e.message)}
+   return;
+  }
+  const deactivate=cmd.match(/^desativar (modelo de linguagem|geracao local|embeddings|visao|audio|modelo de fala)$/);
+  if(deactivate){
+   const role=/embeddings/.test(cmd)?"embeddings":/visao/.test(cmd)?"vision":/(audio|fala)/.test(cmd)?"speech":"generator";
+   pendingVoiceAction=role;speakAndShow("Confirme: deseja desativar "+deactivate[1]+"? Diga “Nix, confirmar” ou “Nix, cancelar”.");return;
+  }
+  if(/^(ajuda|quais comandos|o que posso fazer)$/.test(cmd)){
+   speakAndShow("Você pode pedir para abrir conversa, biblioteca, aprendizagem, frameworks, Hugging Face, diagnóstico e laboratório de mídia; atualizar o painel; pesquisar na biblioteca; ou conversar normalmente. Para chamar, comece com Nix.");return;
+  }
+  await postChat(raw);
+ }
+ toggle.addEventListener("click",()=>listening?stopListening():startListening());
+ repeat.addEventListener("click",()=>say(lastSpoken));
+ mute.addEventListener("click",()=>{
+  muted=!muted;mute.textContent=muted?"Ativar fala":"Silenciar fala";
+  if(muted)window.speechSynthesis?.cancel();else say("Fala ativada.");
+ });
+ repeat.disabled=false;
+ setState("Voz desativada",SpeechRecognition?"Ative o microfone uma vez; depois a palavra-chave “Nix” inicia cada interação.":"Este navegador não oferece reconhecimento de voz compatível.");
+})();

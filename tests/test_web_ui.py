@@ -125,6 +125,19 @@ class WebInterfaceTests(unittest.TestCase):
         css = (base / "style.css").read_text(encoding="utf-8")
         self.assertTrue(css.startswith(":root"))
 
+    def test_voice_console_and_hands_free_controls_are_present(self):
+        base = ROOT / "nixlms_web" / "static"
+        html = (base / "index.html").read_text(encoding="utf-8")
+        js = (base / "app.js").read_text(encoding="utf-8")
+        css = (base / "style.css").read_text(encoding="utf-8")
+        self.assertIn('id="voice-toggle"', html)
+        self.assertIn('id="voice-state"', html)
+        self.assertIn("webkitSpeechRecognition", js)
+        self.assertIn('recognition.lang="pt-BR"', js)
+        self.assertIn("SpeechSynthesisUtterance", js)
+        self.assertIn("pendingVoiceAction", js)
+        self.assertIn("voice-orb.listening", css)
+
     def test_server_is_loopback_only_and_has_no_shell_endpoint(self):
         source = (ROOT / "nixlms_web" / "server.py").read_text(encoding="utf-8")
         self.assertIn('host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))', source)

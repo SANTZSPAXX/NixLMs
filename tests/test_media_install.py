@@ -24,11 +24,14 @@ class MediaInstallTests(unittest.TestCase):
                 encoding="utf-8",
             )
             installed_modules = {"torch", "PIL", "transformers"}
+            installed_distributions = {"torch", "pillow", "transformers"}
             plan = media_install.build_install_plan(
                 root / "requirements-hf-media.txt",
                 root=root,
                 module_probe=lambda module: module in installed_modules,
-                version_probe=lambda distribution: "1.0" if distribution else None,
+                version_probe=lambda distribution: (
+                    "1.0" if distribution in installed_distributions else None
+                ),
                 system_name="Linux",
                 machine="x86_64", python_version=(3, 12),
             )
@@ -101,6 +104,70 @@ class MediaInstallTests(unittest.TestCase):
         self.assertIn("diffusers>=0.30", requirements_call)
         self.assertIn("--no-upgrade", requirements_call)
 
+
+    def test_distribution_metadata_prevents_reinstall_when_module_spec_is_missing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            plan = media_install.build_install_plan(
+                requirements, root=root,
+                module_probe=lambda module: False,
+                version_probe=lambda distribution: "0.30.1" if distribution == "diffusers" else None,
+                system_name="Windows", machine="AMD64", python_version=(3, 12),
+            )
+        self.assertTrue(plan["packages"][0]["installed"])
+        self.assertFalse(plan["packages"][0]["module_available"])
+        self.assertEqual(plan["missing_requirements"], [])
+        self.assertTrue(plan["blocked"])
+        self.assertIn("diffusers", plan["ambiguous_packages"])
+
+    def test_module_without_distribution_metadata_blocks_install(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            plan = media_install.build_install_plan(
+                requirements, root=root,
+                module_probe=lambda module: module == "diffusers",
+                version_probe=lambda distribution: None,
+                system_name="Windows", machine="AMD64", python_version=(3, 12),
+            )
+        self.assertTrue(plan["packages"][0]["installed"])
+        self.assertTrue(plan["packages"][0]["ambiguous_install"])
+        self.assertTrue(plan["blocked"])
+
+    def test_torch_distribution_metadata_without_module_blocks_install(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            plan = media_install.build_install_plan(
+                requirements, root=root,
+                module_probe=lambda module: False,
+                version_probe=lambda distribution: "2.6.0" if distribution == "torch" else None,
+                system_name="Windows", machine="AMD64", python_version=(3, 12),
+            )
+        self.assertTrue(plan["torch"]["installed"])
+        self.assertFalse(plan["torch"]["module_available"])
+        self.assertTrue(plan["torch"]["ambiguous_install"])
+        self.assertTrue(plan["blocked"])
+
+    def test_direct_url_requirement_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text(
+                "diffusers @ https://example.invalid/diffusers.whl\\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                media_install.build_install_plan(
+                    requirements, root=root,
+                    module_probe=lambda module: False,
+                    version_probe=lambda distribution: None,
+                    system_name="Windows", machine="AMD64", python_version=(3, 12),
+                )
 
     def test_python_below_3_11_is_blocked(self):
         with tempfile.TemporaryDirectory() as temp:

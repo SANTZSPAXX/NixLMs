@@ -52,7 +52,7 @@ Commits iniciais da branch:
 - `6452eab64f592a5b1e82b6a07ae0292bc44de664` — guard de caminho.
 - `cd1aad67eb232d8c874c6d9939055e271d576272` — testes de caminho.
 - `3a82b1ac1f35cd2ee1782965f5ff2e99d2efbe96` — CHANGELOG.
-- HEAD final após os ajustes: `f4f625d8ce417893ae02e8dba2a24698a3896a03` (8 commits no total).
+- Commit com a lógica e os testes finais: `b7350afde8830a875dc0911e737ed412b569c929`. Os commits posteriores desta branch são somente documentação.
 
 ## CI da PR #36 — execução anterior à correção
 
@@ -63,7 +63,7 @@ Run [#44153228925](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44153228925
 - Ubuntu/Python 3.12: 176 testes, success.
 - Windows/Python 3.12: 176 testes, success.
 - Job `episodic-benchmark`: success.
-- Job `episodic-quality-benchmark`: success; artefato enviado (ID 14386102603).
+- Job `episodic-quality-benchmark`: success; artefato enviado (ID 14359367899).
 
 Os logs dos seis jobs foram consultados. Avisos não bloqueantes incluem depreciação do runtime Node.js 20 das actions e avisos Node `punycode`/`url.parse`. A CI anterior não valida os commits desta branch de correção.
 
@@ -82,7 +82,7 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 - Ubuntu/Python 3.12: 182 testes, success.
 - Windows/Python 3.12: 182 testes, success.
 - Job `episodic-benchmark`: success; artefato enviado (ID 14385449940).
-- Job `episodic-quality-benchmark`: success; artefato enviado.
+- Job `episodic-quality-benchmark`: success; artefato enviado (ID 14386102603).
 - Os seis logs foram consultados. Cada matriz executou 182 testes e terminou em `OK`; os testes de caminho protegido, destino separado e NaN/±infinito aparecem como `ok` no log Python 3.12.
 - Os dois artefatos do run #44211940434 foram publicados. O JSON de qualidade foi baixado e inspecionado; preservou o hash do dataset e as métricas por split.
 - A aprovação da CI da PR #36 não foi atribuída a esta correção.
@@ -101,12 +101,12 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 
 ## Próximos passos priorizados
 
-1. Aguardar e inspecionar logs completos da CI da correção de caminho.
-2. Confirmar que a saída protegida falha sem alterar memória/dataset e que um destino separado funciona.
-3. Revisar manualmente qrels ambíguos, sobretudo contextual, antes de usar o baseline como gate.
-4. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
-5. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
-6. Preparar runner Linux ARM64 quando houver ambiente real.
+1. Revisar manualmente qrels ambíguos, sobretudo a categoria contextual, antes de usar o baseline como gate.
+2. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
+3. Registrar proveniência/fingerprint do encoder E5 local no relatório para reprodutibilidade.
+4. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
+5. Preparar runner Linux ARM64 quando houver ambiente real.
+6. Revisar consentimento e integridade do instalador Linux do Ollama nas PRs #23/#29.
 7. Manter todas as PRs em draft; sem merge automático.
 
 ## Referências
@@ -133,4 +133,4 @@ A diferença entre validation e test é relevante e reforça que o conjunto aind
 
 A revisão também identificou que `--min-score nan` ou `inf` era aceito: NaN fazia todas as comparações de score falharem e podia gerar JSON com valores não padrão em outras saídas. A branch desta PR agora rejeita limiares não finitos tanto em `evaluate_dataset()` quanto no CLI, com testes de regressão para NaN e ±infinito.
 
-CI da branch de correção permanece pendente até a execução do workflow no HEAD final. Nenhuma aprovação da PR #36 foi atribuída aos commits desta correção.
+CI da correção finalizada: run #44211940434, 6/6 jobs success. O código e os testes foram validados no commit `b7350afde8830a875dc0911e737ed412b569c929`; os commits posteriores alteraram somente esta documentação. Nenhuma aprovação da PR #36 foi atribuída aos commits desta correção.

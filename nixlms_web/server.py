@@ -140,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
             diagnostic = assistant.run_startup_diagnostics()
             checks = {
                 name: {
-                    "ok": item.get("status") != "error",
+                    "ok": item.get("status") == "ok",
                     "status": item.get("status", "unknown"),
                     "detail": item.get("detail", ""),
                 }
@@ -159,14 +159,23 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 "framework_inventory": {
                     "ok": isinstance(inspect_frameworks(), list),
-                    "status": "ok",
-                    "detail": "Inventário sem importações pesadas",
+                    "status": "info",
+                    "detail": "Inventário de dependências opcionais; não indica que todos os frameworks estejam instalados",
+                },
+                "scheduler_running": {
+                    "ok": assistant.scheduler.running,
+                    "status": "ok" if assistant.scheduler.running else "error",
+                    "detail": "Agendador ativo" if assistant.scheduler.running else "Agendador parado",
                 },
             })
+            errors = sum(item["status"] == "error" for item in checks.values())
+            warnings = sum(item["status"] == "warning" for item in checks.values())
+            status = "failed" if errors else ("degraded" if warnings else "ok")
             return self.send_json({
-                "ok": diagnostic.get("status") != "failed"
-                     and all(item["ok"] for item in checks.values()),
-                "status": diagnostic.get("status", "unknown"),
+                "ok": status == "ok" and all(
+                    item["status"] in {"ok", "info"} for item in checks.values()
+                ),
+                "status": status,
                 "checks": checks,
                 "scheduler_running": assistant.scheduler.running,
                 "idle_learning": assistant.idle_learning.status(),
@@ -252,7 +261,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    host, port = "127.0.0.1", 8765
+    host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError as exc:

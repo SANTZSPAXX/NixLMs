@@ -134,6 +134,26 @@ class AutonomyPlannerTests(unittest.TestCase):
             self.goals.add_step(goal["id"], "Grande",
                                 task={"name": "x", "payload": {"data": "x" * 9000}})
 
+
+    def test_non_json_task_result_is_not_marked_completed(self):
+        self.planner.register_task("bad_result", lambda payload: object(),
+                                   lambda result, payload: True)
+        goal = self.goals.create_goal("Resultado inválido")
+        self.goals.add_step(goal["id"], "Executar", task={"name": "bad_result", "payload": {}})
+        result = self.planner.run_cycle()
+        self.assertEqual(result["results"][0]["status"], "failed")
+        self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "failed")
+
+    def test_oversized_task_result_is_not_marked_completed(self):
+        self.engine.policy.max_result_bytes = 256
+        self.planner.register_task("large_result", lambda payload: {"data": "x" * 500},
+                                   lambda result, payload: True)
+        goal = self.goals.create_goal("Resultado grande")
+        self.goals.add_step(goal["id"], "Executar", task={"name": "large_result", "payload": {}})
+        result = self.planner.run_cycle()
+        self.assertEqual(result["results"][0]["status"], "failed")
+        self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "failed")
+
     def test_duplicate_task_registration_is_rejected(self):
         callback = lambda payload: True
         verifier = lambda result, payload: result is True

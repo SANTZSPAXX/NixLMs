@@ -43,6 +43,13 @@ class PerceptionManager:
             return False
 
     @staticmethod
+    def _torch_available():
+        try:
+            return importlib.util.find_spec("torch") is not None
+        except (ImportError, ValueError, ModuleNotFoundError):
+            return False
+
+    @staticmethod
     def _validate_file(path, extensions, max_bytes, label):
         target = Path(path).expanduser()
         if not target.is_file():
@@ -55,13 +62,17 @@ class PerceptionManager:
         return target.resolve()
 
     def _get_pipeline(self, task, model_path):
+        if model_path is None or not model_path.is_dir():
+            raise RuntimeError(
+                "Configure um diretório de modelo local; downloads automáticos estão desativados."
+            )
         if not self._transformers_available():
             raise RuntimeError(
                 "Transformers não está instalado. A percepção é opcional."
             )
-        if model_path is None or not model_path.is_dir():
+        if not self._torch_available():
             raise RuntimeError(
-                "Configure um diretório de modelo local; downloads automáticos estão desativados."
+                "PyTorch não está instalado. Instale a dependência opcional compatível com CPU."
             )
         key = (task, str(model_path.resolve()))
         with self._lock:
@@ -119,6 +130,7 @@ class PerceptionManager:
         return {
             "enabled": True,
             "transformers_installed": self._transformers_available(),
+            "pytorch_installed": self._torch_available(),
             "vision": {
                 "configured": self.vision_model_path is not None,
                 "model_path_exists": bool(

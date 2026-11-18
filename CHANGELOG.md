@@ -1,5 +1,11 @@
 # Changelog
 
+## Segurança do destino de saída do benchmark PT-BR
+
+- Rejeita caminhos de saída que coincidam com a memória episódica de produção ou com os arquivos de entrada do benchmark (conjunto padrão e diretório selecionado).
+- Resolve caminhos antes da comparação para também bloquear aliases com segmentos relativos e symlinks já existentes.
+- Adiciona testes para memória de produção, entradas padrão/customizadas e caminho separado permitido.
+
 ## Benchmark piloto de qualidade da recuperação episódica em PT-BR
 
 - Adiciona corpus sintético offline com 50 episódios, 30 consultas e qrels graduados, incluindo paráfrases, coloquialismos, variações ortográficas, referências contextuais e consultas sem resposta.

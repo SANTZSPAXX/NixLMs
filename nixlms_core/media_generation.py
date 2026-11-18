@@ -31,7 +31,10 @@ class MediaGenerationManager:
     }
     BLOCKED_PROMPT = re.compile(
         r"\b(child|children|minor|underage|under-age|preteen|pre-teen|"
-        r"schoolgirl|schoolboy|loli|shota|infant|toddler)\b",
+        r"schoolgirl|schoolboy|loli|shota|infant|toddler|"
+        r"criança|crianças|menor|menores|adolescente|adolescentes|"
+        r"bebê|bebe|infantil|menina|menino|garotinha|garotinho|"
+        r"pré-adolescente|pre-adolescente)\b",
         re.IGNORECASE,
     )
 
@@ -88,7 +91,7 @@ class MediaGenerationManager:
             raise MediaGenerationError("Prompt bloqueado: conteúdo sexual ou sugestivo envolvendo menores não é permitido.")
         if nsfw and not self.settings()["nsfw_enabled"]:
             raise MediaGenerationError("Modo NSFW desativado. Ative-o explicitamente nas configurações locais.")
-        if nsfw and re.search(r"\b(real person|real people|celebrity|public figure|deepfake)\b", prompt, re.I):
+        if nsfw and re.search(r"\b(real person|real people|celebrity|public figure|deepfake|pessoa real|pessoas reais|celebridade|famoso|famosa|figura pública|figura publica|deepfake)\b", prompt, re.I):
             raise MediaGenerationError("O modo adulto aceita somente personagens fictícios; pessoas reais não são permitidas.")
         return prompt
 

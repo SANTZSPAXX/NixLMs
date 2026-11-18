@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -50,6 +51,7 @@ class HuggingFaceHub:
         self.timeout = max(1, min(30, int(timeout)))
         self.opener = opener or urlopen
         self.downloader = downloader
+        self._registry_lock = threading.RLock()
         # Even if the environment contains a cached login, never attach it
         # implicitly to public Hub requests.
         os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
@@ -326,13 +328,14 @@ class HuggingFaceHub:
             "estimated_bytes": estimated_bytes, "downloaded_bytes": actual_bytes,
             "files": files, "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }
-        registry = self._load_registry()
-        registry = [
-            item for item in registry
-            if not (item.get("repo_type") == repo_type and item.get("repo_id") == repo_id)
-        ]
-        registry.append(entry)
-        self._save_registry(registry)
+        with self._registry_lock:
+            registry = self._load_registry()
+            registry = [
+                item for item in registry
+                if not (item.get("repo_type") == repo_type and item.get("repo_id") == repo_id)
+            ]
+            registry.append(entry)
+            self._save_registry(registry)
         return entry
 
     def _load_registry(self):
@@ -573,7 +576,7 @@ class HuggingFaceHub:
 
 
 class HuggingFaceLocalGenerator:
-    """Geração causal opcional: CPU, pesos locais e Safetensors, sem código remoto."""
+    """Geração causal opcional: CPU, Safetensors/GGUF locais, sem código remoto."""
 
     def __init__(self, model_path, repo_id="", max_input_tokens=1024,
                  max_new_tokens=160, threads=2, model_loader=None):

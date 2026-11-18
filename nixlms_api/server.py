@@ -69,7 +69,7 @@ def create_server(host=None, port=None, assistant=None, key_store=None):
                 else:
                     messages = data.get("messages")
                     if not isinstance(messages,list): raise ValueError("messages deve ser uma lista.")
-                    prompt = "\\n".join(str(item.get("content","")) for item in messages
+                    prompt = "\n".join(str(item.get("content","")) for item in messages
                         if isinstance(item,dict) and item.get("role") in {"system","user"})
                 if not prompt or len(prompt)>16000: raise ValueError("Mensagem vazia ou acima de 16000 caracteres.")
                 nonlocal assistant

@@ -341,6 +341,6 @@ O comando adiciona somente objetivos/etapas ausentes por título e preserva o pr
 
 ## Autodiagnóstico e aprendizado em ociosidade
 
-Ao iniciar com `python neural_core.py`, a NixLMs executa verificações locais e inicia o scheduler com um ciclo de aprendizado em ociosidade. Após cinco minutos sem interação, o ciclo audita o dataset e só tenta uma época de treinamento incremental se houver dados íntegros, pelo menos quatro amostras QA de validação e no máximo 500 registros de treino. Há cooldown de 30 minutos entre tentativas; candidatos só são promovidos após validação. Ollama continua opcional.
+Ao iniciar com `python neural_core.py`, a NixLMs executa verificações locais e inicia o scheduler com um ciclo de aprendizado em ociosidade. Após cinco minutos sem interação, o ciclo audita o dataset e só tenta uma época de treinamento incremental se houver dados íntegros, pelo menos quatro amostras QA de validação e no máximo 100 registros de treino. Há cooldown de 30 minutos entre tentativas; candidatos só são promovidos após validação. Ollama continua opcional.
 
 Comandos: `/diagnostico`, `/ocioso status` e `/status`. Consulte [docs/startup-diagnostics-idle-learning.md](docs/startup-diagnostics-idle-learning.md) para critérios, limites e comportamento.

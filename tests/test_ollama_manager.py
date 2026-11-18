@@ -1,5 +1,7 @@
 import os
 import subprocess
+import threading
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -344,6 +346,39 @@ class OllamaManagerTests(unittest.TestCase):
         result = manager.pull_model("nome de modelo")
         self.assertFalse(result["ok"])
         self.assertIn("inválido", result["error"])
+
+
+    def test_concurrent_start_requests_are_serialized(self):
+        manager = OllamaManager(FakeLanguage(reachable=False))
+        active = 0
+        maximum_active = 0
+        state_lock = threading.Lock()
+        calls = []
+
+        def start_once():
+            nonlocal active, maximum_active
+            with state_lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+                calls.append(True)
+            time.sleep(0.03)
+            with state_lock:
+                active -= 1
+            return {"ok": True}
+
+        with patch.object(manager, "_start_service_locked", side_effect=start_once):
+            threads = [
+                threading.Thread(target=manager.start_service)
+                for _ in range(8)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=2)
+
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(len(calls), 8)
+        self.assertEqual(maximum_active, 1)
 
 
 if __name__ == "__main__":

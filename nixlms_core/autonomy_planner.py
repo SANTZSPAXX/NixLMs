@@ -3,8 +3,98 @@
 Natural-language text is never interpreted as executable code. A task must name
 an action registered by trusted application code and provide a result verifier.
 """
+import hashlib
 import json
+import math
 import threading
+import time
+
+
+class TaskCancelledError(RuntimeError):
+    """Raised when an operator requests cooperative task cancellation."""
+
+
+class TaskExecutionContext:
+    """Deadline, cancellation signal and stable idempotency key for one step.
+
+    The callback must call checkpoint()/wait() regularly. Python callbacks are
+    never force-killed by this context.
+    """
+
+    MAX_TIMEOUT_SECONDS = 3600.0
+
+    def __init__(self, task_id, *, timeout_seconds=None, clock=None):
+        self.task_id = str(task_id)
+        self.idempotency_key = "nixlms-" + hashlib.sha256(
+            self.task_id.encode("utf-8")
+        ).hexdigest()
+        self._clock = clock or time.monotonic
+        self.started_at = self._clock()
+        self.timeout_seconds = self.validate_timeout(timeout_seconds)
+        self._deadline = (
+            self.started_at + self.timeout_seconds
+            if self.timeout_seconds is not None else None
+        )
+        self._cancel_event = threading.Event()
+
+    @classmethod
+    def validate_timeout(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("Timeout deve ser numérico.")
+        normalized = float(value)
+        if (not math.isfinite(normalized) or normalized <= 0
+                or normalized > cls.MAX_TIMEOUT_SECONDS):
+            raise ValueError("Timeout deve ficar entre 0 e 3600 segundos.")
+        return normalized
+
+    @property
+    def cancellation_requested(self):
+        return self._cancel_event.is_set()
+
+    @property
+    def remaining_seconds(self):
+        if self._deadline is None:
+            return None
+        return max(0.0, self._deadline - self._clock())
+
+    def cancel(self):
+        """Signal cancellation; the callback must observe it cooperatively."""
+        self._cancel_event.set()
+
+    def checkpoint(self):
+        """Raise when cancellation or the configured deadline is observed."""
+        if self._cancel_event.is_set():
+            raise TaskCancelledError("Cancelamento solicitado pelo operador.")
+        if self._deadline is not None and self._clock() >= self._deadline:
+            raise TimeoutError("Timeout cooperativo da tarefa excedido.")
+
+    def wait(self, timeout=None):
+        """Wait cancellably, bounded by both the supplied wait and task deadline."""
+        if timeout is not None:
+            if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+                raise ValueError("Tempo de espera deve ser numérico.")
+            timeout = float(timeout)
+            if not math.isfinite(timeout) or timeout < 0:
+                raise ValueError("Tempo de espera inválido.")
+        self.checkpoint()
+        wait_seconds = timeout
+        remaining = self.remaining_seconds
+        if remaining is not None:
+            wait_seconds = remaining if wait_seconds is None else min(wait_seconds, remaining)
+        self._cancel_event.wait(wait_seconds)
+        self.checkpoint()
+
+    def snapshot(self):
+        remaining = self.remaining_seconds
+        return {
+            "task_id": self.task_id,
+            "idempotency_key": self.idempotency_key,
+            "timeout_seconds": self.timeout_seconds,
+            "remaining_seconds": round(remaining, 3) if remaining is not None else None,
+            "cancellation_requested": self.cancellation_requested,
+        }
 
 
 class AutonomyPlanner:
@@ -17,7 +107,9 @@ class AutonomyPlanner:
         self.goals = goal_manager
         self.engine = autonomy_engine
         self._lock = threading.RLock()
+        self._cycle_lock = threading.Lock()
         self._tasks = {}
+        self._active_tasks = {}
         self.language_engine = None
         policy_limit = autonomy_engine.policy.max_actions_per_cycle
         self.max_actions_per_cycle = max(
@@ -31,22 +123,41 @@ class AutonomyPlanner:
             description="Move one dependency-ready, user-defined manual step to in_progress",
         )
 
-    def register_task(self, name, callback, verifier, *, description=""):
-        """Register trusted internal work; verifier must confirm its result."""
+    def register_task(
+        self, name, callback, verifier, *, description="",
+        timeout_seconds=None, context_aware=False,
+    ):
+        """Register trusted work; timeout/cancellation require a context-aware callback.
+
+        Legacy one-argument callbacks remain supported without built-in timeout.
+        """
         name = str(name).strip()
         if not name or len(name) > 80 or not callable(callback) or not callable(verifier):
             raise ValueError("Tarefa exige nome, callback e verificador válidos.")
+        if not isinstance(context_aware, bool):
+            raise ValueError("context_aware precisa ser booleano.")
+        timeout_seconds = TaskExecutionContext.validate_timeout(timeout_seconds)
+        if timeout_seconds is not None and not context_aware:
+            raise ValueError("Timeout exige callback context_aware=True.")
         if name in self._tasks:
             raise ValueError("Tarefa já registrada: " + name)
         action_name = self.TASK_PREFIX + name
 
         def execute(payload):
+            if not isinstance(payload, dict):
+                raise ValueError("Payload da tarefa precisa ser um objeto.")
             goal_id = str(payload.get("goal_id", "")).strip()
             step_id = str(payload.get("step_id", "")).strip()
             task_payload = payload.get("task_payload", {})
             if not goal_id or not step_id or not isinstance(task_payload, dict):
                 raise ValueError("Contexto da tarefa inválido.")
+            task_id = goal_id + "/" + step_id
+            context = TaskExecutionContext(
+                task_id, timeout_seconds=timeout_seconds
+            )
             with self._lock:
+                if task_id in self._active_tasks:
+                    raise RuntimeError("A etapa já possui uma execução ativa.")
                 goal = self.goals.get_goal(goal_id)
                 if goal is None:
                     raise ValueError("Objetivo não encontrado.")
@@ -61,8 +172,12 @@ class AutonomyPlanner:
                 if step_id not in ready_ids:
                     raise ValueError("Etapa possui dependências não concluídas.")
                 self.goals.set_step_status(goal_id, step_id, "in_progress")
+                self._active_tasks[task_id] = context
+
             try:
-                result = callback(task_payload)
+                context.checkpoint()
+                result = callback(task_payload, context) if context_aware else callback(task_payload)
+                context.checkpoint()
                 encoded_result = json.dumps(
                     result, ensure_ascii=False, separators=(",", ":"), allow_nan=False
                 )
@@ -70,25 +185,82 @@ class AutonomyPlanner:
                     raise ValueError("Resultado da tarefa excede o limite configurado.")
                 if verifier(result, task_payload) is not True:
                     raise RuntimeError("Verificação da tarefa não confirmou o resultado.")
-                self.goals.set_step_status(goal_id, step_id, "completed")
-                return {"goal_id": goal_id, "step_id": step_id,
-                        "status": "completed", "verified": True, "result": result}
-            except Exception:
-                current = self.goals.get_goal(goal_id)
-                current_step = next((item for item in current.get("steps", [])
-                                     if item.get("id") == step_id), None) if current else None
-                if current_step and current_step.get("status") == "in_progress":
-                    self.goals.set_step_status(goal_id, step_id, "failed")
+                with self._lock:
+                    context.checkpoint()
+                    self.goals.set_step_status(goal_id, step_id, "completed")
+                    self._active_tasks.pop(task_id, None)
+                return {
+                    "goal_id": goal_id,
+                    "step_id": step_id,
+                    "task_id": task_id,
+                    "idempotency_key": context.idempotency_key,
+                    "status": "completed",
+                    "verified": True,
+                    "result": result,
+                }
+            except TaskCancelledError:
+                with self._lock:
+                    current = self.goals.get_goal(goal_id)
+                    current_step = next(
+                        (item for item in current.get("steps", [])
+                         if item.get("id") == step_id), None
+                    ) if current else None
+                    if current_step and current_step.get("status") == "in_progress":
+                        self.goals.set_step_status(goal_id, step_id, "cancelled")
+                    self._active_tasks.pop(task_id, None)
                 raise
+            except Exception:
+                with self._lock:
+                    current = self.goals.get_goal(goal_id)
+                    current_step = next(
+                        (item for item in current.get("steps", [])
+                         if item.get("id") == step_id), None
+                    ) if current else None
+                    if current_step and current_step.get("status") == "in_progress":
+                        self.goals.set_step_status(goal_id, step_id, "failed")
+                    self._active_tasks.pop(task_id, None)
+                raise
+            finally:
+                with self._lock:
+                    self._active_tasks.pop(task_id, None)
 
         self.engine.register_action(
             action_name, execute, scope="internal", risk="low",
             description=str(description)[:500] or "Verified internal task: " + name,
         )
-        self._tasks[name] = {"action": action_name, "description": str(description)[:500]}
-        return {"name": name, "action": action_name, "scope": "internal",
-                "risk": "low", "verification_required": True}
+        self._tasks[name] = {
+            "action": action_name,
+            "description": str(description)[:500],
+            "timeout_seconds": timeout_seconds,
+            "context_aware": context_aware,
+        }
+        return {
+            "name": name,
+            "action": action_name,
+            "scope": "internal",
+            "risk": "low",
+            "verification_required": True,
+            "timeout_seconds": timeout_seconds,
+            "cooperative_cancellation": context_aware,
+        }
 
+    def cancel_task(self, goal_id, step_id):
+        """Request cooperative cancellation for an active goal step."""
+        task_id = str(goal_id).strip() + "/" + str(step_id).strip()
+        with self._lock:
+            context = self._active_tasks.get(task_id)
+            if context is None:
+                return False
+            context.cancel()
+            return True
+
+    def active_tasks(self):
+        """Return bounded runtime metadata for currently active tasks."""
+        with self._lock:
+            return [
+                context.snapshot()
+                for _, context in sorted(self._active_tasks.items())
+            ]
 
     def set_language_engine(self, language_engine):
         """Attach the optional local language model; no provider is downloaded."""
@@ -230,8 +402,8 @@ class AutonomyPlanner:
                 "transition": "pending_to_in_progress"}
 
     def run_cycle(self, limit=None):
-        """Execute a bounded batch; completed task steps require verifier success."""
-        with self._lock:
+        """Execute one serialized bounded batch; cancellation remains independently callable."""
+        with self._cycle_lock:
             proposals = self.preview(limit=limit)
             results = self.engine.run_cycle(proposals)
             completed = sum(
@@ -252,6 +424,7 @@ class AutonomyPlanner:
             "active_goals": len(goals),
             "ready_steps": ready,
             "registered_tasks": sorted(self._tasks),
+            "active_tasks": self.active_tasks(),
             "language_planning_available": self.language_engine is not None,
             "next_actions": self.preview(),
             "execution_scope": "internal_allowlist_only",

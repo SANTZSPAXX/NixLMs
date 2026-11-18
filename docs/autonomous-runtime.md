@@ -40,6 +40,50 @@ Se o callback falhar ou o verificador rejeitar o resultado, a etapa fica em `fai
 
 Quando um modelo local estiver disponível, o planner oferece `draft_goal(intent)`. Ele solicita um rascunho JSON limitado a 12 etapas, valida dependências e rejeita propriedades inesperadas. O rascunho não é salvo automaticamente e contém `requires_human_confirmation=true` e `executable_actions=0`. Somente depois da revisão do operador, `accept_goal_draft(draft)` cria o objetivo e suas etapas manuais. O modelo não pode registrar handlers, escolher callbacks executáveis nem executar o plano por si só.
 
+## Timeout, cancelamento e idempotência cooperativos
+
+Tarefas que precisam de limite de tempo ou cancelamento devem ser registradas
+com \`context_aware=True\` e receber dois argumentos:
+
+\`\`\`python
+def revisar_indice(payload, context):
+    context.checkpoint()
+    # Em loops ou entre operações bloqueantes, verificar o contexto.
+    context.wait(0.1)
+    return {"checked": True, "index": payload["index"]}
+
+
+planner.register_task(
+    "review_index",
+    revisar_indice,
+    verifier=lambda result, payload: result.get("checked") is True,
+    context_aware=True,
+    timeout_seconds=45,
+)
+\`\`\`
+
+- \`timeout_seconds\` é opcional e limitado a 1–3600 segundos; só é aceito com callback context-aware.
+- \`context.checkpoint()\` lança \`TimeoutError\` ao observar o prazo excedido e
+  \`TaskCancelledError\` quando o operador solicita cancelamento.
+- \`context.wait(seconds)\` aguarda de forma cancelável e nunca ultrapassa o
+  prazo restante da tarefa.
+- \`planner.cancel_task(goal_id, step_id)\` sinaliza o cancelamento e retorna
+  \`True\` somente quando a etapa ainda possui execução ativa.
+- \`planner.status()["active_tasks"]\` expõe apenas identificador, chave de
+  idempotência, prazo restante e estado do pedido de cancelamento.
+- A chave \`context.idempotency_key\` é estável para a mesma etapa persistida;
+  handlers podem usá-la para deduplicação. Ela não fornece garantia de
+  execução exatamente uma vez.
+- Timeout marca a etapa como \`failed\`; cancelamento cooperativo marca como
+  \`cancelled\`. Nenhum dos dois provoca replay automático.
+
+**Limite importante:** o executor não mata threads nem interrompe à força uma
+chamada Python bloqueada. O callback precisa consultar o contexto em pontos
+seguros e também configurar timeout nas bibliotecas de I/O que utilizar.
+Callbacks legados de um argumento continuam compatíveis, mas não possuem
+timeout/cancelamento gerenciado. Etapas abandonadas por queda abrupta continuam
+exigindo reconciliação manual.
+
 ## Modelo de linguagem
 
 A Nix oferece integração opcional com Ollama local (modelo padrão configurado: `qwen2.5:0.5b`) e gerador Hugging Face local quando já instalado. Nenhum modelo é baixado automaticamente. Sem modelo generativo disponível, o núcleo legado continua funcionando, mas não oferece planejamento geral por linguagem natural.

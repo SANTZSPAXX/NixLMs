@@ -1,4 +1,5 @@
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -198,6 +199,93 @@ class AutonomyPlannerTests(unittest.TestCase):
         self.planner.register_task("one", callback, verifier)
         with self.assertRaises(ValueError):
             self.planner.register_task("one", callback, verifier)
+
+
+    def test_timeout_requires_context_aware_callback(self):
+        with self.assertRaises(ValueError):
+            self.planner.register_task(
+                "unsafe_timeout", lambda payload: True,
+                lambda result, payload: True, timeout_seconds=1,
+            )
+
+    def test_context_aware_task_receives_stable_idempotency_key(self):
+        keys = []
+        self.planner.register_task(
+            "idempotent_task",
+            lambda payload, context: keys.append(context.idempotency_key) or {"ok": True},
+            lambda result, payload: result.get("ok") is True,
+            context_aware=True,
+        )
+        goal = self.goals.create_goal("Chave idempotente")
+        step = self.goals.add_step(
+            goal["id"], "Executar uma vez",
+            task={"name": "idempotent_task", "payload": {}},
+        )
+        self.planner.run_cycle()
+        self.planner.run_cycle()
+        self.assertEqual(len(keys), 1)
+        self.assertEqual(len(keys[0]), 71)
+        self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "completed")
+        self.assertFalse(self.planner.cancel_task(goal["id"], step["id"]))
+
+    def test_context_aware_timeout_marks_step_failed_without_replay(self):
+        calls = []
+        self.planner.register_task(
+            "bounded_wait",
+            lambda payload, context: calls.append("started") or context.wait(1),
+            lambda result, payload: True,
+            timeout_seconds=0.02,
+            context_aware=True,
+        )
+        goal = self.goals.create_goal("Timeout cooperativo")
+        self.goals.add_step(
+            goal["id"], "Aguardar com limite",
+            task={"name": "bounded_wait", "payload": {}},
+        )
+        first = self.planner.run_cycle()
+        second = self.planner.run_cycle()
+        self.assertEqual(first["results"][0]["status"], "failed")
+        self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "failed")
+        self.assertEqual(second["processed"], 0)
+        self.assertEqual(calls, ["started"])
+
+    def test_active_context_aware_task_can_be_cancelled_from_another_thread(self):
+        started = threading.Event()
+
+        def callback(payload, context):
+            started.set()
+            while True:
+                context.wait(0.05)
+
+        self.planner.register_task(
+            "cancellable_loop", callback,
+            lambda result, payload: True,
+            context_aware=True,
+        )
+        goal = self.goals.create_goal("Cancelamento cooperativo")
+        step = self.goals.add_step(
+            goal["id"], "Executar loop cooperativo",
+            task={"name": "cancellable_loop", "payload": {}},
+        )
+        result_holder = {}
+
+        def run_cycle():
+            result_holder["result"] = self.planner.run_cycle()
+
+        worker = threading.Thread(target=run_cycle)
+        worker.start()
+        self.assertTrue(started.wait(2))
+        active = self.planner.active_tasks()
+        self.assertEqual(len(active), 1)
+        self.assertFalse(active[0]["cancellation_requested"])
+        self.assertTrue(self.planner.cancel_task(goal["id"], step["id"]))
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(
+            self.goals.get_goal(goal["id"])["steps"][0]["status"], "cancelled"
+        )
+        self.assertEqual(result_holder["result"]["results"][0]["status"], "failed")
+        self.assertEqual(self.planner.active_tasks(), [])
 
 
 if __name__ == "__main__":

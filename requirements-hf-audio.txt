@@ -1,0 +1,4 @@
+# Processamento local de áudio; modelos e pesos precisam ser baixados explicitamente.
+-r requirements-hf-local.txt
+soundfile>=0.12
+librosa>=0.10,<1

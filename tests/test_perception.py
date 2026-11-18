@@ -83,6 +83,8 @@ class PerceptionManagerTests(unittest.TestCase):
                 "image-to-text",
                 model=str(model.resolve()),
                 device=-1,
+                local_files_only=True,
+                trust_remote_code=False,
                 model_kwargs={
                     "local_files_only": True,
                     "trust_remote_code": False,

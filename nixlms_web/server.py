@@ -143,6 +143,24 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(inspect_frameworks())
         if path == "/api/media/status":
             return self.send_json(media.status())
+        if path == "/api/media/file":
+            query = parse_qs(urlsplit(self.path).query)
+            name = Path(query.get("name", [""])[0]).name
+            target = (media.output_dir / name).resolve()
+            if not name or media.output_dir.resolve() not in target.parents or not target.is_file():
+                return self.send_json({"error": "Arquivo de mídia não encontrado."}, 404)
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(str(target))[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(target.stat().st_size))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            with target.open("rb") as stream:
+                while True:
+                    chunk = stream.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            return
         if path == "/api/library":
             return self.send_json({
                 "stats": library.stats(),

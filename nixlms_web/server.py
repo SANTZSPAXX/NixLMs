@@ -95,6 +95,37 @@ except Exception as exc:
 assistant = NixLMsNeuralCore(data_dir=DATA)
 assistant.supabase_store = supabase_store
 if supabase_store is not None:
+    try:
+        # Backfill the first vector index from the existing local/remote memories.
+        expected_vectors = len(assistant.memory.knowledge) + len(assistant.episodic.items)
+        if supabase_store.vector_count() < expected_vectors:
+            vector_records = []
+            for item in assistant.memory.knowledge:
+                question = str(item.get("question", ""))
+                answer = str(item.get("answer", ""))
+                passage = question + " " + answer
+                memory_id = "knowledge:" + __import__("hashlib").sha256(
+                    __import__("unicodedata").normalize("NFKD", question.lower()).encode("utf-8")
+                ).hexdigest()
+                vector_records.append((memory_id, "knowledge", passage,
+                                       assistant.encoder.encode(passage),
+                                       {"tags": item.get("tags", [])}))
+            for item in assistant.episodic.items:
+                passage = str(item.get("user_input", "")) + " " + str(item.get("assistant_output", ""))
+                vector_records.append(("episode:" + str(item.get("id", "")), "episode",
+                                       passage, assistant.encoder.encode(passage),
+                                       {"source": item.get("source", "unknown")}))
+            for chunk in library.list_chunks(limit=500):
+                passage = str(chunk["content"])
+                vector_records.append(("library:" + str(chunk["document_id"]) + ":" +
+                                       str(chunk["chunk_index"]), "library", passage,
+                                       assistant.encoder.encode(passage),
+                                       {"title": chunk["title"], "document_id": chunk["document_id"]}))
+            supabase_store.upsert_vectors(vector_records)
+            print("[NixUI] Memórias vetoriais indexadas:", len(vector_records))
+    except Exception as exc:
+        supabase_store._last_error = "vector_backfill:" + type(exc).__name__
+        print("[NixUI] Falha no índice vetorial inicial:", type(exc).__name__)
     supabase_worker = SnapshotWorker(supabase_store, interval=int(os.getenv("NIXLMS_SUPABASE_SYNC_SECONDS", "10")))
     supabase_worker.start()
     atexit.register(supabase_worker.stop)

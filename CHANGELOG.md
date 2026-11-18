@@ -2,7 +2,7 @@
 
 - Runs non-destructive startup diagnostics for core modules, local storage, dataset integrity, model persistence and scheduler handlers.
 - Starts a persistent idle-learning scheduler job automatically from the CLI.
-- Requires five minutes of inactivity, a 30-minute cooldown, a clean dataset, at least four QA validation samples and no more than 500 training rows.
+- Requires five minutes of inactivity, a 30-minute cooldown, a clean dataset, at least four QA validation samples and no more than 100 training rows.
 - Limits each idle attempt to one incremental epoch and relies on isolated candidate training plus validation before promotion.
 - Adds `/diagnostico` and `/ocioso status`, with tests for inactivity, cooldown, data integrity, validation and resource gates.
 

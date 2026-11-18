@@ -6,7 +6,9 @@ disponibilidade do módulo são sinais independentes; divergências são ambígu
 from __future__ import annotations
 
 
-def classify_installation(version: str | None, module_available: bool) -> dict[str, bool | str]:
+def classify_installation(
+    version: str | None, module_available: bool
+) -> dict[str, bool | str]:
     """Classifica metadados e módulo sem confundir presença parcial com instalação.
 
     installed só é verdadeiro quando os dois sinais concordam. Uma

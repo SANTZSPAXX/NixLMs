@@ -71,7 +71,19 @@ O agendador não treina modelos automaticamente, não altera pesos neurais, não
 - **Goal Manager:** registro de objetivos e dependências.
 - **Language Engine:** Ollama local opcional, limitado a loopback; descobre modelos já instalados, seleciona um modelo local disponível sem executar downloads e expõe diagnóstico de conexão/erros.
 
-Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm preparar` para executar o assistente de configuração: ele detecta o executável, solicita autorização antes de instalar o Ollama (informando que, no Linux, poderá atualizar índices do apt, instalar zstd e executar o instalador oficial remoto de ollama.com), solicita autorização separada antes de iniciar o serviço e antes de baixar `qwen2.5:0.5b`, verifica `/api/tags` e executa uma geração de teste. A confirmação de uso exige que `/api/chat` retorne o nome exato do modelo e `done=true`. Nenhuma instalação, inicialização ou transferência é executada sem confirmação explícita. Use `/llm usar NOME_EXATO` para selecionar outro modelo já instalado. Saudações e perguntas simples de data/hora são tratadas por regras determinísticas; perguntas sobre o nome do usuário não inventam um perfil ausente. A recuperação QA exige relevância mínima antes de usar uma lembrança como resposta. Respostas do LLM que apenas repetem a pergunta, desviam para uma saudação ou omitem a pessoa perguntada são recusadas. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
+Na CLI, use `/llm` para verificar conectividade, modelos instalados e o último erro. Use `/llm preparar` para executar o assistente de configuração: ele detecta o executável, solicita autorização antes de instalar o Ollama, solicita autorização separada antes de iniciar o serviço e antes de baixar `qwen2.5:0.5b`, verifica `/api/tags` e executa uma geração de teste. A confirmação de uso exige que `/api/chat` retorne o nome exato do modelo e `done=true`. Nenhuma instalação, inicialização ou transferência é executada sem confirmação explícita. Use `/llm usar NOME_EXATO` para selecionar outro modelo já instalado. Saudações e perguntas simples de data/hora são tratadas por regras determinísticas; perguntas sobre o nome do usuário não inventam um perfil ausente. A recuperação QA exige relevância mínima antes de usar uma lembrança como resposta. Respostas do LLM que apenas repetem a pergunta, desviam para uma saudação ou omitem a pessoa perguntada são recusadas. Para as demais perguntas, o contexto recuperado é limitado por tamanho e explicitamente tratado como dado não confiável no prompt do modelo.
+
+## Ciclo de vida do serviço Ollama gerenciado
+
+Quando a NixLMs inicia `ollama serve` por meio de `OllamaManager` e a verificação de prontidão falha ou o usuário interrompe a espera com Ctrl+C, o gerenciador tenta encerrar somente o objeto de processo `Popen` criado por aquela instância. A interrupção é propagada ao chamador após a tentativa de limpeza:
+
+1. Solicita `terminate()` e aguarda até 2 segundos.
+2. Se a espera expirar, solicita `kill()` e aguarda mais 2 segundos.
+3. Registra o resultado em `last_cleanup`, também exposto por `OllamaManager.status()` e no retorno de falha de `start_service()`.
+
+Os estados distinguem `terminated`, `killed`, `already_exited`, `not_managed` e `unconfirmed`. Se o encerramento não puder ser confirmado, a referência ao processo é preservada e uma nova inicialização pela mesma instância é recusada enquanto ele continuar ativo. O erro original de inicialização permanece disponível em `startup_error`.
+
+Serviços que já estavam acessíveis antes da inicialização não são encerrados. A limpeza cobre somente o processo diretamente criado por `Popen`; não confirma nem encerra processos descendentes. O comportamento portátil usa a API padrão de `subprocess`: em POSIX, `terminate()` envia SIGTERM e `kill()` envia SIGKILL; no Windows, ambos usam TerminateProcess. Consulte a [documentação oficial de subprocess do Python 3.10](https://docs.python.org/3.10/library/subprocess.html#popen-objects).
 
 ## Limitações importantes
 
@@ -232,3 +244,8 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 ## Arquitetura
 
 `nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, agendador SQLite, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.
+
+
+### Concorrência do serviço Ollama
+
+Chamadas concorrentes a `OllamaManager.start_service()` são serializadas por instância. Isso impede que duas inicializações simultâneas criem processos filhos independentes e que um handle de processo seja sobrescrito antes do cleanup. A serialização não encerra serviços preexistentes e não transforma a verificação de bind de serviços externos em uma garantia de isolamento.

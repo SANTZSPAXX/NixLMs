@@ -1,10 +1,24 @@
 # Changelog
 
-## Consentimento explícito do instalador Ollama
+## Concorrência do gerenciador Ollama
 
-- O prompt de instalação agora informa que, no Linux, o fluxo pode atualizar índices do apt, instalar `zstd` e baixar/executar o instalador remoto oficial de `ollama.com`.
-- A descrição do fluxo foi alinhada no README e no notebook Colab.
+- Serializa chamadas concorrentes a `start_service()` com lock por instância, evitando que inicializações simultâneas criem processos filhos duplicados e percam a referência de cleanup.
+- Adiciona teste de regressão com oito chamadas concorrentes.
 
+
+## Ollama — limpeza limitada após falha de inicialização
+
+- Após falha de prontidão ou interrupção por Ctrl+C, tenta encerrar somente o processo `Popen` criado pela instância: `terminate()` + espera de até 2 segundos, seguida de `kill()` + nova espera de até 2 segundos; a interrupção do usuário continua sendo propagada.
+- Expõe `last_cleanup` no diagnóstico e no resultado da inicialização, distinguindo encerramento confirmado de limpeza não confirmada.
+- Preserva a referência do processo quando o encerramento não pode ser confirmado e recusa uma nova inicialização duplicada enquanto esse processo continuar ativo.
+- Não encerra serviços preexistentes nem tenta finalizar a árvore de processos; descendentes podem exigir tratamento específico por sistema operacional.
+
+
+## Ollama — isolamento do serviço gerenciado
+
+- Inicia o processo Ollama com uma cópia explícita do ambiente e OLLAMA_HOST fixado ao endereço loopback correspondente ao endpoint local; o ambiente do processo pai não é alterado.
+- Expõe bind_scope no diagnóstico: processos iniciados pelo gerenciador usam configured_loopback, enquanto serviços preexistentes são marcados como unverified_preexisting porque o bind do processo externo não é inspecionado.
+- Adiciona regressões para ambiente herdado wildcard, preservação da porta e formatação IPv6.
 
 ## Consent-gated Ollama setup and runtime verification
 

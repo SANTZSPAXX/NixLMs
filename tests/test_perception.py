@@ -4,9 +4,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nixlms_core.perception import PerceptionManager
+from nixlms_core import NixLMsNeuralCore
 
 
 class PerceptionManagerTests(unittest.TestCase):
+
+    def test_neural_core_exposes_perception_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            status = ai.status()
+            self.assertTrue(status["perception"]["enabled"])
+            self.assertFalse(status["perception"]["automatic_downloads"])
+
     def test_status_is_cpu_only_and_never_downloads(self):
         manager = PerceptionManager(vision_model_path=None, speech_model_path=None)
         status = manager.status()

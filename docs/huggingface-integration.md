@@ -15,6 +15,7 @@ Público e gratuito não significa custo zero de infraestrutura pessoal: downloa
 | Busca de modelos | Integrada | Pesquisa pública por nome/tarefa e ordenação |
 | Busca de datasets | Integrada | Catálogo público e metadados |
 | Busca de Spaces | Integrada | Catálogo e link para o Hub; não executa o Space |
+| Papers, documentação e Collections | Links no painel | Abrem recursos públicos oficiais no navegador; não executam código nem exigem conta |
 | Detalhes e Model/Dataset Cards | Integrada | Licença declarada, tags, tarefa, SHA, arquivos e tamanho |
 | Download de modelos | Integrado | Ação explícita, revisão SHA fixa, allowlist e limite de tamanho |
 | Download de datasets | Integrado | Ação explícita, apenas arquivos tabulares/textuais permitidos |

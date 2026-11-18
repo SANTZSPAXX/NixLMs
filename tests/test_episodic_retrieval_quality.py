@@ -176,6 +176,23 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
                 output.resolve(),
             )
 
+    def test_evaluate_dataset_rejects_non_finite_min_score(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(min_score=value):
+                with self.assertRaisesRegex(ValueError, "finito e não negativo"):
+                    evaluate_dataset(DATA_DIR, min_score=value)
+
+    def test_cli_rejects_non_finite_min_score(self):
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPT), "--min-score", "nan"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("min-score deve ser finito e não negativo", completed.stderr)
+        self.assertEqual(completed.stdout, "")
+
     def test_cli_runs_offline_lexical_mode_and_emits_machine_readable_json(self):
         completed = subprocess.run(
             [sys.executable, str(SCRIPT)],

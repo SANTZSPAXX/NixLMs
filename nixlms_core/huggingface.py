@@ -221,13 +221,14 @@ class HuggingFaceHub:
             )
         if repo_type == "model":
             has_config = "config.json" in selected
+            has_gguf = any(Path(path).suffix.lower() == ".gguf" for path in selected)
             has_weights = any(
                 Path(path).suffix.lower() in {".safetensors", ".gguf", ".onnx"}
                 for path in selected
             )
-            if not has_config or not has_weights:
+            if not has_weights or (not has_config and not has_gguf):
                 raise HuggingFaceError(
-                    "Modelo sem config.json ou sem pesos Safetensors/GGUF/ONNX permitidos."
+                    "Modelo sem config.json + pesos permitidos, ou sem um arquivo GGUF."
                 )
         elif not any(
             Path(path).suffix.lower() in self.DATASET_EXTENSIONS - {".md", ".yaml", ".yml"}
@@ -302,7 +303,7 @@ class HuggingFaceHub:
             )
             if actual_bytes > max_bytes:
                 raise HuggingFaceError("Download excedeu o limite após a transferência.")
-            if repo_type == "model" and not (temporary / "config.json").is_file():
+            if repo_type == "model" and not (temporary / "config.json").is_file() and not any(temporary.rglob("*.gguf")):
                 raise HuggingFaceError("Download incompleto: config.json ausente.")
             if not any(
                 path.is_file() and path.suffix.lower() in (
@@ -359,9 +360,9 @@ class HuggingFaceHub:
         path = Path(str(value.get("path", ""))).resolve()
         if self.models_dir.resolve() not in path.parents:
             return None
-        if not (path / "config.json").is_file():
-            return None
-        if not any(path.rglob("*.safetensors")):
+        has_safetensors = any(path.rglob("*.safetensors"))
+        has_gguf = any(path.rglob("*.gguf"))
+        if not has_gguf and (not (path / "config.json").is_file() or not has_safetensors):
             return None
         return value
 
@@ -378,9 +379,11 @@ class HuggingFaceHub:
         path = Path(entry.get("path", "")).resolve()
         if self.models_dir.resolve() not in path.parents:
             raise HuggingFaceError("Caminho local do modelo não permitido.")
-        if not (path / "config.json").is_file() or not any(path.rglob("*.safetensors")):
+        has_safetensors = any(path.rglob("*.safetensors"))
+        has_gguf = any(path.rglob("*.gguf"))
+        if not has_gguf and (not (path / "config.json").is_file() or not has_safetensors):
             raise HuggingFaceError(
-                "Geração Transformers exige config.json e ao menos um arquivo Safetensors."
+                "Geração exige Safetensors com config.json ou um arquivo GGUF."
             )
         value = {
             "repo_id": repo_id, "path": str(path), "revision": entry.get("revision"),
@@ -505,17 +508,34 @@ class HuggingFaceLocalGenerator:
         if self._model is not None:
             return self._model, self._tokenizer
         path = Path(self.model_path)
-        if not path.is_dir() or not (path / "config.json").is_file():
+        if not path.is_dir():
             raise HuggingFaceError("Diretório de modelo local incompleto.")
-        if not any(path.rglob("*.safetensors")):
-            raise HuggingFaceError("Inferência local aceita somente pesos Safetensors.")
+        gguf_files = sorted(path.rglob("*.gguf"))
+        safetensors_files = list(path.rglob("*.safetensors"))
+        if not gguf_files and (not (path / "config.json").is_file() or not safetensors_files):
+            raise HuggingFaceError("Inferência exige Safetensors com config.json ou GGUF.")
         if self.model_loader:
             model, tokenizer = self.model_loader(
                 model_path=self.model_path, device="cpu",
                 local_files_only=True, trust_remote_code=False,
-                use_safetensors=True, threads=self.threads,
+                use_safetensors=bool(safetensors_files), threads=self.threads,
             )
+            self._backend = "mocked_local"
+        elif gguf_files:
+            try:
+                from llama_cpp import Llama
+            except ImportError as exc:
+                raise HuggingFaceError(
+                    "Modelo GGUF requer llama-cpp-python CPU; instale requirements-ml-llama-cpp.txt."
+                ) from exc
+            model = Llama(
+                model_path=str(gguf_files[0]), n_ctx=self.max_input_tokens + self.max_new_tokens,
+                n_threads=self.threads, verbose=False,
+            )
+            tokenizer = None
+            self._backend = "llama.cpp_cpu"
         else:
+            self._backend = "transformers_cpu"
             try:
                 import torch
                 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -563,9 +583,16 @@ class HuggingFaceLocalGenerator:
             if pad_token_id is not None:
                 generation_options["pad_token_id"] = pad_token_id
             with torch.inference_mode():
+                if self._backend == "llama.cpp_cpu":
+                result = model.create_completion(
+                    prompt=text, max_tokens=self.max_new_tokens,
+                    temperature=0.1, echo=False,
+                )
+                answer = str(result.get("choices", [{}])[0].get("text", "")).strip()
+            else:
                 output = model.generate(**inputs, **generation_options)
-            generated = output[0][inputs["input_ids"].shape[1]:]
-            answer = tokenizer.decode(generated, skip_special_tokens=True).strip()
+                generated = output[0][inputs["input_ids"].shape[1]:]
+                answer = tokenizer.decode(generated, skip_special_tokens=True).strip()
             if not answer:
                 self.last_error = "O modelo local não gerou conteúdo."
                 return None
@@ -580,5 +607,6 @@ class HuggingFaceLocalGenerator:
             "provider": "huggingface_local", "repo_id": self.repo_id,
             "model_path": self.model_path, "device": "cpu",
             "local_files_only": True, "loaded": self._model is not None,
+            "backend": getattr(self, "_backend", None),
             "last_error": self.last_error,
         }

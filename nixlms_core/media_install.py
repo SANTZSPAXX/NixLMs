@@ -40,7 +40,14 @@ def _installed_version(distribution: str) -> str | None:
 
 
 def _distribution_name(requirement: str) -> str:
-    match = re.match(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)", requirement.strip())
+    value = requirement.strip()
+    if (
+        "://" in value or " @ " in value
+        or value.startswith(("git+", "file:", "/", "./", "../"))
+        or re.match(r"^[A-Za-z]:[\\/]", value)
+    ):
+        raise ValueError("URLs e caminhos diretos não são permitidos no perfil.")
+    match = re.match(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)", value)
     if not match:
         raise ValueError("Requisito inválido: " + requirement)
     return re.sub(r"[-_.]+", "-", match.group(1)).lower()
@@ -98,22 +105,33 @@ def build_install_plan(
     python_supported = python_version >= (3, 11)
     packages = []
     seen = set()
+    ambiguous_packages = []
     for requirement in _iter_requirements(Path(requirements_file), Path(root)):
         distribution = _distribution_name(requirement)
         if distribution in seen:
             continue
         seen.add(distribution)
         module = _module_for_distribution(distribution)
-        installed = bool(module_probe(module))
+        version = version_probe(distribution)
+        module_available = bool(module_probe(module))
+        installed = version is not None or module_available
+        ambiguous_install = (version is not None) != module_available
+        if ambiguous_install:
+            ambiguous_packages.append(distribution)
         packages.append({
             "requirement": requirement,
             "distribution": distribution,
             "module": module,
             "installed": installed,
-            "version": version_probe(distribution) if installed else None,
+            "version": version,
+            "module_available": module_available,
+            "ambiguous_install": ambiguous_install,
         })
 
-    torch_installed = bool(module_probe("torch"))
+    torch_version = version_probe("torch")
+    torch_module_available = bool(module_probe("torch"))
+    torch_installed = torch_version is not None or torch_module_available
+    torch_ambiguous = (torch_version is not None) != torch_module_available
     cpu_index_supported = (
         system_name in {"Windows", "Linux"}
         and machine.lower() in {"x86_64", "amd64"}
@@ -121,16 +139,24 @@ def build_install_plan(
     missing_requirements = [
         item["requirement"] for item in packages if not item["installed"]
     ]
-    blocked = (not python_supported) or (not torch_installed and not cpu_index_supported)
+    blocked_reasons = []
     if not python_supported:
-        blocked_reason = "Este perfil exige Python 3.11 ou superior."
-    elif not torch_installed and not cpu_index_supported:
-        blocked_reason = (
+        blocked_reasons.append("Este perfil exige Python 3.11 ou superior.")
+    if torch_ambiguous:
+        blocked_reasons.append(
+            "Metadados e módulo torch divergem; instalação bloqueada para preservar o ambiente."
+        )
+    if ambiguous_packages:
+        blocked_reasons.append(
+            "Pacotes com metadados/módulo divergentes: " + ", ".join(sorted(ambiguous_packages))
+        )
+    if not torch_installed and not cpu_index_supported:
+        blocked_reasons.append(
             "PyTorch ausente: selecione e instale manualmente um wheel compatível "
             "com esta plataforma em https://pytorch.org/get-started/locally/."
         )
-    else:
-        blocked_reason = None
+    blocked = bool(blocked_reasons)
+    blocked_reason = "; ".join(blocked_reasons) if blocked_reasons else None
     return {
         "automatic_install": False,
         "requirements_file": Path(requirements_file).name,
@@ -140,7 +166,9 @@ def build_install_plan(
         "python_supported": python_supported,
         "torch": {
             "installed": torch_installed,
-            "version": version_probe("torch") if torch_installed else None,
+            "version": torch_version,
+            "module_available": torch_module_available,
+            "ambiguous_install": torch_ambiguous,
             "action": (
                 "preserve" if torch_installed
                 else "install_cpu" if cpu_index_supported
@@ -150,6 +178,7 @@ def build_install_plan(
         },
         "packages": packages,
         "missing_requirements": missing_requirements,
+        "ambiguous_packages": sorted(ambiguous_packages),
         "blocked": blocked,
         "blocked_reason": blocked_reason,
     }

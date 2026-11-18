@@ -60,6 +60,14 @@ class HuggingFaceHubTests(unittest.TestCase):
         self.assertIsNone(request.get_header("Authorization"))
         self.assertEqual(request.get_header("User-agent"), "NixLMs-HuggingFace/1.0")
 
+    def test_unknown_repo_type_is_rejected_without_network(self):
+        with self.assertRaises(HuggingFaceError):
+            self.hub.search("private", "anything")
+
+    def test_spaces_are_catalog_only_and_never_downloaded(self):
+        with self.assertRaises(HuggingFaceError):
+            self.hub.download("space", "owner/demo")
+
     def test_invalid_repository_id_is_rejected(self):
         with self.assertRaises(HuggingFaceError):
             self.hub.details("model", "../private/model")

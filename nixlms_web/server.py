@@ -166,6 +166,10 @@ class Handler(BaseHTTPRequestHandler):
                     )
             except HuggingFaceError as exc:
                 return self.send_json({"error": str(exc)}, 400)
+            except Exception as exc:
+                if type(exc).__name__ == "HuggingFaceError":
+                    return self.send_json({"error": str(exc)}, 400)
+                return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
             return self.send_json({"error": "Endpoint Hugging Face não encontrado."}, 404)
         if path == "/api/diagnostics":
             diagnostic = assistant.run_startup_diagnostics()
@@ -369,6 +373,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
         except HuggingFaceError as exc:
             return self.send_json({"error": str(exc)}, 400)
+        except Exception as exc:
+            if type(exc).__name__ == "HuggingFaceError":
+                return self.send_json({"error": str(exc)}, 400)
+            if isinstance(exc, (ValueError, UnicodeError, json.JSONDecodeError)):
+                return self.send_json({"error": str(exc)}, 400)
+            return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
         except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
             return self.send_json({"error": str(exc)}, 400)
         except Exception as exc:

@@ -267,6 +267,9 @@ def summarize_group(rows, k=5):
 
 def evaluate_dataset(data_dir=DEFAULT_DATA_DIR, *, encoder=None, encoder_info=None,
                      k=5, min_score=0.05, passage_batch_size=8):
+    min_score = float(min_score)
+    if not math.isfinite(min_score) or min_score < 0:
+        raise ValueError("min-score deve ser finito e não negativo.")
     episodes, queries, qrels, qrels_by_query, data_hash = load_dataset(data_dir)
     with tempfile.TemporaryDirectory(prefix="nixlms-episodic-ptbr-") as temporary:
         memory_path = Path(temporary) / "episodic.json"
@@ -425,8 +428,8 @@ def main():
 
     if args.k < 1:
         parser.error("k deve ser positivo.")
-    if args.min_score < 0:
-        parser.error("min-score não pode ser negativo.")
+    if not math.isfinite(args.min_score) or args.min_score < 0:
+        parser.error("min-score deve ser finito e não negativo.")
     if not 1 <= args.batch_size <= 32:
         parser.error("batch-size deve estar entre 1 e 32.")
 

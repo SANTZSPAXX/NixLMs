@@ -48,10 +48,11 @@ Foi criada a branch `fix/ptbr-benchmark-protect-output-paths`, derivada do HEAD 
 - Acrescenta testes para memória de produção, arquivos padrão, dataset customizado e destino permitido.
 - Registra a correção no CHANGELOG.
 
-Commits da branch:
+Commits iniciais da branch:
 - `6452eab64f592a5b1e82b6a07ae0292bc44de664` — guard de caminho.
-- `cd1aad67eb232d8c874c6d9939055e271d576272` — testes.
+- `cd1aad67eb232d8c874c6d9939055e271d576272` — testes de caminho.
 - `3a82b1ac1f35cd2ee1782965f5ff2e99d2efbe96` — CHANGELOG.
+- HEAD final após os ajustes: `f4f625d8ce417893ae02e8dba2a24698a3896a03` (8 commits no total).
 
 ## CI da PR #36 — execução anterior à correção
 
@@ -75,9 +76,15 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 ## Testes desta correção
 
 - Nenhum teste local foi executado neste ambiente.
-- CI da nova branch: pendente de execução/consulta após abertura da PR.
-- A aprovação da CI da PR #36 não deve ser atribuída a esta correção.
-- O teste de integração deverá confirmar que caminhos protegidos são rejeitados antes de qualquer escrita.
+- CI real da PR #37: [run #44211753611](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44211753611), HEAD `f4f625d8ce417893ae02e8dba2a24698a3896a03`, concluída com sucesso.
+- Ubuntu/Python 3.10: 182 testes, success.
+- Ubuntu/Python 3.11: 182 testes, success.
+- Ubuntu/Python 3.12: 182 testes, success.
+- Windows/Python 3.12: 182 testes, success.
+- Job `episodic-benchmark`: success; artefato enviado.
+- Job `episodic-quality-benchmark`: success; artefato enviado.
+- Os seis logs foram consultados. Os testes de caminho protegido, destino separado e NaN/±infinito aparecem como `ok` no log Python 3.12.
+- A aprovação da CI da PR #36 não foi atribuída a esta correção.
 - Não foi executado E5 real nem checkpoint nativo real.
 - Nenhum arquivo da memória pessoal foi lido ou alterado por este ciclo.
 

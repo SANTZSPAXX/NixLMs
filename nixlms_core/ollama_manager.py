@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -21,6 +22,7 @@ class OllamaManager:
 
     def __init__(self, language_engine, readiness_timeout=45):
         self.language = language_engine
+        self._start_lock = threading.Lock()
         self.readiness_timeout = max(1, int(readiness_timeout))
         self.process = None
         self.last_error = None
@@ -283,6 +285,11 @@ class OllamaManager:
             return {"ok": False, "error": self.last_error}
 
     def start_service(self):
+        """Serializa inicializações para impedir processos duplicados concorrentes."""
+        with self._start_lock:
+            return self._start_service_locked()
+
+    def _start_service_locked(self):
         """Inicia 'ollama serve' com bind loopback explícito e ambiente isolado."""
         if not self.language.local_host:
             self.last_error = "Inicialização recusada: o endpoint precisa ser loopback local."

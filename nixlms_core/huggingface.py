@@ -45,6 +45,7 @@ class HuggingFaceHub:
         self.datasets_dir = self.root / "datasets"
         self.registry_path = self.root / "registry.json"
         self.active_path = self.root / "active_model.json"
+        self.active_encoder_path = self.root / "active_encoder.json"
         self.timeout = max(1, min(30, int(timeout)))
         self.opener = opener or urlopen
         self.downloader = downloader
@@ -319,7 +320,7 @@ class HuggingFaceHub:
         entry = {
             "repo_id": repo_id, "repo_type": repo_type,
             "path": str(target), "revision": revision,
-            "license": info.get("license"),
+            "license": info.get("license"), "pipeline_tag": info.get("pipeline_tag"),
             "estimated_bytes": estimated_bytes, "downloaded_bytes": actual_bytes,
             "files": files, "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -372,6 +373,8 @@ class HuggingFaceHub:
         ), None)
         if not entry:
             raise HuggingFaceError("Modelo não encontrado no registro de downloads locais.")
+        if entry.get("pipeline_tag") != "text-generation":
+            raise HuggingFaceError("Ativação de geração exige um modelo com tarefa text-generation.")
         path = Path(entry.get("path", "")).resolve()
         if self.models_dir.resolve() not in path.parents:
             raise HuggingFaceError("Caminho local do modelo não permitido.")
@@ -388,6 +391,54 @@ class HuggingFaceHub:
         temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(str(temporary), str(self.active_path))
         return value
+
+    def active_encoder(self):
+        try:
+            value = json.loads(self.active_encoder_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return None
+        if not isinstance(value, dict):
+            return None
+        path = Path(str(value.get("path", ""))).resolve()
+        if self.models_dir.resolve() not in path.parents:
+            return None
+        if not (path / "config.json").is_file() or not any(path.rglob("*.safetensors")):
+            return None
+        return value
+
+    def activate_encoder(self, repo_id):
+        repo_id = self._repo_id(repo_id)
+        entry = next((
+            item for item in self._load_registry()
+            if item.get("repo_type") == "model" and item.get("repo_id") == repo_id
+        ), None)
+        if not entry:
+            raise HuggingFaceError("Encoder não encontrado no registro de downloads locais.")
+        if entry.get("pipeline_tag") not in {"sentence-similarity", "feature-extraction"}:
+            raise HuggingFaceError(
+                "Ativação de embeddings exige sentence-similarity ou feature-extraction."
+            )
+        path = Path(entry.get("path", "")).resolve()
+        if self.models_dir.resolve() not in path.parents:
+            raise HuggingFaceError("Caminho local do encoder não permitido.")
+        if not (path / "config.json").is_file() or not any(path.rglob("*.safetensors")):
+            raise HuggingFaceError("Encoder exige config.json e pesos Safetensors.")
+        value = {
+            "repo_id": repo_id, "path": str(path), "revision": entry.get("revision"),
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self.root.mkdir(parents=True, exist_ok=True)
+        temporary = self.active_encoder_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(str(temporary), str(self.active_encoder_path))
+        return value
+
+    def deactivate_encoder(self):
+        try:
+            self.active_encoder_path.unlink()
+            return True
+        except FileNotFoundError:
+            return False
 
     def deactivate_model(self):
         try:
@@ -417,6 +468,7 @@ class HuggingFaceHub:
             "inference_support": transformers_installed and torch_installed,
             "repositories": repositories,
             "active_model": self.active_model(),
+            "active_encoder": self.active_encoder(),
             "limits": {
                 "model_bytes": self.HARD_MODEL_LIMIT,
                 "dataset_bytes": self.HARD_DATASET_LIMIT,

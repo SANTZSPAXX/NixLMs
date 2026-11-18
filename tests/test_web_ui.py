@@ -57,6 +57,8 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("core", data)
         self.assertIn("world_model", data["core"])
         self.assertIn("autonomy", data["core"])
+        self.assertTrue(data["core"]["simulation"]["enabled"])
+        self.assertFalse(data["core"]["perception"]["automatic_downloads"])
         self.assertIn("runtime", data)
 
     def test_framework_inventory_does_not_require_registry_module(self):

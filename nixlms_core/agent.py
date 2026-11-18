@@ -16,6 +16,8 @@ from .cognition import CognitiveEngine
 from .learner import FeedbackLearner
 from .mental_map import MentalMap
 from .world_model import WorldModel
+from .simulation import WorldSimulator
+from .perception import PerceptionManager
 from .planning import GoalManager
 from .autonomy import AutonomyEngine
 from .autonomy_planner import AutonomyPlanner
@@ -110,6 +112,8 @@ class NixLMsNeuralCore:
         self.learner = FeedbackLearner(self.network)
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
         self.world_model = WorldModel(self.data_dir / "world_model.json")
+        self.simulator = WorldSimulator(self.world_model)
+        self.perception = PerceptionManager()
         self.goals = GoalManager(self.data_dir / "goals.json")
         self.scheduler = TaskScheduler(self.data_dir / "scheduler.sqlite3")
         self.autonomy = AutonomyEngine(self.data_dir / "autonomy.sqlite3")
@@ -849,6 +853,8 @@ class NixLMsNeuralCore:
         return {
             **self.memory.stats(), **self.episodic.stats(), **self.mental_map.stats(), **self.learner.stats(),
             "world_model": self.world_model.stats(),
+            "simulation": self.simulator.status(),
+            "perception": self.perception.status(),
             "planning": self.goals.stats(),
             "autonomy": {
                 "registered_actions": self.autonomy.registered_actions(),

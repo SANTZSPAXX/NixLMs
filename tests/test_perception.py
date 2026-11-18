@@ -83,7 +83,7 @@ class PerceptionManagerTests(unittest.TestCase):
                 "image-to-text",
                 model=str(model.resolve()),
                 device=-1,
-                model_kwargs={"local_files_only": True},
+                model_kwargs={\n                    "local_files_only": True,\n                    "trust_remote_code": False,\n                    "use_safetensors": True,\n                },
             )
 
     def test_audio_requires_wav_only(self):

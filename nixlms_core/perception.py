@@ -82,6 +82,8 @@ class PerceptionManager:
                     task,
                     model=str(model_path.resolve()),
                     device=-1,
+                    local_files_only=True,
+                    trust_remote_code=False,
                     model_kwargs={
                         "local_files_only": True,
                         "trust_remote_code": False,

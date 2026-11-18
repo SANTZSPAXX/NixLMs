@@ -16,6 +16,7 @@ from .learner import FeedbackLearner
 from .mental_map import MentalMap
 from .world_model import WorldModel
 from .planning import GoalManager
+from .autonomy import AutonomyEngine
 from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
@@ -105,6 +106,7 @@ class NixLMsNeuralCore:
         self.world_model = WorldModel(self.data_dir / "world_model.json")
         self.goals = GoalManager(self.data_dir / "goals.json")
         self.scheduler = TaskScheduler(self.data_dir / "scheduler.sqlite3")
+        self.autonomy = AutonomyEngine(self.data_dir / "autonomy.sqlite3")
         self.scheduler.register_handler("memory_housekeeping", self._scheduled_memory_housekeeping)
         self.scheduler.register_handler("dataset_audit", self._scheduled_dataset_audit)
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)

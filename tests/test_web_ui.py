@@ -100,6 +100,7 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("scheduler_running", data)
         self.assertIn("idle_learning", data)
         self.assertIn("scheduler_running", data["checks"])
+        self.assertIn("idle_learning_dataset", data["checks"])
         self.assertEqual(data["checks"]["scheduler_running"]["status"], "ok")
         self.assertIn(data["status"], {"ok", "degraded", "failed"})
         self.assertEqual(data["ok"], data["status"] == "ok")

@@ -25,15 +25,26 @@ class ColabRuntimeWiringTests(unittest.TestCase):
 
     def test_notebook_exposes_anonymous_huggingface_commands(self):
         notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
-        session = "".join(notebook["cells"][7]["source"])
+        session = next("".join(cell["source"]) for cell in notebook["cells"]
+                        if "elif low == '/hf' or low.startswith('/hf '):" in "".join(cell.get("source", [])))
         self.assertIn("elif low == '/hf' or low.startswith('/hf '):", session)
         self.assertIn("ia.huggingface.search", session)
         self.assertIn("ia.huggingface.download", session)
         compile(session, "<colab-huggingface-session>", "exec")
 
+    def test_notebook_initializes_media_manager_and_safe_download_helpers(self):
+        notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
+        media_cell = next("".join(cell["source"]) for cell in notebook["cells"]
+                          if "MediaGenerationManager" in "".join(cell.get("source", [])))
+        self.assertIn("media.bootstrap_async(enabled=True)", media_cell)
+        self.assertIn("confirm=True", media_cell)
+        self.assertIn("nix_media_generate", media_cell)
+        compile(media_cell, "<colab-media-setup>", "exec")
+
     def test_notebook_stops_scheduler_after_chat_session(self):
         notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
-        session = "".join(notebook["cells"][7]["source"])
+        session = next("".join(cell["source"]) for cell in notebook["cells"]
+                        if "elif low == '/hf' or low.startswith('/hf '):" in "".join(cell.get("source", [])))
         self.assertIn("nix_chat()", session)
         self.assertIn("ia.scheduler.stop()", session)
         self.assertLess(session.index("nix_chat()"), session.index("ia.scheduler.stop()"))

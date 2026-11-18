@@ -116,11 +116,29 @@ class HuggingFaceHubTests(unittest.TestCase):
         (model_path / "model.safetensors").write_bytes(b"weights")
         hub._save_registry([{
             "repo_id": self.payload["id"], "repo_type": "model",
-            "path": str(model_path), "revision": "a" * 40,
+            "path": str(model_path), "revision": "a" * 40, "pipeline_tag": "text-generation",
         }])
         active = hub.activate_model(self.payload["id"])
         self.assertEqual(active["repo_id"], self.payload["id"])
         self.assertEqual(hub.active_model()["path"], str(model_path))
+
+    def test_embedding_activation_requires_semantic_task_and_local_weights(self):
+        root = Path(self.temp.name) / "data"
+        hub = HuggingFaceHub(root, opener=self.opener, downloader=lambda *a, **k: None)
+        model_path = hub.models_dir / "intfloat" / "multilingual-e5-small"
+        model_path.mkdir(parents=True)
+        (model_path / "config.json").write_text("{}", encoding="utf-8")
+        (model_path / "model.safetensors").write_bytes(b"weights")
+        hub._save_registry([{
+            "repo_id": "intfloat/multilingual-e5-small", "repo_type": "model",
+            "path": str(model_path), "revision": "a" * 40,
+            "pipeline_tag": "sentence-similarity",
+        }])
+        active = hub.activate_encoder("intfloat/multilingual-e5-small")
+        self.assertEqual(active["repo_id"], "intfloat/multilingual-e5-small")
+        self.assertEqual(hub.active_encoder()["path"], str(model_path))
+        with self.assertRaises(HuggingFaceError):
+            hub.activate_model("intfloat/multilingual-e5-small")
 
     def test_status_does_not_require_optional_huggingface_packages(self):
         with patch("nixlms_core.huggingface.importlib.util.find_spec", return_value=None):

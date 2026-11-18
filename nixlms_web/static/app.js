@@ -53,7 +53,8 @@ async function showHuggingFaceDetails(type,id){
   if($("#hf-detail-activate"))$("#hf-detail-activate").onclick=()=>activateHuggingFace(id,"generator");
   if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
   if($("#hf-detail-activate-vision"))$("#hf-detail-activate-vision").onclick=()=>activateHuggingFace(id,"vision");
-  if($("#hf-detail-activate-speech"))$("#hf-detail-activate-speech").onclick=()=>activateHuggingFace(id,"speech");\n  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
+  if($("#hf-detail-activate-speech"))$("#hf-detail-activate-speech").onclick=()=>activateHuggingFace(id,"speech");
+  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
  }catch(e){box.textContent=e.message}
 }
 async function downloadHuggingFace(type,id){

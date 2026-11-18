@@ -1,5 +1,12 @@
 # Changelog
 
+## Benchmark episódico PT-BR v2 — privacidade e determinismo
+
+- Substitui o corpus piloto por 50 episódios genéricos de computação/ciências, 30 consultas autossuficientes e 32 julgamentos, sem conteúdo derivado de conversas de operadores.
+- Remove a categoria `contextual`, que sugeria avaliação de histórico conversacional não fornecido ao avaliador; substitui por `consulta_curta`.
+- Define desempate determinístico por ID de episódio quando score e timestamp são iguais, evitando dependência da ordem de entrada.
+
+
 ## Benchmark piloto de qualidade da recuperação episódica em PT-BR
 
 - Adiciona corpus sintético offline com 50 episódios, 30 consultas e qrels graduados, incluindo paráfrases, coloquialismos, variações ortográficas, referências contextuais e consultas sem resposta.

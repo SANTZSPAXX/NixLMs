@@ -15,6 +15,7 @@ from benchmarks.episodic_retrieval_quality_ptbr import (
     validate_dataset,
 )
 from nixlms_core.encoding import SemanticEncoder
+from nixlms_core.episodic import EpisodicMemory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,6 +123,45 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
             0.0,
         )
         self.assertNotIn(str(DATA_DIR.resolve()), json.dumps(first, ensure_ascii=False))
+
+    def test_equal_score_ranking_is_independent_of_episode_file_order(self):
+        timestamp = "2026-01-15T12:00:00+00:00"
+        rows = [
+            {
+                "id": "episode-a",
+                "timestamp": timestamp,
+                "user_input": "alpha beta",
+                "assistant_output": "shared content",
+                "context": {},
+                "outcome": "",
+                "importance": 0.5,
+                "feedback": None,
+                "tags": [],
+            },
+            {
+                "id": "episode-b",
+                "timestamp": timestamp,
+                "user_input": "alpha beta",
+                "assistant_output": "shared content",
+                "context": {},
+                "outcome": "",
+                "importance": 0.5,
+                "feedback": None,
+                "tags": [],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            first_path = Path(temporary) / "first.json"
+            second_path = Path(temporary) / "second.json"
+            first_path.write_text(json.dumps(rows), encoding="utf-8")
+            second_path.write_text(json.dumps(list(reversed(rows))), encoding="utf-8")
+            first = EpisodicMemory(first_path).recall("alpha beta", limit=2, min_score=0)
+            second = EpisodicMemory(second_path).recall("alpha beta", limit=2, min_score=0)
+
+        self.assertEqual([item["id"] for _, item in first],
+                         [item["id"] for _, item in second])
+        self.assertEqual([item["id"] for _, item in first],
+                         ["episode-b", "episode-a"])
 
     def test_local_native_checkpoint_must_be_explicit_and_compatible(self):
         encoder = SemanticEncoder(dimensions=8)

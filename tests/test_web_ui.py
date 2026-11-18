@@ -96,7 +96,7 @@ class WebInterfaceTests(unittest.TestCase):
 
     def test_server_is_loopback_only_and_has_no_shell_endpoint(self):
         source = (ROOT / "nixlms_web" / "server.py").read_text(encoding="utf-8")
-        self.assertIn('host,port="127.0.0.1",8765', source)
+        self.assertIn('host, port = "127.0.0.1", 8765', source)
         self.assertNotIn('host,port="0.0.0.0"', source)
         self.assertNotIn("subprocess", source)
 

@@ -111,7 +111,7 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
         self.assertEqual(first["metrics"]["overall"]["query_count"], 30)
         self.assertEqual(
             set(first["metrics"]["by_category"]),
-            {"parafrase", "coloquial", "variacao_ortografica", "contextual", "sem_resposta"},
+            {"parafrase", "coloquial", "variacao_ortografica", "consulta_curta", "sem_resposta"},
         )
         self.assertEqual(
             first["metrics"]["overall"]["abstention"]["no_answer_query_count"],

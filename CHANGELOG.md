@@ -1,3 +1,9 @@
+## Sandbox mínimo para aprendizagem incremental (2026-11-18)
+
+- O treinamento candidato agora recebe apenas o snapshot do dataset, estado do modelo/conhecimento e calibrações necessárias.
+- Evita copiar bancos SQLite privados, histórico episódico, diretórios de modelos baixados e saídas de mídia para o diretório temporário de treinamento.
+- Adiciona teste de regressão para garantir o isolamento dos acervos não necessários.
+
 ## Integração Hugging Face gratuita e local
 
 - Adiciona descoberta anônima de modelos, datasets e Spaces públicos sem token.

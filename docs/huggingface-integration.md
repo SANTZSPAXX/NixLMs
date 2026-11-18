@@ -131,7 +131,7 @@ O ID do modelo público é escolhido pelo operador. O download exige confirmaç�
 
 Ao iniciar o servidor web, a NixLMs verifica as dependências multimodais ausentes e tenta instalá-las em segundo plano, sem atualizar pacotes já instalados. Se PyTorch estiver ausente, instala a distribuição oficial CPU; se já houver PyTorch CUDA/CPU, preserva a instalação existente. O estado é registrado em `data/media/bootstrap.json` e a tentativa é limitada a uma por 24 horas. Defina `NIXLMS_AUTO_INSTALL_MEDIA=0` para desativar o bootstrap automático. Falha de instalação não deve impedir o núcleo conversacional de iniciar.
 
-A instalação automática usa internet, espaço em disco e tempo de CPU. Não baixa pesos de modelos automaticamente. O download de cada modelo continua sendo uma ação separada e confirmada pelo operador. A preparação automática acontece no servidor local; o notebook Colab ainda precisa executar a instalação de dependências no próprio runtime.
+A instalação automática usa internet, espaço em disco e tempo de CPU. Não baixa pesos de modelos automaticamente. O download de cada modelo continua sendo uma ação separada e confirmada pelo operador. A preparação automática acontece no servidor local e também na nova célula **Geração multimodal local** do notebook Colab, usando o ambiente Python ativo de cada runtime.
 
 ### NSFW
 

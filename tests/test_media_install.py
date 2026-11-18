@@ -109,7 +109,7 @@ class MediaInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             requirements = root / "requirements.txt"
-            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            requirements.write_text("diffusers>=0.30\n", encoding="utf-8")
             plan = media_install.build_install_plan(
                 requirements, root=root,
                 module_probe=lambda module: False,
@@ -126,7 +126,7 @@ class MediaInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             requirements = root / "requirements.txt"
-            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            requirements.write_text("diffusers>=0.30\n", encoding="utf-8")
             plan = media_install.build_install_plan(
                 requirements, root=root,
                 module_probe=lambda module: module == "diffusers",
@@ -141,7 +141,7 @@ class MediaInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             requirements = root / "requirements.txt"
-            requirements.write_text("diffusers>=0.30\\n", encoding="utf-8")
+            requirements.write_text("diffusers>=0.30\n", encoding="utf-8")
             plan = media_install.build_install_plan(
                 requirements, root=root,
                 module_probe=lambda module: False,
@@ -158,7 +158,7 @@ class MediaInstallTests(unittest.TestCase):
             root = Path(temp)
             requirements = root / "requirements.txt"
             requirements.write_text(
-                "diffusers @ https://example.invalid/diffusers.whl\\n",
+                "diffusers @ https://example.invalid/diffusers.whl\n",
                 encoding="utf-8",
             )
             with self.assertRaises(ValueError):

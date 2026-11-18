@@ -172,3 +172,22 @@
 - Added LIF spike telemetry and explicit-feedback plasticity.
 - Added split-aware QA and contrastive datasets and evaluation metrics.
 - Added optional local Ollama language generation.
+
+## Validação comparativa da recuperação episódica
+
+- Compara cache desabilitado, cache frio e cache aquecido com o mesmo conjunto determinístico de episódios e encoder.
+- Verifica equivalência de IDs/ordenação e scores por ID com tolerância absoluta de `1e-5`.
+- Confirma que `recall()` não altera o JSON persistido e que feedback, importância e recência continuam sendo recalculados sem re-encoding.
+- Mede mediana e p95 em repetições para 100, 500 e 2.000 episódios; a CI publica o relatório JSON sintético como artefato.
+- Mantém E5 opcional e local-only; nenhum modelo é baixado automaticamente.
+
+
+## Recuperação episódica otimizada — cache LRU e codificação em lote
+
+- Adiciona cache LRU volátil e limitado para embeddings de passagens episódicas, armazenados em float32 e sem alterar o JSON persistido.
+- Vincula entradas ao fingerprint do conteúdo e à identidade/configuração/versão do encoder; invalida entradas obsoletas e libera itens removidos.
+- Codifica somente misses em lotes limitados; mantém fallback compatível para encoders que oferecem apenas encode_passage ou encode.
+- Adiciona métricas de hits, misses, evictions, passagens codificadas e chamadas ao encoder.
+- Adiciona testes com encoders determinísticos/fakes e benchmark reproduzível para 100, 500 e 2.000 episódios; o modo E5 usa exclusivamente um modelo local informado pelo usuário.
+
+

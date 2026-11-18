@@ -249,3 +249,34 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 ### Concorrência do serviço Ollama
 
 Chamadas concorrentes a `OllamaManager.start_service()` são serializadas por instância. Isso impede que duas inicializações simultâneas criem processos filhos independentes e que um handle de processo seja sobrescrito antes do cleanup. A serialização não encerra serviços preexistentes e não transforma a verificação de bind de serviços externos em uma garantia de isolamento.
+
+
+## Cache e benchmark da memória episódica
+
+### Desempenho da recuperação episódica
+
+Quando um encoder semântico é fornecido, os embeddings das passagens são mantidos em um cache LRU volátil, limitado por padrão ao número máximo de episódios. O cache usa a identidade/versão do encoder e fingerprints do conteúdo; alterações de texto, substituição do encoder ou remoção de episódios invalidam somente as entradas afetadas. Os vetores são armazenados em float32 e não são gravados no JSON de memória.
+
+As passagens ausentes são codificadas em lotes pequenos (padrão 8, máximo 32) quando o encoder oferece encode_passages. Encoders antigos que oferecem somente encode_passage ou encode continuam compatíveis. A consulta continua sendo codificada a cada recuperação; recência, importância e feedback continuam sendo recalculados em tempo de consulta. O cache não muda o formato dos episódios nem a fórmula de ranking.
+
+O diagnóstico episodic.stats() inclui hits, misses, evictions, passagens codificadas, chamadas ao encoder, limite e quantidade atual de entradas. O tamanho pode ser ajustado ao construir EpisodicMemory por embedding_cache_size e passage_batch_size; não há configuração global nem dependência adicional obrigatória.
+
+Para medir 100, 500 e 2.000 episódios com encoder sintético determinístico:
+
+    python benchmarks/episodic_retrieval.py
+
+Para medir o backend E5, use um modelo que já esteja disponível localmente:
+
+    python benchmarks/episodic_retrieval.py --model-path models/multilingual-e5-small --batch-size 8
+
+O benchmark compara três cenários: cache desabilitado (`embedding_cache_size=0`), cache frio e cache aquecido. Por padrão, executa 7 repetições por cenário e informa mediana e p95, além de verificar IDs, ordenação e scores (tolerância absoluta de `1e-5`). O cenário desabilitado usa a mesma revisão do código com cache em zero; não é uma execução do código anterior à implementação do cache.
+
+A CI executa o benchmark sintético completo para 100, 500 e 2.000 episódios, com 5 repetições, e publica o JSON como artefato da execução do GitHub Actions. O encoder sintético mede o caminho de recuperação, não a qualidade nem a latência de um modelo pré-treinado.
+
+Para medir o backend E5, use um modelo que já esteja disponível localmente:
+
+    python benchmarks/episodic_retrieval.py --model-path models/multilingual-e5-small --batch-size 8 --repeats 7
+
+O modo E5 usa somente arquivos locais/cache, não baixa pesos e exclui o carregamento inicial do modelo dos tempos medidos. Os tempos variam por hardware e não são limites absolutos de aceitação.
+
+

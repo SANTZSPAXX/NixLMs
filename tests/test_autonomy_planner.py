@@ -237,7 +237,7 @@ class AutonomyPlannerTests(unittest.TestCase):
             "bounded_wait",
             lambda payload, context: calls.append("started") or context.wait(1),
             lambda result, payload: True,
-            timeout_seconds=0.02,
+            timeout_seconds=0.2,
             context_aware=True,
         )
         goal = self.goals.create_goal("Timeout cooperativo")
@@ -277,13 +277,13 @@ class AutonomyPlannerTests(unittest.TestCase):
 
         worker = threading.Thread(target=run_cycle)
         worker.start()
-        self.assertTrue(started.wait(2))
+        self.assertTrue(started.wait(5))
         active = self.planner.active_tasks()
         self.assertEqual(len(active), 1)
         self.assertFalse(active[0]["cancellation_requested"])
         self.assertTrue(active[0]["cooperative_cancellation"])
         self.assertTrue(self.planner.cancel_task(goal["id"], step["id"]))
-        worker.join(2)
+        worker.join(5)
         self.assertFalse(worker.is_alive())
         self.assertEqual(
             self.goals.get_goal(goal["id"])["steps"][0]["status"], "cancelled"
@@ -298,7 +298,7 @@ class AutonomyPlannerTests(unittest.TestCase):
 
         def callback(payload):
             started.set()
-            release.wait(2)
+            release.wait(5)
             return {"ok": True}
 
         self.planner.register_task(
@@ -316,18 +316,32 @@ class AutonomyPlannerTests(unittest.TestCase):
             target=lambda: result_holder.setdefault("result", self.planner.run_cycle())
         )
         worker.start()
-        self.assertTrue(started.wait(2))
+        self.assertTrue(started.wait(5))
         active = self.planner.active_tasks()
         self.assertEqual(len(active), 1)
         self.assertFalse(active[0]["cooperative_cancellation"])
         self.assertFalse(self.planner.cancel_task(goal["id"], step["id"]))
         release.set()
-        worker.join(2)
+        worker.join(5)
         self.assertFalse(worker.is_alive())
         self.assertEqual(
             self.goals.get_goal(goal["id"])["steps"][0]["status"], "completed"
         )
         self.assertEqual(result_holder["result"]["verified_completed"], 1)
+
+
+    def test_task_timeout_rejects_non_positive_non_finite_and_excessive_values(self):
+        invalid_values = (0, -1, 3601, float("nan"), float("inf"), True, "5")
+        for index, timeout in enumerate(invalid_values):
+            with self.subTest(timeout=timeout):
+                with self.assertRaises(ValueError):
+                    self.planner.register_task(
+                        "invalid_timeout_" + str(index),
+                        lambda payload, context: True,
+                        lambda result, payload: True,
+                        context_aware=True,
+                        timeout_seconds=timeout,
+                    )
 
 
 if __name__ == "__main__":

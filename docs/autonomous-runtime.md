@@ -62,7 +62,7 @@ planner.register_task(
 )
 ```
 
-- `timeout_seconds` é opcional e limitado a 1–3600 segundos; só é aceito com callback context-aware.
+- `timeout_seconds` é opcional e deve ser maior que zero, até 3600 segundos; só é aceito com callback context-aware.
 - `context.checkpoint()` lança `TimeoutError` ao observar o prazo excedido e
   `TaskCancelledError` quando o operador solicita cancelamento.
 - `context.wait(seconds)` aguarda de forma cancelável e nunca ultrapassa o

@@ -23,7 +23,10 @@ class TaskExecutionContext:
 
     MAX_TIMEOUT_SECONDS = 3600.0
 
-    def __init__(self, task_id, *, timeout_seconds=None, clock=None, cooperative_cancellation=True):
+    def __init__(
+        self, task_id, *, timeout_seconds=None, clock=None,
+        cooperative_cancellation=True,
+    ):
         self.task_id = str(task_id)
         self.cooperative_cancellation = bool(cooperative_cancellation)
         self.idempotency_key = "nixlms-" + hashlib.sha256(
@@ -179,7 +182,10 @@ class AutonomyPlanner:
 
             try:
                 context.checkpoint()
-                result = callback(task_payload, context) if context_aware else callback(task_payload)
+                result = (
+                    callback(task_payload, context)
+                    if context_aware else callback(task_payload)
+                )
                 context.checkpoint()
                 encoded_result = json.dumps(
                     result, ensure_ascii=False, separators=(",", ":"), allow_nan=False

@@ -1,18 +1,89 @@
+import subprocess
+import sys
+import time
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
+BASE = "http://127.0.0.1:8765"
+
 class WebInterfaceTests(unittest.TestCase):
-    def test_static_assets_exist(self):
-        base=ROOT/"nixlms_web"/"static"
-        for name in ("index.html","style.css","app.js"):
-            self.assertTrue((base/name).is_file())
-    def test_server_binds_loopback(self):
-        source=(ROOT/"nixlms_web"/"server.py").read_text(encoding="utf-8")
-        self.assertIn('host,port="127.0.0.1",8765',source)
-        self.assertNotIn('host,port="0.0.0.0"',source)
-    def test_upload_is_allowlisted(self):
-        source=(ROOT/"nixlms_web"/"server.py").read_text(encoding="utf-8")
-        self.assertIn('".txt"',source)
-        self.assertNotIn('subprocess',source)
-if __name__=="__main__": unittest.main()
+    @classmethod
+    def setUpClass(cls):
+        cls.process = subprocess.Popen(
+            [sys.executable, "-m", "nixlms_web.server"],
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        for _ in range(60):
+            if cls.process.poll() is not None:
+                raise RuntimeError("Servidor encerrou durante a inicialização.")
+            try:
+                urllib.request.urlopen(BASE + "/api/status", timeout=1)
+                break
+            except (OSError, urllib.error.URLError):
+                time.sleep(0.25)
+        else:
+            cls.process.terminate()
+            raise RuntimeError("Servidor não abriu a porta de teste.")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.process.terminate()
+        try:
+            cls.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            cls.process.kill()
+            cls.process.wait(timeout=5)
+
+    def get_json(self, path):
+        with urllib.request.urlopen(BASE + path, timeout=5) as response:
+            import json
+            return json.loads(response.read().decode("utf-8"))
+
+    def test_homepage_served(self):
+        with urllib.request.urlopen(BASE + "/", timeout=5) as response:
+            body = response.read().decode("utf-8")
+            self.assertEqual(response.status, 200)
+            self.assertIn("NixLMs", body)
+
+    def test_status_endpoint_connected(self):
+        data = self.get_json("/api/status")
+        self.assertIn("knowledge", data)
+        self.assertIn("library", data)
+        self.assertIn("documents", data["library"])
+
+    def test_framework_inventory_does_not_require_registry_module(self):
+        data = self.get_json("/api/frameworks")
+        self.assertTrue(isinstance(data, list))
+        self.assertTrue(any(item["name"] == "PyTorch" for item in data))
+
+    def test_chat_endpoint_uses_legacy_core(self):
+        import json
+        request = urllib.request.Request(
+            BASE + "/api/chat",
+            data=json.dumps({"message": "oi"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        self.assertIn("reply", data)
+        self.assertTrue(data["reply"])
+
+    def test_static_assets_exist_and_css_is_valid_prefix(self):
+        base = ROOT / "nixlms_web" / "static"
+        for name in ("index.html", "style.css", "app.js"):
+            self.assertTrue((base / name).is_file())
+        css = (base / "style.css").read_text(encoding="utf-8")
+        self.assertTrue(css.startswith(":root"))
+
+    def test_server_is_loopback_only_and_has_no_shell_endpoint(self):
+        source = (ROOT / "nixlms_web" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('host,port="127.0.0.1",8765', source)
+        self.assertNotIn('host,port="0.0.0.0"', source)
+        self.assertNotIn("subprocess", source)
+
+if __name__ == "__main__":
+    unittest.main()

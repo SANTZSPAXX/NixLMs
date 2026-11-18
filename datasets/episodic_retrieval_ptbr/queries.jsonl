@@ -1,30 +1,30 @@
-{"query_id":"q001","query":"qual recurso deixa as bibliotecas de cada projeto Python separadas?","category":"parafrase","split":"validation","expects_no_answer":false}
-{"query_id":"q002","query":"como rodar a suíte de testes depois de mexer no código?","category":"parafrase","split":"validation","expects_no_answer":false}
-{"query_id":"q003","query":"qual é o jeito seguro de experimentar sem mexer na versão principal?","category":"parafrase","split":"validation","expects_no_answer":false}
-{"query_id":"q004","query":"o que evita que leituras bloqueiem gravações no banco local?","category":"parafrase","split":"test","expects_no_answer":false}
-{"query_id":"q005","query":"como impedir que o serviço de linguagem fique exposto na rede?","category":"parafrase","split":"test","expects_no_answer":false}
-{"query_id":"q006","query":"quais prefixos o E5 exige para pergunta e passagem?","category":"parafrase","split":"test","expects_no_answer":false}
-{"query_id":"q007","query":"deu ruim na inicialização; como não deixar o processo pendurado?","category":"coloquial","split":"validation","expects_no_answer":false}
-{"query_id":"q008","query":"meu note é fraquinho: como rodar um modelo sem placa de vídeo?","category":"coloquial","split":"validation","expects_no_answer":false}
-{"query_id":"q009","query":"como guardar vetores sem deixar o cache crescer sem fim?","category":"coloquial","split":"validation","expects_no_answer":false}
-{"query_id":"q010","query":"no Windows, qual comando liga o ambiente virtual?","category":"coloquial","split":"test","expects_no_answer":false}
-{"query_id":"q011","query":"pra rodar num Raspberry com Linux, o que preciso checar?","category":"coloquial","split":"test","expects_no_answer":false}
-{"query_id":"q012","query":"como evitar que a busca baixe o modelo pela internet?","category":"coloquial","split":"test","expects_no_answer":false}
-{"query_id":"q013","query":"manjericao aguenta sol direto ou queima?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
-{"query_id":"q014","query":"terra compactada atrapalha o crecimento das raizes?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
-{"query_id":"q015","query":"qual adubo caseiro devolve nutriente pra terra?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
-{"query_id":"q016","query":"qual distancia deixo entre os dente do alho?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
-{"query_id":"q017","query":"molhar de manha e melhor pra horta?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
-{"query_id":"q018","query":"da pra reaproveita o substrato apos colher?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
-{"query_id":"q019","query":"e no caixote, de quanto em quanto tempo rega?","category":"contextual","split":"validation","expects_no_answer":false}
-{"query_id":"q020","query":"e o reservatorio, quantos litros voce sugeriu pra começar?","category":"contextual","split":"validation","expects_no_answer":false}
-{"query_id":"q021","query":"depois que o filtro amadurecer, qual parametro acompanhar?","category":"contextual","split":"validation","expects_no_answer":false}
-{"query_id":"q022","query":"e no galinheiro, onde posicionar o bebedouro?","category":"contextual","split":"test","expects_no_answer":false}
-{"query_id":"q023","query":"quando parar de sair bolha no airlock, o que faço?","category":"contextual","split":"test","expects_no_answer":false}
-{"query_id":"q024","query":"pra rodar todos os testes, qual era aquele comando?","category":"contextual","split":"test","expects_no_answer":false}
-{"query_id":"q025","query":"qual foi o laudo da ressonancia magnetica?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q026","query":"senha do roteador azul qual era mesmo?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q027","query":"qual hotel ficou reservado em Recife?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q028","query":"a bicicleta da vizinha era de qual marca?","category":"sem_resposta","split":"test","expects_no_answer":true}
-{"query_id":"q029","query":"quanto ficou o contrato de aluguel e o reajuste?","category":"sem_resposta","split":"test","expects_no_answer":true}
-{"query_id":"q030","query":"quem ganhou o campeonato municipal de xadrez?","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q001","query":"qual jeito separa os pacotes de cada projeto python?","category":"parafrase","split":"validation","expects_no_answer":false}
+{"query_id":"q002","query":"qual comando executa a bateria de testes unittest?","category":"parafrase","split":"validation","expects_no_answer":false}
+{"query_id":"q003","query":"como mexer no git sem alterar a branch principal?","category":"parafrase","split":"validation","expects_no_answer":false}
+{"query_id":"q004","query":"qual ajuste permite leitura durante escrita no sqlite?","category":"parafrase","split":"validation","expects_no_answer":false}
+{"query_id":"q005","query":"o que quer dizer erro http 404 e 500?","category":"parafrase","split":"test","expects_no_answer":false}
+{"query_id":"q006","query":"como um domínio vira endereço ip?","category":"parafrase","split":"test","expects_no_answer":false}
+{"query_id":"q007","query":"como proteger dados que trafegam pela rede?","category":"coloquial","split":"validation","expects_no_answer":false}
+{"query_id":"q008","query":"como conferir se o json segue os campos esperados?","category":"coloquial","split":"validation","expects_no_answer":false}
+{"query_id":"q009","query":"como gerar uma impressão digital sha256 do arquivo?","category":"coloquial","split":"validation","expects_no_answer":false}
+{"query_id":"q010","query":"como o cache descarta o item menos usado recentemente?","category":"coloquial","split":"test","expects_no_answer":false}
+{"query_id":"q011","query":"qual é a ordem de grandeza da busca que divide por dois?","category":"coloquial","split":"test","expects_no_answer":false}
+{"query_id":"q012","query":"lista pode mudar e tupla não, certo?","category":"coloquial","split":"test","expects_no_answer":false}
+{"query_id":"q013","query":"qual algoritmo visita primeiro os vizinhos mais próximos?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
+{"query_id":"q014","query":"como percorrer o grafo indo fundo antes de voltar?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
+{"query_id":"q015","query":"qual algoritmo acha caminho minimo com pesos positivos?","category":"variacao_ortografica","split":"validation","expects_no_answer":false}
+{"query_id":"q016","query":"como uma tabela transforma chave em posicao?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
+{"query_id":"q017","query":"qual estrutura atende primeiro quem chegou primeiro?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
+{"query_id":"q018","query":"qual estrutura remove primeiro o ultimo elemento inserido?","category":"variacao_ortografica","split":"test","expects_no_answer":false}
+{"query_id":"q019","query":"indice acelera consulta sql?","category":"consulta_curta","split":"validation","expects_no_answer":false}
+{"query_id":"q020","query":"transacao permite confirmar ou desfazer operacoes?","category":"consulta_curta","split":"validation","expects_no_answer":false}
+{"query_id":"q021","query":"o que impede repeticao de efeito numa api?","category":"consulta_curta","split":"validation","expects_no_answer":false}
+{"query_id":"q022","query":"como evitar muitas tentativas juntas depois de erro?","category":"consulta_curta","split":"test","expects_no_answer":false}
+{"query_id":"q023","query":"por que uma requisicao precisa de tempo maximo?","category":"consulta_curta","split":"test","expects_no_answer":false}
+{"query_id":"q024","query":"threads dividem memoria do processo?","category":"consulta_curta","split":"test","expects_no_answer":false}
+{"query_id":"q025","query":"qual foi a temperatura exata registrada no observatorio em 14 de abril?","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q026","query":"qual identificador foi atribuido ao pedido de compra do laboratorio?","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q027","query":"qual era o resultado da partida final do torneio regional de damas?","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q028","query":"quantos quilometros tinha a rota medida pelo satelite na terça-feira?","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q029","query":"qual fabricante produziu o sensor instalado no farol da ilha?","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q030","query":"qual foi o valor medido no experimento de pressão do laboratório 7?","category":"sem_resposta","split":"test","expects_no_answer":true}

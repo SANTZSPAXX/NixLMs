@@ -1,1 +1,2 @@
 # NixLMs 0.4: núcleo Python padrão, sem dependências obrigatórias.
+psycopg[binary]>=3.2,<4

@@ -264,3 +264,13 @@ class PrivateKnowledgeLibrary:
             "database_bytes": size, "offline": True,
             "supported_extensions": sorted(SUPPORTED_EXTENSIONS),
         }
+
+    def list_chunks(self, limit=1000):
+        """Return bounded document chunks for optional vector indexing."""
+        with self._connect() as db:
+            rows = db.execute("""
+                SELECT d.id AS document_id, d.title, c.chunk_index, c.content
+                FROM chunks c JOIN documents d ON d.id=c.document_id
+                ORDER BY d.imported_at DESC, c.chunk_index ASC LIMIT ?
+            """, (max(1, min(5000, int(limit))),)).fetchall()
+        return [dict(row) for row in rows]

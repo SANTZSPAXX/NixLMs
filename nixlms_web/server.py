@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import importlib.util
 import hmac
+import hashlib
+import atexit
 import json
 import mimetypes
 import os
@@ -28,8 +30,10 @@ ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
 from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core.utils import normalize  # noqa: E402
 from nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
+from nixlms_core.supabase_store import SnapshotWorker, SupabaseStore  # noqa: E402
 
 
 def inspect_frameworks():
@@ -73,8 +77,63 @@ def inspect_frameworks():
     return result
 
 
+# Restaurar o estado durável ANTES de abrir JSON/SQLite nos módulos cognitivos.
+supabase_store = None
+supabase_worker = None
+try:
+    supabase_store = SupabaseStore.from_env(DATA)
+    if supabase_store is not None:
+        print("[NixUI] Restaurando estado persistente do Supabase...")
+        print("[NixUI]", supabase_store.restore())
+    elif RENDER_MODE and os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+        raise RuntimeError("NIXLMS_DATABASE_URL é obrigatória neste serviço Render.")
+except Exception as exc:
+    if RENDER_MODE and os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+        raise RuntimeError("Supabase obrigatório, mas indisponível: " + type(exc).__name__) from exc
+    print("[NixUI] Supabase indisponível; execução local sem persistência cloud:", type(exc).__name__)
+    supabase_store = None
+
 # Uma única instância alimenta chat, biblioteca, memória e diagnóstico.
 assistant = NixLMsNeuralCore(data_dir=DATA)
+assistant.supabase_store = supabase_store
+if supabase_store is not None:
+    try:
+        # Backfill the first vector index from the existing local/remote memories.
+        existing_chunks = library.list_chunks(limit=500)
+        expected_vectors = (len(assistant.memory.knowledge) +
+                            len(assistant.episodic.items) + len(existing_chunks))
+        if supabase_store.vector_count() < expected_vectors:
+            vector_records = []
+            for item in assistant.memory.knowledge:
+                question = str(item.get("question", ""))
+                answer = str(item.get("answer", ""))
+                passage = question + " " + answer
+                memory_id = "knowledge:" + hashlib.sha256(
+                    normalize(question).encode("utf-8")
+                ).hexdigest()
+                vector_records.append((memory_id, "knowledge", passage,
+                                       assistant.encoder.encode(passage),
+                                       {"tags": item.get("tags", [])}))
+            for item in assistant.episodic.items:
+                passage = str(item.get("user_input", "")) + " " + str(item.get("assistant_output", ""))
+                episode_id = str(item.get("id") or hashlib.sha256(passage.encode("utf-8")).hexdigest())
+                vector_records.append(("episode:" + episode_id, "episode",
+                                       passage, assistant.encoder.encode(passage),
+                                       {"source": item.get("source", "unknown")}))
+            for chunk in existing_chunks:
+                passage = str(chunk["content"])
+                vector_records.append(("library:" + str(chunk["document_id"]) + ":" +
+                                       str(chunk["chunk_index"]), "library", passage,
+                                       assistant.encoder.encode(passage),
+                                       {"title": chunk["title"], "document_id": chunk["document_id"]}))
+            supabase_store.upsert_vectors(vector_records)
+            print("[NixUI] Memórias vetoriais indexadas:", len(vector_records))
+    except Exception as exc:
+        supabase_store._last_error = "vector_backfill:" + type(exc).__name__
+        print("[NixUI] Falha no índice vetorial inicial:", type(exc).__name__)
+    supabase_worker = SnapshotWorker(supabase_store, interval=int(os.getenv("NIXLMS_SUPABASE_SYNC_SECONDS", "10")))
+    supabase_worker.start()
+    atexit.register(supabase_worker.stop)
 library = assistant.private_library
 media = MediaGenerationManager(DATA, hub=assistant.huggingface)
 started = time.time()
@@ -108,6 +167,11 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(supplied, expected)
 
     def send_json(self, obj, status=200):
+        if supabase_worker is not None:
+            try:
+                supabase_worker.flush()
+            except Exception as exc:
+                supabase_store._last_error = type(exc).__name__ + ": " + str(exc)[:300]
         raw = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -135,7 +199,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if RENDER_MODE and path == "/api/health":
-            return self.send_json({"ok": True, "service": "nixlms"})
+            persistence = "not_configured"
+            healthy = True
+            if supabase_store is not None:
+                try:
+                    supabase_store.ping()
+                    persistence = "connected"
+                except Exception as exc:
+                    persistence = "unavailable"
+                    healthy = False
+                    supabase_store._last_error = type(exc).__name__
+            elif os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+                healthy = False
+            return self.send_json({
+                "ok": healthy, "service": "nixlms",
+                "persistence": persistence,
+            }, 200 if healthy else 503)
         if not RENDER_MODE and not self.local():
             return self.send_json({"error": "Somente acesso local."}, 403)
         if not self.authorized_api(path):
@@ -152,6 +231,7 @@ class Handler(BaseHTTPRequestHandler):
                 "runtime": {
                     "scheduler_running": assistant.scheduler.running,
                     "idle_learning": assistant.idle_learning.status(),
+                    "persistence": supabase_store.status() if supabase_store else {"configured": False},
                 },
                 "python": platform.python_version(),
                 "platform": platform.platform(),
@@ -430,7 +510,20 @@ class Handler(BaseHTTPRequestHandler):
                 if target.exists():
                     target = inbox / (str(int(time.time())) + "_" + safe_name)
                 target.write_text(content, encoding="utf-8")
-                return self.send_json(library.import_path(target))
+                result = library.import_path(target)
+                if supabase_store is not None:
+                    try:
+                        for chunk in library.list_chunks(limit=500):
+                            vector_text = str(chunk["content"])
+                            supabase_store.upsert_vector(
+                                "library:" + str(chunk["document_id"]) + ":" + str(chunk["chunk_index"]),
+                                "library", vector_text,
+                                assistant.encoder.encode(vector_text),
+                                {"title": chunk["title"], "document_id": chunk["document_id"]},
+                            )
+                    except Exception as exc:
+                        supabase_store._last_error = "vector_index:" + type(exc).__name__
+                return self.send_json(result)
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
         except (HuggingFaceError, MediaGenerationError) as exc:
             return self.send_json({"error": str(exc)}, 400)
@@ -463,6 +556,8 @@ def main():
         print("\nEncerrando interface...")
     finally:
         assistant.scheduler.stop()
+        if supabase_worker is not None:
+            print("Sincronização final Supabase:", supabase_worker.stop())
         server.server_close()
 
 

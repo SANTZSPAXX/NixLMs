@@ -172,6 +172,8 @@ class NixLMsNeuralCore:
             self._save_decoder()
         self._load_lif_calibration()
         self._load_decoder_calibration()
+        self.supabase_store = None
+        self._vector_memory_error = None
 
         self.last_trace = {}
         self.last_question = ""
@@ -690,6 +692,22 @@ class NixLMsNeuralCore:
             {"question": item.get("question"), "answer": item.get("answer")}
             for _, item in relevant_ranked[:3]
         ]
+        store = getattr(self, "supabase_store", None)
+        if store is not None:
+            try:
+                vector_matches = store.search_vectors(self.encoder.encode(text), limit=3)
+                for match in vector_matches:
+                    if float(match.get("similarity", 0.0)) < 0.15:
+                        continue
+                    memory_context.append({
+                        "question": "Memória vetorial persistente (" + str(match.get("memory_type", "memory")) + ")",
+                        "answer": str(match.get("content", ""))[:4000],
+                        "source": "supabase_pgvector",
+                        "score": float(match.get("similarity", 0.0)),
+                    })
+                self._vector_memory_error = None
+            except Exception as exc:
+                self._vector_memory_error = type(exc).__name__
         if lif_ranked:
             memory_context.insert(0, {
                 "question": "Candidato de resposta recuperado pela leitura associativa LIF",
@@ -867,13 +885,25 @@ class NixLMsNeuralCore:
         if record:
             self.memory.add_episode("user", text)
             self.memory.add_episode("assistant", answer)
-            self.episodic.record(
+            episode = self.episodic.record(
                 text, answer,
                 context={"response_source": source, "confidence": confidence,
                          "world_fact_sources": self.last_trace["world_fact_sources"]},
                 outcome="response_generated", source=source,
                 importance=max(0.0, min(1.0, float(confidence))),
             )
+            store = getattr(self, "supabase_store", None)
+            if store is not None:
+                try:
+                    vector_text = text + "\\n" + answer
+                    store.upsert_vector(
+                        "episode:" + str(episode["id"]), "episode", vector_text,
+                        self.encoder.encode(vector_text),
+                        {"source": source, "confidence": float(confidence)},
+                    )
+                    self._vector_memory_error = None
+                except Exception as exc:
+                    self._vector_memory_error = type(exc).__name__
         return answer
 
     def run_autonomy_cycle(self, limit=None):
@@ -888,7 +918,19 @@ class NixLMsNeuralCore:
         self.invalidate_lif_calibration()
         self.encoder.fit_vocabulary([question, answer])
         if remember:
-            self.memory.remember(question, answer)
+            remembered = self.memory.remember(question, answer)
+            store = getattr(self, "supabase_store", None)
+            if store is not None:
+                try:
+                    store.upsert_vector(
+                        "knowledge:" + hashlib.sha256(normalize(question).encode("utf-8")).hexdigest(),
+                        "knowledge", question + "\\n" + answer,
+                        self.encoder.encode(question + "\\n" + answer),
+                        {"tags": remembered.get("tags", [])},
+                    )
+                    self._vector_memory_error = None
+                except Exception as exc:
+                    self._vector_memory_error = type(exc).__name__
         if reinforce:
             vector = self.encoder.encode(question)
             _, hidden = self.network.forward(vector, track_plasticity=True)
@@ -932,6 +974,7 @@ class NixLMsNeuralCore:
             "startup_diagnostics": self.startup_diagnostics,
             "idle_learning": self.idle_learning.status(),
             "private_library": self.private_library.stats(),
+            "vector_memory": {"configured": getattr(self, "supabase_store", None) is not None, "last_error": self._vector_memory_error},
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
             "lif_network": {

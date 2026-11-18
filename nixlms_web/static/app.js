@@ -1,5 +1,16 @@
 const $=s=>document.querySelector(s), all=s=>[...document.querySelectorAll(s)];
-async function api(path,opt={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opt});const d=await r.json();if(!r.ok)throw Error(d.error||"Falha");return d}
+async function api(path,opt={},retry=true){
+ const headers={"Content-Type":"application/json",...(opt.headers||{})};
+ const token=sessionStorage.getItem("nixlms_access_token");
+ if(token)headers.Authorization="Bearer "+token;
+ let r=await fetch(path,{...opt,headers});
+ if(r.status===401&&retry){
+  const entered=window.prompt("Acesso protegido da NixLMs. Informe o token de acesso configurado no Render:");
+  if(entered){sessionStorage.setItem("nixlms_access_token",entered.trim());return api(path,opt,false)}
+  throw Error("Token de acesso necessário para usar a NixLMs hospedada.");
+ }
+ const d=await r.json();if(!r.ok)throw Error(d.error||"Falha");return d
+}
 function toast(s){const t=$("#toast");t.textContent=s;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2500)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function bytes(n){return n<1024?n+" B":n<1048576?(n/1024).toFixed(1)+" KB":(n/1048576).toFixed(2)+" MB"}

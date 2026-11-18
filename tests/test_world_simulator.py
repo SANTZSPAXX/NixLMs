@@ -4,6 +4,7 @@ from pathlib import Path
 
 from nixlms_core.simulation import WorldSimulator
 from nixlms_core.world_model import WorldModel
+from nixlms_core import NixLMsNeuralCore
 
 
 class WorldSimulatorTests(unittest.TestCase):
@@ -58,6 +59,14 @@ class WorldSimulatorTests(unittest.TestCase):
                 {"subject": "x", "predicate": "p", "object": str(i)}
                 for i in range(self.simulator.MAX_CHANGES + 1)
             ])
+
+
+    def test_neural_core_exposes_simulator_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            status = ai.status()
+            self.assertTrue(status["simulation"]["enabled"])
+            self.assertFalse(status["simulation"]["persists_results"])
 
     def test_simulation_identifier_is_deterministic(self):
         change = [{"subject": "x", "predicate": "p", "object": "y"}]

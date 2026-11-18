@@ -31,6 +31,9 @@ class MediaGenerationTests(unittest.TestCase):
         self.manager.set_nsfw(False)
         self.assertFalse(self.manager.settings()["nsfw_enabled"])
 
+    def test_safe_mode_allows_nonsexual_child_prompt(self):
+        self.assertEqual(self.manager._validate_prompt("a child reading a book"), "a child reading a book")
+
     def test_minor_prompt_is_rejected(self):
         self.manager.set_nsfw(True)
         with self.assertRaisesRegex(MediaGenerationError, "menores"):

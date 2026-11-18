@@ -295,7 +295,7 @@ def main():
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
-    print("NixLMs UI: http://127.0.0.1:8765 (somente este computador)")
+    print(f"NixLMs UI: http://127.0.0.1:{port} (somente este computador)")
     print("Motor: NixLMsNeuralCore")
     print("Autodiagnóstico:", runtime["diagnostics"]["status"])
     print("Aprendizagem ociosa:", runtime["idle_learning"])

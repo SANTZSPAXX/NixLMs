@@ -68,10 +68,11 @@ class NixLMsNeuralCore:
 
         # O encoder nativo continua responsável pelo vetor de entrada LIF e pelo
         # aprendizado contrastivo. O backend pré-treinado é apenas para recuperação.
-        model_path = os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
         active_hf_encoder = self.huggingface.active_encoder()
-        if not model_path and active_hf_encoder:
-            model_path = active_hf_encoder["path"]
+        model_path = (
+            active_hf_encoder["path"] if active_hf_encoder
+            else os.getenv("NIXLMS_EMBEDDING_MODEL_PATH", "").strip()
+        )
         self.retrieval_encoder = (
             TransformersSentenceEncoder(model_path, device="cpu", local_files_only=True)
             if model_path else self.encoder

@@ -642,6 +642,7 @@ class NixLMsNeuralCore:
             text, episodic_encoder, limit=3,
             exclude_user_inputs=excluded_questions,
         )
+        library_results = self.private_library.search(text, limit=3)
         for result in library_results:
             memory_context.append({
                 "question": f"Trecho da biblioteca privada: {result['title']}",
@@ -657,7 +658,6 @@ class NixLMsNeuralCore:
             })
         concepts = self.mental_map.associate(text, limit=8)
         world_facts = self.world_model.search(text, limit=5)
-        library_results = self.private_library.search(text, limit=3)
         goal_context = self.goals.active_context(limit=5)
         history = self.attention.working.context(limit=6)
         temporal_answer = self._temporal_response(text)

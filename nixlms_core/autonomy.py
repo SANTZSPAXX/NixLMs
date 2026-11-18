@@ -7,6 +7,7 @@ import json
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 import uuid
 from pathlib import Path
 
@@ -27,7 +28,9 @@ class AutonomyPolicy:
         max_payload_bytes=16384,
         max_result_bytes=65536,
     ):
-        self.allowed_scopes = set(allowed_scopes or {"internal", "local", "external"})
+        self.allowed_scopes = set(
+            allowed_scopes if allowed_scopes is not None else {"internal", "local", "external"}
+        )
         self.approval_scopes = set(
             approval_scopes if approval_scopes is not None else {"local", "external"}
         )
@@ -70,11 +73,19 @@ class AutonomyEngine:
         self._lock = threading.RLock()
         self._initialize()
 
+    @contextmanager
     def _connect(self):
         db = sqlite3.connect(str(self.path), timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=10000")
-        return db
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def _initialize(self):
         with self._connect() as db:

@@ -1,5 +1,11 @@
 # Changelog
 
+## Concorrência do gerenciador Ollama
+
+- Serializa chamadas concorrentes a `start_service()` com lock por instância, evitando que inicializações simultâneas criem processos filhos duplicados e percam a referência de cleanup.
+- Adiciona teste de regressão com oito chamadas concorrentes.
+
+
 ## Ollama — limpeza limitada após falha de inicialização
 
 - Após falha de prontidão ou interrupção por Ctrl+C, tenta encerrar somente o processo `Popen` criado pela instância: `terminate()` + espera de até 2 segundos, seguida de `kill()` + nova espera de até 2 segundos; a interrupção do usuário continua sendo propagada.

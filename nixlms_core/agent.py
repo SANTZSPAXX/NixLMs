@@ -27,6 +27,7 @@ from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
 from .ollama_manager import OllamaManager
+from .huggingface import HuggingFaceHub
 from .learning import LearningEngine
 from .utils import save_json, load_json, normalize
 
@@ -123,6 +124,12 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
+        self.huggingface = HuggingFaceHub(self.data_dir)
+        active_hf_model = self.huggingface.active_model()
+        if active_hf_model:
+            self.language.configure_huggingface_local(
+                active_hf_model["path"], active_hf_model.get("repo_id", "")
+            )
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
         self.starter_dataset_seeded = False
@@ -830,7 +837,8 @@ class NixLMsNeuralCore:
             "response_source": source, "concepts": concepts,
             "llm_error": self.language.last_error if llm_attempted else None,
             "llm_model_used": self.language.last_used_model if llm_attempted else None,
-            "llm_generation_verified": bool(llm_attempted and self.language.last_used_model == self.language.model),
+            "llm_generation_verified": bool(llm_attempted and self.language.last_used_provider in {"ollama_local", "huggingface_local"}),
+            "llm_provider_used": self.language.last_used_provider,
             "llm_answer_used": source in {"lif_conditioned_llm", "local_llm"},
             "llm_rejection_reason": llm_rejection_reason,
             "relevant_memories_used": len(relevant_ranked),
@@ -951,5 +959,6 @@ class NixLMsNeuralCore:
                 "load_error": self.decoder_load_error,
             },
             "llm": self.language.status(), "last_trace": self.last_trace,
-            "config": self.config.__dict__
+            "config": self.config.__dict__,
+            "huggingface": self.huggingface.status()
         }

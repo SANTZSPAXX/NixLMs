@@ -124,7 +124,7 @@ class TaskSchedulerTests(unittest.TestCase):
             ai = NixLMsNeuralCore(Path(tmp))
             self.assertEqual(
                 set(ai.scheduler.stats()["registered_handlers"]),
-                {"memory_housekeeping", "dataset_audit", "goal_review"},
+                {"memory_housekeeping", "dataset_audit", "goal_review", "idle_learning_cycle"},
             )
             job_id = ai.scheduler.schedule_once("dataset_audit")
             self.assertTrue(ai.scheduler.run_once())
@@ -132,6 +132,23 @@ class TaskSchedulerTests(unittest.TestCase):
             self.assertEqual(job["status"], "completed")
             self.assertTrue(job["last_result"]["valid"])
             self.assertFalse(ai.scheduler.running)
+
+    def test_start_runtime_runs_diagnostics_and_starts_idle_job(self):
+        from nixlms_core import NixLMsNeuralCore
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = NixLMsNeuralCore(Path(tmp))
+            runtime = ai.start_runtime()
+            try:
+                self.assertEqual(runtime["diagnostics"]["status"], "ok")
+                self.assertTrue(runtime["scheduler_started"])
+                job = next(
+                    item for item in ai.scheduler.list_jobs()
+                    if item["id"] == "nixlms-idle-learning-v1"
+                )
+                self.assertEqual(job["handler"], "idle_learning_cycle")
+                self.assertEqual(job["status"], "pending")
+            finally:
+                ai.scheduler.stop()
 
     def test_nonpositive_run_limit_does_not_execute(self):
         with tempfile.TemporaryDirectory() as tmp:

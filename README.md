@@ -337,3 +337,10 @@ A NixLMs inclui um roadmap inicial idempotente com cinco objetivos: confiabilida
 ```
 
 O comando adiciona somente objetivos/etapas ausentes por título e preserva o progresso já existente em `data/goals.json`. Todas as etapas novas começam como `pending`. O planner 0.2 apenas inicia uma etapa liberada (`in_progress`); não executa o trabalho nem o conclui automaticamente. Consulte [docs/initial-roadmap-goals.md](docs/initial-roadmap-goals.md).
+
+
+## Autodiagnóstico e aprendizado em ociosidade
+
+Ao iniciar com `python neural_core.py`, a NixLMs executa verificações locais e inicia o scheduler com um ciclo de aprendizado em ociosidade. Após cinco minutos sem interação, o ciclo audita o dataset e só tenta uma época de treinamento incremental se houver dados íntegros, pelo menos quatro amostras QA de validação e no máximo 100 registros de treino. Há cooldown de 30 minutos entre tentativas; candidatos só são promovidos após validação. Ollama continua opcional.
+
+Comandos: `/diagnostico`, `/ocioso status` e `/status`. Consulte [docs/startup-diagnostics-idle-learning.md](docs/startup-diagnostics-idle-learning.md) para critérios, limites e comportamento.

@@ -1,7 +1,8 @@
 import os
 import math
 import hashlib
-from datetime import datetime
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from .config import CoreConfig
 from .decoder import NeuralTextDecoder
@@ -18,6 +19,7 @@ from .world_model import WorldModel
 from .planning import GoalManager
 from .autonomy import AutonomyEngine
 from .autonomy_planner import AutonomyPlanner
+from .idle_learning import IdleLearningManager
 from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
@@ -117,6 +119,8 @@ class NixLMsNeuralCore:
         self.language = LanguageEngine(model=llm_model)
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
+        self.idle_learning = IdleLearningManager(self)
+        self.scheduler.register_handler("idle_learning_cycle", self._scheduled_idle_learning)
 
         if not self.memory.knowledge:
             self.memory.knowledge.extend(DEFAULTS)
@@ -143,6 +147,120 @@ class NixLMsNeuralCore:
 
         self.last_trace = {}
         self.last_question = ""
+        self.startup_diagnostics = self.run_startup_diagnostics()
+
+
+    def run_startup_diagnostics(self):
+        """Run fast, non-destructive checks of runtime modules and local state."""
+        checks = {}
+
+        def record(name, ok, detail="", severity="error"):
+            checks[name] = {
+                "status": "ok" if ok else severity,
+                "detail": str(detail)[:500],
+            }
+
+        required = {
+            "memory": self.memory,
+            "episodic_memory": self.episodic,
+            "semantic_encoder": self.encoder,
+            "lif_network": self.network,
+            "decoder": self.decoder,
+            "goal_manager": self.goals,
+            "scheduler": self.scheduler,
+            "autonomy_engine": self.autonomy,
+            "learning_engine": self.learning,
+            "idle_learning": self.idle_learning,
+        }
+        for name, component in required.items():
+            record("module_" + name, component is not None)
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                prefix=".nixlms-diagnostic-", dir=str(self.data_dir), delete=True
+            ) as probe:
+                probe.write(b"ok")
+                probe.flush()
+            record("data_directory_writable", True, str(self.data_dir))
+        except OSError as exc:
+            record("data_directory_writable", False, exc, "error")
+
+        try:
+            audit = self.learning.dataset.audit_splits()
+            record(
+                "dataset_integrity", audit.get("valid", False),
+                "violations=" + str(len(audit.get("violations", []))),
+                "error",
+            )
+        except Exception as exc:
+            record("dataset_integrity", False, type(exc).__name__ + ": " + str(exc))
+
+        record(
+            "decoder_persistence",
+            self.decoder_persistence_enabled,
+            self.decoder_load_error or "decoder state is readable",
+            "warning",
+        )
+        record(
+            "retrieval_encoder",
+            self._retrieval_encoder_error is None,
+            self._retrieval_encoder_error or "retrieval encoder ready",
+            "warning",
+        )
+        record(
+            "ollama_optional",
+            True,
+            "API acessível" if self.language.reachable else "não disponível; integração opcional, núcleo local continua disponível",
+            "warning",
+        )
+        try:
+            scheduler_stats = self.scheduler.stats()
+            record(
+                "scheduler_handlers",
+                {"memory_housekeeping", "dataset_audit", "goal_review",
+                 "idle_learning_cycle"}.issubset(
+                    set(scheduler_stats.get("registered_handlers", []))
+                ),
+                scheduler_stats.get("registered_handlers", []),
+            )
+        except Exception as exc:
+            record("scheduler_handlers", False, type(exc).__name__ + ": " + str(exc))
+
+        errors = sum(item["status"] == "error" for item in checks.values())
+        warnings = sum(item["status"] == "warning" for item in checks.values())
+        return {
+            "status": "failed" if errors else ("degraded" if warnings else "ok"),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checks": checks,
+            "errors": errors,
+            "warnings": warnings,
+        }
+
+    def _scheduled_idle_learning(self, payload):
+        return self.idle_learning.run_if_idle(payload)
+
+    def start_runtime(self):
+        """Run diagnostics and start the scheduler with one persistent idle job."""
+        self.startup_diagnostics = self.run_startup_diagnostics()
+        job_id = "nixlms-idle-learning-v1"
+        existing = self.scheduler.list_jobs(limit=1000)
+        if not any(job.get("id") == job_id for job in existing):
+            self.scheduler.schedule_interval(
+                "idle_learning_cycle",
+                60,
+                payload={},
+                first_delay_seconds=60,
+                priority=-10,
+                max_attempts=1,
+                job_id=job_id,
+            )
+        started = self.scheduler.start()
+        return {
+            "diagnostics": self.startup_diagnostics,
+            "scheduler_started": self.scheduler.running,
+            "scheduler_started_now": started,
+            "idle_learning": self.idle_learning.status(),
+        }
 
     def _save_encoder(self):
         save_json(self.data_dir / "semantic_encoder.json", self.encoder.state_dict())
@@ -453,6 +571,7 @@ class NixLMsNeuralCore:
         text = str(message).strip()
         if not text:
             return "Digite uma mensagem para começarmos."
+        self.idle_learning.mark_activity()
 
         if isinstance(excluded_questions, str):
             excluded_questions = (excluded_questions,)
@@ -725,6 +844,8 @@ class NixLMsNeuralCore:
                 "planner": self.autonomy_planner.status(),
             },
             "scheduler": self.scheduler.stats(),
+            "startup_diagnostics": self.startup_diagnostics,
+            "idle_learning": self.idle_learning.status(),
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
             "lif_network": {

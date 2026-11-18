@@ -1,5 +1,8 @@
 # Dados privados e estado de execução local
 /data/
+/data/huggingface/
+/models/huggingface/
+/datasets/huggingface/
 /**/__pycache__/
 *.py[cod]
 *$py.class

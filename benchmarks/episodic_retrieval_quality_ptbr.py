@@ -172,7 +172,7 @@ def validate_dataset(episodes, queries, qrels):
     for query_id, query in query_by_id.items():
         has_qrels = bool(qrels_by_query.get(query_id))
         if query["expects_no_answer"] and has_qrels:
-            raise ValueError("Consulta sem resposta possui qrels: " + query_id + ".")
+            raise ValueError("Consulta sem resposta possui julgamento: " + query_id + ".")
         if not query["expects_no_answer"] and not has_qrels:
             raise ValueError("Consulta respondível sem qrels: " + query_id + ".")
 

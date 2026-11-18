@@ -10,6 +10,8 @@ HELP = """Comandos:
                                       adiciona par contrastivo (1=similar, 0=diferente)
   /importar arquivo.jsonl             importa exemplos QA e pares contrastivos
   /status                              estado dos módulos
+  /diagnostico                         executa novamente o autodiagnóstico
+  /ocioso status                       estado do aprendizado autônomo em ociosidade
   /eeg                                 bandas sintéticas e atividade LIF
   /mapa                                conceitos e associações
   /fato sujeito || relação || objeto [|| fonte]
@@ -178,7 +180,9 @@ def main():
     if not ai.language.reachable or "qwen2.5:0.5b" not in initial_models:
         print("Para configurar Ollama e Qwen com autorização, execute /llm preparar.")
     print("Digite /ajuda para comandos.")
-    ai.scheduler.start()
+    runtime = ai.start_runtime()
+    print("Autodiagnóstico:", runtime["diagnostics"])
+    print("Aprendizado em ociosidade:", runtime["idle_learning"])
     while True:
         try:
             msg = input("Você: ").strip()
@@ -195,6 +199,13 @@ def main():
             continue
         if low == "/status":
             print(ai.status())
+            continue
+        if low == "/diagnostico":
+            ai.startup_diagnostics = ai.run_startup_diagnostics()
+            print("Autodiagnóstico:", ai.startup_diagnostics)
+            continue
+        if low in {"/ocioso", "/ocioso status"}:
+            print(ai.idle_learning.status())
             continue
         if low == "/eeg":
             print(ai.last_trace.get("eeg_bands", "Envie uma mensagem primeiro."))

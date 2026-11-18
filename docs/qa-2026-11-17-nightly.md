@@ -110,3 +110,19 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 - MTEB-BR repository: https://github.com/tardellirs/mteb-br
 - BEIR: https://arxiv.org/abs/2104.08663
 - E5 model card: https://huggingface.co/intfloat/multilingual-e5-small
+
+
+## Adendo — revisão final de parâmetros e artefato
+
+A inspeção do artefato JSON `episodic-retrieval-quality-ptbr` (ID 14359367899, gerado pelo run #44153228925) confirmou o SHA-256 do conjunto `15bb508c03426adf37b34889ee63238a355676d007451a1cabf92f49a7b95508` e os valores publicados na descrição da PR #36.
+
+Métricas por split observadas no artefato:
+- Validation (12 respondíveis + 3 sem resposta): nDCG@5 0.937482, MRR@5 1.000000, Recall@5 0.833333, cobertura 1.000000.
+- Test (12 respondíveis + 3 sem resposta): nDCG@5 0.721039, MRR@5 0.750000, Recall@5 0.666667, cobertura 0.750000.
+- Abstenção nas consultas sem resposta: 3/3 em cada split; nenhum falso positivo.
+
+A diferença entre validation e test é relevante e reforça que o conjunto ainda é pequeno; não se deve interpretar o agregado como qualidade geral. O artefato contém IDs e resultados, sem textos de consultas/passagens.
+
+A revisão também identificou que `--min-score nan` ou `inf` era aceito: NaN fazia todas as comparações de score falharem e podia gerar JSON com valores não padrão em outras saídas. A branch desta PR agora rejeita limiares não finitos tanto em `evaluate_dataset()` quanto no CLI, com testes de regressão para NaN e ±infinito.
+
+CI da branch de correção permanece pendente até a execução do workflow no HEAD final. Nenhuma aprovação da PR #36 foi atribuída aos commits desta correção.

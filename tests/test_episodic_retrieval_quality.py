@@ -13,6 +13,7 @@ from benchmarks.episodic_retrieval_quality_ptbr import (
     load_dataset,
     load_encoder,
     validate_dataset,
+    validate_output_path,
 )
 from nixlms_core.encoding import SemanticEncoder
 
@@ -148,6 +149,32 @@ class EpisodicRetrievalQualityDatasetTests(unittest.TestCase):
             missing = Path(temporary) / "missing-model"
             with self.assertRaises(FileNotFoundError):
                 load_encoder(e5_model_path=missing)
+
+    def test_output_path_rejects_production_episodic_memory(self):
+        protected = ROOT / "data" / "episodic_memory.json"
+        with self.assertRaisesRegex(ValueError, "memória episódica de produção"):
+            validate_output_path(protected)
+
+    def test_output_path_rejects_default_dataset_inputs(self):
+        protected = DATA_DIR / "episodes.jsonl"
+        with self.assertRaisesRegex(ValueError, "arquivos do conjunto"):
+            validate_output_path(protected)
+
+    def test_output_path_rejects_custom_dataset_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset_dir = Path(temporary) / "dataset"
+            output = dataset_dir / "queries.jsonl"
+            with self.assertRaisesRegex(ValueError, "arquivos do conjunto"):
+                validate_output_path(output, data_dir=dataset_dir)
+
+    def test_output_path_allows_separate_report_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dataset_dir = Path(temporary) / "dataset"
+            output = Path(temporary) / "reports" / "quality.json"
+            self.assertEqual(
+                validate_output_path(output, data_dir=dataset_dir),
+                output.resolve(),
+            )
 
     def test_cli_runs_offline_lexical_mode_and_emits_machine_readable_json(self):
         completed = subprocess.run(

@@ -644,9 +644,9 @@ class HuggingFaceLocalGenerator:
         try:
             model, tokenizer = self._load()
             text = (
-                "Instruções do sistema:\\n" + str(system_prompt)[:5000]
-                + "\\n\\nMensagem/contexto:\\n" + str(prompt)[:12000]
-                + "\\n\\nResposta em português brasileiro:"
+                "Instruções do sistema:\n" + str(system_prompt)[:5000]
+                + "\n\nMensagem/contexto:\n" + str(prompt)[:12000]
+                + "\n\nResposta em português brasileiro:"
             )
             if self._backend == "llama.cpp_cpu":
                 result = model.create_completion(

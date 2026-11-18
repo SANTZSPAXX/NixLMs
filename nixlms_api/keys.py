@@ -1,6 +1,7 @@
 """Armazenamento local de chaves da API; segredos são exibidos somente na criação."""
 from __future__ import annotations
 import hashlib, json, secrets, sqlite3, time
+from contextlib import contextmanager
 from pathlib import Path
 VALID_SCOPES = {"chat:read", "chat:write", "models:read"}
 
@@ -14,9 +15,18 @@ class APIKeyStore:
                 scopes TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL,
                 revoked_at REAL)""")
             db.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(prefix)")
+    @contextmanager
     def _connect(self):
-        db = sqlite3.connect(str(self.path), timeout=10); db.row_factory = sqlite3.Row
-        return db
+        db = sqlite3.connect(str(self.path), timeout=10)
+        db.row_factory = sqlite3.Row
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
     @staticmethod
     def _digest(token):
         return hashlib.sha256(token.encode("utf-8")).hexdigest()

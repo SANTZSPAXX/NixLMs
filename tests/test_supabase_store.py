@@ -26,9 +26,13 @@ class SupabaseStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.sqlite3"
             import sqlite3
-            with sqlite3.connect(path) as db:
+            db = sqlite3.connect(path)
+            try:
                 db.execute("create table t (v text)")
                 db.execute("insert into t values ('persisted')")
+                db.commit()
+            finally:
+                db.close()
             content = SupabaseStore._read_consistent(path)
             fd_path = Path(tmp) / "restored.sqlite3"
             fd_path.write_bytes(content)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import hmac
+import hashlib
 import atexit
 import json
 import mimetypes
@@ -29,6 +30,7 @@ ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
 from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core.utils import normalize  # noqa: E402
 from nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
 from nixlms_core.supabase_store import SnapshotWorker, SupabaseStore  # noqa: E402
@@ -97,15 +99,17 @@ assistant.supabase_store = supabase_store
 if supabase_store is not None:
     try:
         # Backfill the first vector index from the existing local/remote memories.
-        expected_vectors = len(assistant.memory.knowledge) + len(assistant.episodic.items)
+        existing_chunks = library.list_chunks(limit=500)
+        expected_vectors = (len(assistant.memory.knowledge) +
+                            len(assistant.episodic.items) + len(existing_chunks))
         if supabase_store.vector_count() < expected_vectors:
             vector_records = []
             for item in assistant.memory.knowledge:
                 question = str(item.get("question", ""))
                 answer = str(item.get("answer", ""))
                 passage = question + " " + answer
-                memory_id = "knowledge:" + __import__("hashlib").sha256(
-                    __import__("unicodedata").normalize("NFKD", question.lower()).encode("utf-8")
+                memory_id = "knowledge:" + hashlib.sha256(
+                    normalize(question).encode("utf-8")
                 ).hexdigest()
                 vector_records.append((memory_id, "knowledge", passage,
                                        assistant.encoder.encode(passage),
@@ -115,7 +119,7 @@ if supabase_store is not None:
                 vector_records.append(("episode:" + str(item.get("id", "")), "episode",
                                        passage, assistant.encoder.encode(passage),
                                        {"source": item.get("source", "unknown")}))
-            for chunk in library.list_chunks(limit=500):
+            for chunk in existing_chunks:
                 passage = str(chunk["content"])
                 vector_records.append(("library:" + str(chunk["document_id"]) + ":" +
                                        str(chunk["chunk_index"]), "library", passage,

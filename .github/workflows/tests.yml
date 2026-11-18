@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
       - name: Run synthetic episodic benchmark
         run: python benchmarks/episodic_retrieval.py --sizes 100 500 2000 --repeats 5 > episodic-benchmark.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: episodic-retrieval-benchmark
           path: episodic-benchmark.json
@@ -56,7 +56,7 @@ jobs:
           python-version: "3.12"
       - name: Run PT-BR episodic retrieval quality baseline
         run: python benchmarks/episodic_retrieval_quality_ptbr.py > episodic-retrieval-quality-ptbr.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: episodic-retrieval-quality-ptbr
           path: episodic-retrieval-quality-ptbr.json

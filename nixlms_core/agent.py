@@ -20,6 +20,7 @@ from .autonomy import AutonomyEngine
 from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
+from .ollama_manager import OllamaManager
 from .learning import LearningEngine
 from .utils import save_json, load_json, normalize
 
@@ -112,6 +113,7 @@ class NixLMsNeuralCore:
         self.scheduler.register_handler("goal_review", self._scheduled_goal_review)
         self.attention = AttentionSystem()
         self.language = LanguageEngine(model=llm_model)
+        self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
 
         if not self.memory.knowledge:
@@ -646,6 +648,9 @@ class NixLMsNeuralCore:
             ),
             "response_source": source, "concepts": concepts,
             "llm_error": self.language.last_error if llm_attempted else None,
+            "llm_model_used": self.language.last_used_model if llm_attempted else None,
+            "llm_generation_verified": bool(llm_attempted and self.language.last_used_model == self.language.model),
+            "llm_answer_used": source in {"lif_conditioned_llm", "local_llm"},
             "llm_rejection_reason": llm_rejection_reason,
             "relevant_memories_used": len(relevant_ranked),
             "retrieval_encoder_error": self._retrieval_encoder_error,
@@ -725,6 +730,7 @@ class NixLMsNeuralCore:
                 "contrastive_updates": self.encoder.updates
             },
             "retrieval_encoder": retrieval_status,
+            "ollama": self.ollama.status(),
             "retrieval_encoder_error": self._retrieval_encoder_error,
             "lif_calibration": {
                 "active_threshold": self.config.lif_retrieval_threshold,

@@ -858,6 +858,7 @@ class NixLMsNeuralCore:
             "scheduler": self.scheduler.stats(),
             "startup_diagnostics": self.startup_diagnostics,
             "idle_learning": self.idle_learning.status(),
+            "private_library": self.private_library.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
             "lif_network": {

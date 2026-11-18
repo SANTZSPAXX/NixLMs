@@ -242,12 +242,17 @@ class PrivateKnowledgeLibrary:
             """).fetchall()
         if not rows:
             return {"exported": 0, "path": str(target), "reason": "no_approved_candidates"}
-        with target.open("w", encoding="utf-8", newline="\n") as handle:
-            for row in rows:
-                handle.write(json.dumps({
-                    "type": "qa", "question": row["question"],
-                    "answer": row["answer"], "split": "train"
-                }, ensure_ascii=False) + "\n")
+        try:
+            # Exclusive creation prevents silently replacing an existing dataset,
+            # including when another process races the export.
+            with target.open("x", encoding="utf-8", newline="\\n") as handle:
+                for row in rows:
+                    handle.write(json.dumps({
+                        "type": "qa", "question": row["question"],
+                        "answer": row["answer"], "split": "train"
+                    }, ensure_ascii=False) + "\\n")
+        except FileExistsError:
+            return {"exported": 0, "path": str(target), "reason": "destination_exists"}
         return {"exported": len(rows), "path": str(target), "split": "train"}
 
     def stats(self):

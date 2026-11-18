@@ -1,20 +1,30 @@
-"""Servidor HTTP local da interface NixLMs: loopback, sem shell remoto."""
+"""Servidor HTTP local da interface NixLMs: núcleo neural, loopback e sem shell remoto."""
 from __future__ import annotations
-import importlib.util, json, mimetypes, os, platform, re, sys, time, threading
-from importlib import metadata
-from urllib.parse import urlsplit
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from urllib.parse import urlparse
 
-ROOT=Path(__file__).resolve().parents[1]
-STATIC=Path(__file__).resolve().parent/"static"
-DATA=ROOT/"data"
-MAX_BODY=5*1024*1024
-ALLOWED={".txt",".md",".rst",".py",".json",".yaml",".yml",".toml"}
-sys.path.insert(0,str(ROOT))
-from nixlms import NixLMs
-from nixlms_core.private_library import PrivateKnowledgeLibrary
+import importlib.util
+import json
+import mimetypes
+import os
+import platform
+import re
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib import metadata
+from pathlib import Path
+from urllib.parse import urlparse, urlsplit
+
+ROOT = Path(__file__).resolve().parents[1]
+STATIC = Path(__file__).resolve().parent / "static"
+DATA = Path(os.getenv("NIXLMS_DATA_DIR", str(ROOT / "data"))).expanduser()
+MAX_BODY = 5 * 1024 * 1024
+ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
+sys.path.insert(0, str(ROOT))
+
+from nixlms_core import NixLMsNeuralCore  # noqa: E402
+
+
 def inspect_frameworks():
     """Inventário leve sem importar os frameworks."""
     candidates = [
@@ -41,18 +51,27 @@ def inspect_frameworks():
             version = metadata.version(distribution) if installed else None
         except metadata.PackageNotFoundError:
             version = None
-        result.append({"name": name, "purpose": purpose, "installed": installed, "version": version})
+        result.append({
+            "name": name, "purpose": purpose,
+            "installed": installed, "version": version,
+        })
     return result
-assistant=NixLMs()
-library=PrivateKnowledgeLibrary(DATA/"private_library.sqlite3")
-started=time.time()
-assistant_lock=threading.RLock()
+
+
+# Uma única instância alimenta chat, biblioteca, memória e diagnóstico.
+assistant = NixLMsNeuralCore(data_dir=DATA)
+library = assistant.private_library
+started = time.time()
+assistant_lock = threading.RLock()
+
 
 class Handler(BaseHTTPRequestHandler):
-    server_version="NixLMsLocalUI/1.0"
-    def log_message(self,fmt,*args): print("[NixUI]",fmt%args)
+    server_version = "NixLMsLocalUI/2.0"
+
+    def log_message(self, fmt, *args):
+        print("[NixUI]", fmt % args)
+
     def local(self):
-        # O socket deve receber conexões apenas do próprio runtime.
         try:
             import ipaddress
             if not ipaddress.ip_address(self.client_address[0]).is_loopback:
@@ -62,84 +81,195 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, IndexError):
             return False
         return host_ok or os.getenv("NIXLMS_COLAB_PROXY") == "1"
-    def send_json(self,obj,status=200):
-        raw=json.dumps(obj,ensure_ascii=False).encode()
-        self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
-        self.send_header("Content-Length",str(len(raw))); self.send_header("Cache-Control","no-store")
-        self.end_headers(); self.wfile.write(raw)
+
+    def send_json(self, obj, status=200):
+        raw = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(raw)
+
     def read_json(self):
-        size=int(self.headers.get("Content-Length","0"))
-        if size<0 or size>MAX_BODY: raise ValueError("Solicitação excede 5 MB.")
-        return json.loads(self.rfile.read(size).decode("utf-8"))
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError as exc:
+            raise ValueError("Content-Length inválido.") from exc
+        if size < 0 or size > MAX_BODY:
+            raise ValueError("Solicitação excede 5 MB.")
+        raw = self.rfile.read(size)
+        if len(raw) != size:
+            raise ValueError("Corpo da solicitação incompleto.")
+        value = json.loads(raw.decode("utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("O corpo JSON precisa ser um objeto.")
+        return value
+
     def do_GET(self):
-        if not self.local(): return self.send_json({"error":"Somente acesso local."},403)
-        path=urlparse(self.path).path
-        if path=="/api/status":
-            s=library.stats()
-            return self.send_json({"knowledge":len(assistant.knowledge),"messages":len(assistant.history),
-                "library":s,"python":platform.python_version(),"platform":platform.platform(),
-                "cpu":platform.processor() or "Não identificado","uptime":int(time.time()-started)})
-        if path=="/api/frameworks": return self.send_json(inspect_frameworks())
-        if path=="/api/library":
-            return self.send_json({"stats":library.stats(),"documents":library.list_documents(100)})
-        if path=="/api/diagnostics":
-            checks={"python":{"ok":sys.version_info>=(3,10),"detail":sys.version.split()[0]},
-                "data":{"ok":DATA.exists() and os.access(DATA,os.W_OK),"detail":str(DATA)},
-                "sqlite":{"ok":library.path.exists(),"detail":"Biblioteca privada local"},
-                "frameworks":{"ok":isinstance(inspect_frameworks(),list),"detail":"Inventário sem importações pesadas"}}
-            return self.send_json({"checks":checks,"ok":all(v["ok"] for v in checks.values())})
-        routes={"/": "index.html","/index.html":"index.html","/app.js":"app.js","/style.css":"style.css"}
-        if path not in routes: return self.send_json({"error":"Não encontrado."},404)
-        target=STATIC/routes[path]
-        try: raw=target.read_bytes()
-        except OSError: return self.send_json({"error":"Asset ausente."},500)
-        self.send_response(200); self.send_header("Content-Type",mimetypes.guess_type(str(target))[0] or "application/octet-stream")
-        self.send_header("Content-Length",str(len(raw))); self.send_header("X-Content-Type-Options","nosniff")
-        self.end_headers(); self.wfile.write(raw)
+        if not self.local():
+            return self.send_json({"error": "Somente acesso local."}, 403)
+        path = urlparse(self.path).path
+        if path == "/api/status":
+            core_status = assistant.status()
+            library_stats = library.stats()
+            return self.send_json({
+                "engine": "NixLMsNeuralCore",
+                "knowledge": core_status.get("semantic_items", 0),
+                "messages": core_status.get("episodic_experiences", core_status.get("episodic_items", 0)),
+                "library": library_stats,
+                "core": core_status,
+                "runtime": {
+                    "scheduler_running": assistant.scheduler.running,
+                    "idle_learning": assistant.idle_learning.status(),
+                },
+                "python": platform.python_version(),
+                "platform": platform.platform(),
+                "cpu": platform.processor() or "Não identificado",
+                "uptime": int(time.time() - started),
+            })
+        if path == "/api/frameworks":
+            return self.send_json(inspect_frameworks())
+        if path == "/api/library":
+            return self.send_json({
+                "stats": library.stats(),
+                "documents": library.list_documents(100),
+            })
+        if path == "/api/diagnostics":
+            diagnostic = assistant.run_startup_diagnostics()
+            checks = {
+                name: {
+                    "ok": item.get("status") != "error",
+                    "status": item.get("status", "unknown"),
+                    "detail": item.get("detail", ""),
+                }
+                for name, item in diagnostic.get("checks", {}).items()
+            }
+            checks.update({
+                "python": {
+                    "ok": sys.version_info >= (3, 10),
+                    "status": "ok" if sys.version_info >= (3, 10) else "error",
+                    "detail": sys.version.split()[0],
+                },
+                "data_directory": {
+                    "ok": DATA.exists() and os.access(DATA, os.W_OK),
+                    "status": "ok" if DATA.exists() and os.access(DATA, os.W_OK) else "error",
+                    "detail": str(DATA),
+                },
+                "framework_inventory": {
+                    "ok": isinstance(inspect_frameworks(), list),
+                    "status": "ok",
+                    "detail": "Inventário sem importações pesadas",
+                },
+            })
+            return self.send_json({
+                "ok": diagnostic.get("status") != "failed"
+                     and all(item["ok"] for item in checks.values()),
+                "status": diagnostic.get("status", "unknown"),
+                "checks": checks,
+                "scheduler_running": assistant.scheduler.running,
+                "idle_learning": assistant.idle_learning.status(),
+            })
+        routes = {
+            "/": "index.html", "/index.html": "index.html",
+            "/app.js": "app.js", "/style.css": "style.css",
+        }
+        if path not in routes:
+            return self.send_json({"error": "Não encontrado."}, 404)
+        target = STATIC / routes[path]
+        try:
+            raw = target.read_bytes()
+        except OSError:
+            return self.send_json({"error": "Asset ausente."}, 500)
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            mimetypes.guess_type(str(target))[0] or "application/octet-stream",
+        )
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(raw)
+
     def do_POST(self):
-        if not self.local(): return self.send_json({"error":"Somente acesso local."},403)
-        origin=self.headers.get("Origin","")
+        if not self.local():
+            return self.send_json({"error": "Somente acesso local."}, 403)
+        origin = self.headers.get("Origin", "")
         if origin:
             try:
                 parsed_origin = urlsplit(origin)
-                origin_ok = parsed_origin.scheme in {"http", "https"} and parsed_origin.hostname in {"127.0.0.1", "localhost", "::1"}
+                origin_ok = (
+                    parsed_origin.scheme in {"http", "https"}
+                    and parsed_origin.hostname in {"127.0.0.1", "localhost", "::1"}
+                )
             except ValueError:
                 origin_ok = False
             if not origin_ok and os.getenv("NIXLMS_COLAB_PROXY") != "1":
-                return self.send_json({"error":"Origem não permitida."},403)
+                return self.send_json({"error": "Origem não permitida."}, 403)
         try:
-            data=self.read_json(); path=urlparse(self.path).path
-            if path=="/api/chat":
-                msg=str(data.get("message","")).strip()
-                if not msg or len(msg)>8000: return self.send_json({"error":"Mensagem vazia ou longa demais."},400)
+            data = self.read_json()
+            path = urlparse(self.path).path
+            if path == "/api/chat":
+                msg = str(data.get("message", "")).strip()
+                if not msg or len(msg) > 8000:
+                    return self.send_json({"error": "Mensagem vazia ou longa demais."}, 400)
                 with assistant_lock:
                     reply = assistant.respond(msg)
-                return self.send_json({"reply":reply})
-            if path=="/api/library/search":
-                q=str(data.get("query","")).strip()
-                if not q or len(q)>1000: return self.send_json({"error":"Consulta inválida."},400)
-                return self.send_json({"results":library.search(q,10)})
-            if path=="/api/library/import":
-                name=Path(str(data.get("name","document.txt"))).name
-                ext=Path(name).suffix.lower(); content=str(data.get("content",""))
-                if ext not in ALLOWED: return self.send_json({"error":"Formato não permitido."},400)
-                if not content.strip() or len(content.encode())>MAX_BODY: return self.send_json({"error":"Arquivo vazio ou acima de 5 MB."},400)
-                inbox=DATA/"ui_imports"; inbox.mkdir(parents=True,exist_ok=True)
-                safe=re.sub(r"[^A-Za-z0-9._-]","_",name)[:120]
-                target=inbox/safe
-                if target.exists(): target=inbox/(str(int(time.time()))+"_"+safe)
-                target.write_text(content,encoding="utf-8")
+                    trace = dict(assistant.last_trace)
+                return self.send_json({
+                    "reply": reply,
+                    "engine": "NixLMsNeuralCore",
+                    "response_source": trace.get("response_source"),
+                    "confidence": trace.get("confidence"),
+                })
+            if path == "/api/library/search":
+                query = str(data.get("query", "")).strip()
+                if not query or len(query) > 1000:
+                    return self.send_json({"error": "Consulta inválida."}, 400)
+                return self.send_json({"results": library.search(query, 10)})
+            if path == "/api/library/import":
+                name = Path(str(data.get("name", "document.txt"))).name
+                extension = Path(name).suffix.lower()
+                content = str(data.get("content", ""))
+                if extension not in ALLOWED:
+                    return self.send_json({"error": "Formato não permitido."}, 400)
+                if not content.strip() or len(content.encode("utf-8")) > MAX_BODY:
+                    return self.send_json({"error": "Arquivo vazio ou acima de 5 MB."}, 400)
+                inbox = DATA / "ui_imports"
+                inbox.mkdir(parents=True, exist_ok=True)
+                safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", name)[:120]
+                target = inbox / safe_name
+                if target.exists():
+                    target = inbox / (str(int(time.time())) + "_" + safe_name)
+                target.write_text(content, encoding="utf-8")
                 return self.send_json(library.import_path(target))
-            return self.send_json({"error":"Endpoint não encontrado."},404)
-        except (ValueError,UnicodeError,json.JSONDecodeError) as exc: return self.send_json({"error":str(exc)},400)
-        except Exception as exc: return self.send_json({"error":"Falha interna: "+type(exc).__name__},500)
+            return self.send_json({"error": "Endpoint não encontrado."}, 404)
+        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+            return self.send_json({"error": str(exc)}, 400)
+        except Exception as exc:
+            return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
+
 
 def main():
-    host,port="127.0.0.1",8765
-    try: server=ThreadingHTTPServer((host,port),Handler)
-    except OSError as exc: raise SystemExit("Não foi possível iniciar a interface: "+str(exc))
+    host, port = "127.0.0.1", 8765
+    try:
+        server = ThreadingHTTPServer((host, port), Handler)
+    except OSError as exc:
+        raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
+    runtime = assistant.start_runtime()
     print("NixLMs UI: http://127.0.0.1:8765 (somente este computador)")
-    try: server.serve_forever()
-    except KeyboardInterrupt: print("\nEncerrando interface...")
-    finally: server.server_close()
-if __name__=="__main__": main()
+    print("Motor: NixLMsNeuralCore")
+    print("Autodiagnóstico:", runtime["diagnostics"]["status"])
+    print("Aprendizagem ociosa:", runtime["idle_learning"])
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nEncerrando interface...")
+    finally:
+        assistant.scheduler.stop()
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()

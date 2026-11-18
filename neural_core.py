@@ -24,6 +24,8 @@ HELP = """Comandos:
   /fato sujeito || relação || objeto [|| fonte]
                                       registra fato com proveniência
   /fato-buscar texto                   pesquisa fatos do modelo de mundo
+  /simular sujeito || relação || objeto [|| confiança]
+                                      simula hipótese sem persistir ou executar ações
   /objetivo criar título               cria um objetivo
   /objetivo semear-roadmap              cria objetivos e etapas iniciais sem sobrescrever progresso
   /objetivo listar                     lista objetivos
@@ -262,6 +264,19 @@ def main():
             continue
         if low == "/mapa":
             print({"concepts": len(ai.mental_map.nodes), "associations": ai.mental_map.associate(ai.last_question, 12)})
+            continue
+        if low.startswith("/simular "):
+            fields = [value.strip() for value in msg[len("/simular "):].split("||")]
+            if len(fields) not in (3, 4):
+                print("Use /simular sujeito || relação || objeto [|| confiança]")
+                continue
+            try:
+                confidence = float(fields[3]) if len(fields) == 4 else 1.0
+                print(ai.simulator.simulate_fact(
+                    fields[0], fields[1], fields[2], confidence=confidence
+                ))
+            except (TypeError, ValueError) as exc:
+                print("Falha na simulação:", exc)
             continue
         if low.startswith("/fato-buscar "):
             print(ai.world_model.search(msg[len("/fato-buscar "):], limit=10))

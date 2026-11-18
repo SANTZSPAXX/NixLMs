@@ -2,7 +2,7 @@ import os
 import math
 import hashlib
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from .config import CoreConfig
 from .decoder import NeuralTextDecoder
@@ -209,8 +209,8 @@ class NixLMsNeuralCore:
         )
         record(
             "ollama_optional",
-            bool(self.language.reachable),
-            "API accessible" if self.language.reachable else "Ollama indisponível; núcleo local continua disponível",
+            True,
+            "API acessível" if self.language.reachable else "não disponível; integração opcional, núcleo local continua disponível",
             "warning",
         )
         try:
@@ -230,7 +230,7 @@ class NixLMsNeuralCore:
         warnings = sum(item["status"] == "warning" for item in checks.values())
         return {
             "status": "failed" if errors else ("degraded" if warnings else "ok"),
-            "checked_at": datetime.utcnow().isoformat() + "Z",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
             "checks": checks,
             "errors": errors,
             "warnings": warnings,

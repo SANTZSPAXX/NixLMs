@@ -47,13 +47,13 @@ A tarefa inicia a interface local no login do usuário. Para remover:
 ### Linux com systemd de usuário
 
 ```bash
-PYTHON="$PWD/.venv/bin/python" ./scripts/install-autostart.sh
+PYTHON="$PWD/.venv/bin/python" sh ./scripts/install-autostart.sh
 ```
 
 Para remover:
 
 ```bash
-./scripts/remove-autostart.sh
+sh ./scripts/remove-autostart.sh
 ```
 
 O processo roda enquanto a sessão do usuário estiver ativa. O computador precisa estar ligado; isso não depende de uma sessão do ChatGPT. Os scripts não instalam Python, dependências ou modelos e não concedem permissões adicionais. Em ambientes sem systemd de usuário, o script Linux não se aplica.

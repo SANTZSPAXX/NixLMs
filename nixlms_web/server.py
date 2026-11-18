@@ -169,12 +169,12 @@ class Handler(BaseHTTPRequestHandler):
                 },
             })
             errors = sum(item["status"] == "error" for item in checks.values())
-            warnings = sum(item["status"] == "warning" for item in checks.values())
-            status = "failed" if errors else ("degraded" if warnings else "ok")
+            non_ok = any(
+                item["status"] not in {"ok", "info"} for item in checks.values()
+            )
+            status = "failed" if errors else ("degraded" if non_ok else "ok")
             return self.send_json({
-                "ok": status == "ok" and all(
-                    item["status"] in {"ok", "info"} for item in checks.values()
-                ),
+                "ok": status == "ok",
                 "status": status,
                 "checks": checks,
                 "scheduler_running": assistant.scheduler.running,

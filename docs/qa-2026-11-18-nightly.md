@@ -53,25 +53,25 @@ A documentação/registro ainda não fornece uma matriz versionada completa por 
 
 | Pacote | Licença upstream (resumo) | Compatibilidade relevante |
 |---|---|---|
-| PyTorch | Licença principal BSD-3-Clause, com licenças de terceiros/componentes | O instalador #70 restringe a Python >=3.11 e Windows/Linux x86_64; ARM64 permanece manual/não validado. |
+| PyTorch | Licença principal BSD-3-Clause, com licenças de terceiros/componentes | A documentação Stable atual exige Python >=3.11 e oferece seletor CPU para Windows/Linux; o instalador #70 restringe x86_64. ARM64 continua fora da matriz automatizada. |
 | NumPy | BSD-3-Clause; wheels incluem componentes de terceiros com licenças próprias | Wheels e tags variam por versão, Python e arquitetura. |
 | SciPy | BSD-3-Clause | Dependência binária de NumPy; não assumir wheel para toda combinação ARM. |
-| scikit-learn | BSD-3-Clause | Usar wheels; em plataformas ARM específicas pode ser necessário compilar, o que não deve ocorrer automaticamente. |
+| scikit-learn | BSD-3-Clause | A documentação stable atual lista Python >=3.11 e recomenda wheels binárias; em Raspberry Pi/algumas combinações pode ocorrer build de NumPy/SciPy a partir do source, que não deve ser automático. |
 | Transformers | Apache-2.0 | Documentação atual exige Python moderno e backend como PyTorch; pesos são separados do pacote. |
 | Sentence Transformers | Apache-2.0 | Depende de PyTorch/Transformers; consumo de RAM depende principalmente do encoder carregado. |
-| FAISS CPU | MIT | Disponibilidade de wheels varia por release, Python e plataforma; instalador atual não habilita ARM64. |
-| ONNX Runtime CPU | MIT | Documentação oficial lista wheels CPU para Windows x64 e Linux x64/ARM64, conforme release. |
+| FAISS CPU | O projeto upstream usa MIT; o wheel faiss-cpu 1.13.1 declara MIT AND BSD-3-Clause | PyPI declara Python >=3.10,<3.15 para essa release; tags de wheel ainda precisam ser verificadas por SO/arquitetura antes de habilitar cada alvo. |
+| ONNX Runtime CPU | MIT | Documentação oficial lista wheels CPU para Windows x64 e Linux x64/ARM64; conferir tag Python da release escolhida. |
 | Safetensors | Apache-2.0 | Serializador; não inclui pesos. |
 | Tokenizers | Apache-2.0 | Extensão Rust; wheel compatível depende da versão e tag Python/plataforma. |
 
 Fontes oficiais:
-- PyTorch: https://pytorch.org/get-started/locally/ e https://github.com/pytorch/pytorch/blob/main/pyproject.toml
+- PyTorch: https://pytorch.org/get-started/locally/ e https://github.com/pytorch/pytorch/blob/main/pyproject.toml (Stable atual: Python >=3.11)
 - NumPy: https://github.com/numpy/numpy/blob/main/LICENSE.txt
 - SciPy: https://github.com/scipy/scipy/blob/main/LICENSE.txt
-- scikit-learn: https://scikit-learn.org/stable/install.html e https://github.com/scikit-learn/scikit-learn/blob/main/COPYING
-- Transformers: https://huggingface.co/docs/transformers/installation e https://github.com/huggingface/transformers/blob/main/LICENSE
+- scikit-learn: https://scikit-learn.org/stable/install.html (wheels binárias; atenção a Raspberry Pi) e https://github.com/scikit-learn/scikit-learn/blob/main/COPYING
+- Transformers: https://huggingface.co/docs/transformers/installation (Python 3.11+, PyTorch 2.6+) e https://github.com/huggingface/transformers/blob/main/LICENSE
 - Sentence Transformers: https://github.com/UKPLab/sentence-transformers/blob/master/LICENSE
-- FAISS: https://github.com/facebookresearch/faiss/blob/main/LICENSE
+- FAISS: https://github.com/facebookresearch/faiss/blob/main/LICENSE e https://pypi.org/project/faiss-cpu/1.13.1/ (wheel declara MIT AND BSD-3-Clause; Python >=3.10,<3.15)
 - ONNX Runtime: https://onnxruntime.ai/docs/install/
 - Safetensors: https://github.com/huggingface/safetensors/blob/main/LICENSE
 - Tokenizers: https://github.com/huggingface/tokenizers/blob/main/LICENSE

@@ -12,7 +12,7 @@ operator and submits a bounded proposal batch to the engine.
 2. Ask GoalManager for pending steps whose dependencies are completed.
 3. Select in stable goal/step insertion order, up to the configured limit.
 4. Submit the allowlisted `goal.start_step` internal action to AutonomyEngine.
-5. The trusted callback rechecks readiness and atomically transitions the
+5. The trusted callback rechecks readiness and transitions the
    selected step through GoalManager's existing status API to `in_progress`.
 6. AutonomyEngine records the request and result in its SQLite audit log.
 

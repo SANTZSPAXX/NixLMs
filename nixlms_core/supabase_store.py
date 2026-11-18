@@ -176,12 +176,25 @@ class SupabaseStore:
             return {"uploaded_files": len(rows), "status": "ok"}
 
     def upsert_vector(self, memory_id, memory_type, content, embedding, metadata=None):
-        vector = [float(value) for value in embedding]
-        if len(vector) != 64:
-            raise ValueError(f"Embedding precisa ter 64 dimensões; recebido: {len(vector)}.")
-        vector_literal = "[" + ",".join(format(value, ".9g") for value in vector) + "]"
+        return self.upsert_vectors([(memory_id, memory_type, content, embedding, metadata)])
+
+    def upsert_vectors(self, records):
+        rows = []
+        for memory_id, memory_type, content, embedding, metadata in records:
+            vector = [float(value) for value in embedding]
+            if len(vector) != 64:
+                raise ValueError(f"Embedding precisa ter 64 dimensões; recebido: {len(vector)}.")
+            if memory_type not in {"knowledge", "episode", "library"}:
+                raise ValueError("Tipo de memória vetorial inválido.")
+            vector_literal = "[" + ",".join(format(value, ".9g") for value in vector) + "]"
+            rows.append((
+                str(memory_id), str(memory_type), str(content)[:12000],
+                vector_literal, json.dumps(metadata or {}, ensure_ascii=False),
+            ))
+        if not rows:
+            return 0
         with self._connect() as conn:
-            conn.execute(
+            conn.executemany(
                 """INSERT INTO public.nix_memory_vectors
                    (memory_id, memory_type, content, embedding, metadata, updated_at)
                    VALUES (%s, %s, %s, %s::extensions.vector(64), %s::jsonb, now())
@@ -189,9 +202,14 @@ class SupabaseStore:
                      memory_type=EXCLUDED.memory_type, content=EXCLUDED.content,
                      embedding=EXCLUDED.embedding, metadata=EXCLUDED.metadata,
                      updated_at=now()""",
-                (str(memory_id), str(memory_type), str(content)[:12000],
-                 vector_literal, json.dumps(metadata or {}, ensure_ascii=False)),
+                rows,
             )
+        return len(rows)
+
+    def vector_count(self):
+        with self._connect() as conn:
+            row = conn.execute("SELECT count(*) AS total FROM public.nix_memory_vectors").fetchone()
+        return int(row["total"])
 
     def search_vectors(self, embedding, limit=5, memory_type=None):
         vector = [float(value) for value in embedding]

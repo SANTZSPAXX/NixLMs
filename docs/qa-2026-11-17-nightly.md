@@ -99,17 +99,19 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 6. Linux ARM64 não foi executado.
 7. Não foi identificado vazamento de treino/teste novo na PR #36; o benchmark não treina encoder nem pesos.
 8. **Proveniência/privacidade:** origem independente de parte dos exemplos contextuais não foi confirmada. Como o repositório é público, substituir por casos sintéticos independentes ou documentar proveniência e autorização antes de tornar a PR #36 integrável.
+9. **Empates:** todos os episódios usam o mesmo timestamp; scores empatados podem cair na ordem original do arquivo. O plano #35 pede teste de empate, mas não há fixture explícita; definir/documentar o desempate e adicionar regressão.
 
 ## Próximos passos priorizados
 
 1. Resolver a proveniência dos exemplos contextuais da PR #36; substituir qualquer conteúdo potencialmente derivado de conversa individual ou documentar autorização explícita antes de integrar.
-2. Revisar manualmente qrels ambíguos, sobretudo a categoria contextual, antes de usar o baseline como gate.
-3. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
-4. Registrar proveniência/fingerprint do encoder E5 local no relatório para reprodutibilidade.
-5. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
-6. Preparar runner Linux ARM64 quando houver ambiente real.
-7. Revisar consentimento e integridade do instalador Linux do Ollama nas PRs #23/#29.
-8. Manter todas as PRs em draft; sem merge automático.
+2. Definir e testar desempate de candidatos com scores iguais, evitando dependência implícita da ordem do arquivo.
+3. Revisar manualmente qrels ambíguos, sobretudo a categoria contextual, antes de usar o baseline como gate.
+4. Planejar um conjunto de avaliação contextual com histórico explícito, sem misturar dados pessoais.
+5. Registrar proveniência/fingerprint do encoder E5 local no relatório para reprodutibilidade.
+6. Executar benchmark no computador físico somente com encoder local já disponível e medir RAM/CPU.
+7. Preparar runner Linux ARM64 quando houver ambiente real.
+8. Revisar consentimento e integridade do instalador Linux do Ollama nas PRs #23/#29.
+9. Manter todas as PRs em draft; sem merge automático.
 
 ## Referências
 
@@ -143,3 +145,8 @@ CI da correção finalizada: run #44211940434, 6/6 jobs success. O código e os 
 Foi publicada uma segunda revisão COMMENT na PR #36 (review ID 5949230088). Parte dos exemplos contextuais tem formulação/encadeamento muito específico e alinhado a uma conversa individual recente. O repositório marca os registros como sintéticos, mas não fornece evidência de criação independente. Não foi encontrada informação identificadora ou segredo no conjunto; o risco é de proveniência não comprovada e possível derivação de contexto de operador.
 
 Recomendação: manter a PR #36 em draft e substituir os exemplos potencialmente derivados por casos independentes/genéricos, ou documentar a origem e obter autorização explícita antes de publicar conteúdo derivado de conversas. O comentário evita reproduzir frases ou detalhes da conversa.
+
+
+## Adendo — desempate do ranking
+
+Foi publicada a revisão COMMENT [5949234969](https://github.com/SANTZSPAXX/NixLMs/pull/36). Os timestamps dos 50 episódios são idênticos; para scores empatados, a ordenação estável do ranking pode depender da posição original no JSONL. A PR #36 não inclui fixture explícita para empate, embora o plano #35 a liste. Recomenda-se definir uma regra de desempate estável e cobri-la com teste antes de transformar o benchmark em gate.

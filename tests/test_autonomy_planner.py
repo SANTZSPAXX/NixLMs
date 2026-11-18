@@ -154,6 +154,44 @@ class AutonomyPlannerTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["status"], "failed")
         self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "failed")
 
+
+    def test_local_language_model_creates_bounded_draft_without_persisting(self):
+        class FakeLanguage:
+            last_error = None
+            def generate(self, prompt):
+                return ('{"title":"Organizar projeto","description":"Plano de teste",'
+                        '"steps":[{"title":"Revisar arquivos","depends_on":[]},'
+                        '{"title":"Validar testes","depends_on":[0]}]}')
+        self.planner.set_language_engine(FakeLanguage())
+        draft = self.planner.draft_goal("Organize o projeto e valide os testes")
+        self.assertTrue(draft["requires_human_confirmation"])
+        self.assertEqual(draft["executable_actions"], 0)
+        self.assertEqual(self.goals.stats()["goals"], 0)
+        goal = self.planner.accept_goal_draft(draft)
+        self.assertEqual(goal["title"], "Organizar projeto")
+        self.assertEqual(goal["steps"][1]["depends_on"], [goal["steps"][0]["id"]])
+
+    def test_language_planning_rejects_invalid_json_without_saving(self):
+        class FakeLanguage:
+            last_error = None
+            def generate(self, prompt):
+                return "not json"
+        self.planner.set_language_engine(FakeLanguage())
+        with self.assertRaises(ValueError):
+            self.planner.draft_goal("Crie um plano")
+        self.assertEqual(self.goals.stats()["goals"], 0)
+
+    def test_language_planning_requires_configured_model(self):
+        with self.assertRaises(RuntimeError):
+            self.planner.draft_goal("Crie um plano")
+
+    def test_goal_draft_rejects_forward_or_cyclic_dependencies(self):
+        draft = {"title": "Plano", "description": "",
+                 "steps": [{"title": "Primeira", "depends_on": [1]}],
+                 "requires_human_confirmation": True, "executable_actions": 0}
+        with self.assertRaises(ValueError):
+            self.planner.accept_goal_draft(draft)
+
     def test_duplicate_task_registration_is_rejected(self):
         callback = lambda payload: True
         verifier = lambda result, payload: result is True

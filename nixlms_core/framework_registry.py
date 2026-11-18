@@ -10,9 +10,9 @@ import importlib.metadata
 import importlib.util
 import json
 from dataclasses import asdict, dataclass
+from typing import Iterable
 
 from .framework_status import classify_installation
-from typing import Iterable
 
 
 @dataclass(frozen=True)

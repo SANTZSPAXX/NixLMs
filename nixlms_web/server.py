@@ -367,7 +367,9 @@ class Handler(BaseHTTPRequestHandler):
                 target.write_text(content, encoding="utf-8")
                 return self.send_json(library.import_path(target))
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
-        except HuggingFaceError as exc:\n            return self.send_json({"error": str(exc)}, 400)\n        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        except HuggingFaceError as exc:
+            return self.send_json({"error": str(exc)}, 400)
+        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
             return self.send_json({"error": str(exc)}, 400)
         except Exception as exc:
             return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)

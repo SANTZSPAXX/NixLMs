@@ -43,3 +43,19 @@ jobs:
           path: episodic-benchmark.json
           if-no-files-found: error
           retention-days: 14
+  episodic-quality-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run PT-BR episodic retrieval quality baseline
+        run: python benchmarks/episodic_retrieval_quality_ptbr.py > episodic-retrieval-quality-ptbr.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: episodic-retrieval-quality-ptbr
+          path: episodic-retrieval-quality-ptbr.json
+          if-no-files-found: error
+          retention-days: 14

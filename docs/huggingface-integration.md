@@ -47,6 +47,10 @@ Na CLI:
 /hf desativar
 /hf ativar-embedding intfloat/multilingual-e5-small
 /hf desativar-embedding
+/hf ativar-visao autor/modelo-image-to-text
+/hf ativar-audio autor/modelo-asr
+/hf desativar-visao
+/hf desativar-audio
 ```
 
 O comando `baixar` pede confirmação. No painel, o botão de download também pede confirmação. Nenhum download é disparado pela inicialização.

@@ -115,3 +115,28 @@ O download guarda os arquivos em `data/huggingface/datasets/autor/nome`. Não in
 ## Colab e Windows
 
 A integração usa caminhos `pathlib`, HTTP padrão e dependências opcionais, portanto não exige GPU nem token no Colab ou Windows. No Colab, os arquivos ficam na sessão temporária, a menos que sejam copiados para armazenamento persistente. Não foram prometidos testes de runtime real em Colab ou no hardware do operador até a validação específica desses ambientes.
+
+
+## Laboratório multimodal local
+
+O painel **Laboratório de mídia** (\`/media\`) adiciona três fluxos locais:
+
+- **Texto → imagem** com pipelines Diffusers compatíveis com AutoPipelineForText2Image.
+- **Imagem → imagem** com AutoPipelineForImage2Image.
+- **Imagem → vídeo** com um pipeline Diffusers de image-to-video que aceite os argumentos \`image\`, \`prompt\` e \`num_frames\`.
+
+O ID do modelo público é escolhido pelo operador. O download exige confirmação, usa SHA fixo, \`token=False\`, arquivos de configuração e pesos Safetensors, e não executa \`trust_remote_code\`. O limite é 4 GiB para imagem e 10 GiB para vídeo. Os resultados ficam em \`data/media/output\`; imagens de entrada devem ser colocadas manualmente em \`data/media/input\`. Os arquivos de entrada são limitados a 20 MB e não podem escapar desse diretório.
+
+### Preparação automática de dependências
+
+Ao iniciar o servidor web, a NixLMs verifica as dependências multimodais ausentes e tenta instalá-las em segundo plano, sem atualizar pacotes já instalados. Se PyTorch estiver ausente, instala a distribuição oficial CPU; se já houver PyTorch CUDA/CPU, preserva a instalação existente. O estado é registrado em \`data/media/bootstrap.json\` e a tentativa é limitada a uma por 24 horas. Defina \`NIXLMS_AUTO_INSTALL_MEDIA=0\` para desativar o bootstrap automático. Falha de instalação não deve impedir o núcleo conversacional de iniciar.
+
+A instalação automática usa internet, espaço em disco e tempo de CPU. Não baixa pesos de modelos automaticamente. O download de cada modelo continua sendo uma ação separada e confirmada pelo operador. A preparação automática acontece no servidor local; o notebook Colab ainda precisa executar a instalação de dependências no próprio runtime.
+
+### NSFW
+
+O modo NSFW é opcional e fica desligado por padrão. A interface exige ativação explícita. A implementação bloqueia prompts que contenham termos conhecidos associados a menores e rejeita referências textuais explícitas a pessoas reais no modo adulto. Use apenas personagens adultos fictícios e imagens de entrada que você tenha autorização para usar. Esses bloqueios são salvaguardas básicas, não um classificador semântico infalível nem garantia de moderação do modelo baixado. Verifique a licença e o Model Card antes de usar um checkpoint.
+
+### Compatibilidade e limites
+
+Diffusers não garante que qualquer repositório seja compatível com os três modos. A arquitetura do checkpoint precisa corresponder à operação selecionada. Pipelines de vídeo variam bastante e podem exigir argumentos, memória e dependências adicionais; o endpoint reporta erro se o modelo não expuser o contrato esperado. A geração em CPU é lenta. No computador com 8 GB RAM e sem GPU, imagem em baixa resolução pode ser experimental; imagem-para-vídeo é recomendada somente em Colab/GPU ou máquina com memória suficiente. A existência do painel e dos testes unitários não significa que um modelo real já foi baixado ou executado.

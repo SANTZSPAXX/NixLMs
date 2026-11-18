@@ -140,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
             diagnostic = assistant.run_startup_diagnostics()
             checks = {
                 name: {
-                    "ok": item.get("status") != "error",
+                    "ok": item.get("status") == "ok",
                     "status": item.get("status", "unknown"),
                     "detail": item.get("detail", ""),
                 }
@@ -159,14 +159,51 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 "framework_inventory": {
                     "ok": isinstance(inspect_frameworks(), list),
-                    "status": "ok",
-                    "detail": "Inventário sem importações pesadas",
+                    "status": "info",
+                    "detail": "Inventário de dependências opcionais; não indica que todos os frameworks estejam instalados",
+                },
+                "scheduler_running": {
+                    "ok": assistant.scheduler.running,
+                    "status": "ok" if assistant.scheduler.running else "error",
+                    "detail": "Agendador ativo" if assistant.scheduler.running else "Agendador parado",
                 },
             })
+            try:
+                dataset_audit = assistant.learning.dataset.audit_splits()
+                dataset_counts = dataset_audit.get("counts", {})
+                training_samples = dataset_counts.get("qa_train", 0) + dataset_counts.get("pair_train", 0)
+                validation_samples = dataset_counts.get("qa_validation", 0)
+                learning_ready = (
+                    dataset_audit.get("valid", False)
+                    and training_samples > 0
+                    and validation_samples >= assistant.idle_learning.min_validation_samples
+                )
+                dataset_status = (
+                    "ok" if learning_ready
+                    else ("warning" if dataset_audit.get("valid", False) else "error")
+                )
+                dataset_detail = (
+                    f"train={training_samples}; validation={validation_samples}; "
+                    f"mínimo_validation={assistant.idle_learning.min_validation_samples}; "
+                    f"integridade={'válida' if dataset_audit.get('valid') else 'inválida'}"
+                )
+            except Exception as exc:
+                learning_ready = False
+                dataset_status = "error"
+                dataset_detail = type(exc).__name__ + ": " + str(exc)
+            checks["idle_learning_dataset"] = {
+                "ok": learning_ready,
+                "status": dataset_status,
+                "detail": dataset_detail,
+            }
+            errors = sum(item["status"] == "error" for item in checks.values())
+            non_ok = any(
+                item["status"] not in {"ok", "info"} for item in checks.values()
+            )
+            status = "failed" if errors else ("degraded" if non_ok else "ok")
             return self.send_json({
-                "ok": diagnostic.get("status") != "failed"
-                     and all(item["ok"] for item in checks.values()),
-                "status": diagnostic.get("status", "unknown"),
+                "ok": status == "ok",
+                "status": status,
                 "checks": checks,
                 "scheduler_running": assistant.scheduler.running,
                 "idle_learning": assistant.idle_learning.status(),
@@ -252,13 +289,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    host, port = "127.0.0.1", 8765
+    host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
-    print("NixLMs UI: http://127.0.0.1:8765 (somente este computador)")
+    print(f"NixLMs UI: http://127.0.0.1:{port} (somente este computador)")
     print("Motor: NixLMsNeuralCore")
     print("Autodiagnóstico:", runtime["diagnostics"]["status"])
     print("Aprendizagem ociosa:", runtime["idle_learning"])

@@ -1,5 +1,8 @@
+import os
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import urllib.error
@@ -7,20 +10,27 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = "http://127.0.0.1:8765"
-
 class WebInterfaceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.temp_data = tempfile.TemporaryDirectory(prefix="nixlms-web-test-")
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            cls.port = probe.getsockname()[1]
+        cls.base = f"http://127.0.0.1:{cls.port}"
+        env = os.environ.copy()
+        env["NIXLMS_DATA_DIR"] = cls.temp_data.name
+        env["NIXLMS_PORT"] = str(cls.port)
         cls.process = subprocess.Popen(
             [sys.executable, "-m", "nixlms_web.server"],
-            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            cwd=str(ROOT), env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         for _ in range(60):
             if cls.process.poll() is not None:
                 raise RuntimeError("Servidor encerrou durante a inicialização.")
             try:
-                urllib.request.urlopen(BASE + "/api/status", timeout=1)
+                urllib.request.urlopen(cls.base + "/api/status", timeout=1)
                 break
             except (OSError, urllib.error.URLError):
                 time.sleep(0.25)
@@ -36,14 +46,15 @@ class WebInterfaceTests(unittest.TestCase):
         except subprocess.TimeoutExpired:
             cls.process.kill()
             cls.process.wait(timeout=5)
+        cls.temp_data.cleanup()
 
     def get_json(self, path):
-        with urllib.request.urlopen(BASE + path, timeout=5) as response:
+        with urllib.request.urlopen(self.base + path, timeout=5) as response:
             import json
             return json.loads(response.read().decode("utf-8"))
 
     def test_homepage_served(self):
-        with urllib.request.urlopen(BASE + "/", timeout=5) as response:
+        with urllib.request.urlopen(self.base + "/", timeout=5) as response:
             body = response.read().decode("utf-8")
             self.assertEqual(response.status, 200)
             self.assertIn("NixLMs", body)
@@ -69,7 +80,7 @@ class WebInterfaceTests(unittest.TestCase):
     def test_chat_endpoint_uses_neural_core(self):
         import json
         request = urllib.request.Request(
-            BASE + "/api/chat",
+            self.base + "/api/chat",
             data=json.dumps({"message": "oi"}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -88,6 +99,11 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("dataset_integrity", data["checks"])
         self.assertIn("scheduler_running", data)
         self.assertIn("idle_learning", data)
+        self.assertIn("scheduler_running", data["checks"])
+        self.assertIn("idle_learning_dataset", data["checks"])
+        self.assertEqual(data["checks"]["scheduler_running"]["status"], "ok")
+        self.assertIn(data["status"], {"ok", "degraded", "failed"})
+        self.assertEqual(data["ok"], data["status"] == "ok")
 
     def test_static_assets_exist_and_css_is_valid_prefix(self):
         base = ROOT / "nixlms_web" / "static"
@@ -98,7 +114,7 @@ class WebInterfaceTests(unittest.TestCase):
 
     def test_server_is_loopback_only_and_has_no_shell_endpoint(self):
         source = (ROOT / "nixlms_web" / "server.py").read_text(encoding="utf-8")
-        self.assertIn('host, port = "127.0.0.1", 8765', source)
+        self.assertIn('host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))', source)
         self.assertNotIn('host,port="0.0.0.0"', source)
         self.assertNotIn("subprocess", source)
 

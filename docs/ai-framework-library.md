@@ -41,8 +41,47 @@ python -m nixlms_core.framework_registry --all
 python -m nixlms_core.framework_registry --json
 ```
 
-A detecção consulta metadados e disponibilidade dos módulos. Não prova que um
-modelo específico pode ser carregado nem executa benchmark de desempenho.
+A detecção consulta metadados da distribuição e disponibilidade do módulo
+separadamente, sem importar frameworks pesados. O estado "instalado" exige
+ambos os sinais. Se apenas um estiver presente, o inventário informa
+"metadata_only" ou "module_only" e não afirma que o pacote está utilizável.
+
+O inventário não prova que um modelo específico está instalado, treinado,
+carregado ou integrado, nem executa benchmark de desempenho.
+
+### Compatibilidade, origem e footprint
+
+A compatibilidade depende da versão exata, do SO, da versão de Python e da
+arquitetura. O catálogo atual ainda não mantém uma matriz completa de licenças,
+origens, hashes, tamanhos instalados ou consumo de RAM/CPU. Esses campos não
+devem ser inferidos do nome do pacote nem do estado de instalação.
+
+Evidências oficiais consultadas nesta auditoria:
+
+- PyTorch: o instalador padrão atual exige Python 3.11+; a página de plataformas
+  adicionais separa builds de ARM64 de Linux/Windows comuns.
+- ONNX Runtime CPU: a documentação do pacote Python lista Windows x64 e Linux
+  x64/ARM64 para o artefato CPU.
+- FAISS: o projeto upstream declara Conda como forma suportada e lista CPU para
+  Linux x86-64/aarch64 e Windows x86-64. O uso de `pip install faiss-cpu` no
+  requirements atual não tem, nesta auditoria, a mesma garantia upstream; não
+  deve ser tratado como caminho universal ou ARM64.
+- TensorFlow CPU: a documentação informa que os builds Linux ARM64 são
+  mantidos/testados por AWS e os builds Windows CPU por Intel, ambos terceiros.
+  Continua sendo alternativa, não requisito do núcleo.
+
+Antes de oferecer instalação, o plano deve mostrar versões resolvidas, origem
+do artefato, hash quando disponível e tamanho de download. O tamanho instalado
+e RAM de pico precisam ser medidos em um ambiente virtual limpo por SO/arquitetura.
+A instalação deve falhar de forma explícita quando não houver wheel compatível,
+em vez de iniciar compilação pesada implicitamente.
+
+Fontes oficiais:
+- PyTorch: https://pytorch.org/get-started/locally/
+- PyTorch additional platforms: https://docs.pytorch.org/get-started/additional-platforms/
+- ONNX Runtime: https://onnxruntime.ai/docs/get-started/with-python
+- FAISS: https://github.com/facebookresearch/faiss/blob/main/INSTALL.md
+- TensorFlow: https://www.tensorflow.org/install/pip
 
 ## Instalação opcional no Windows
 

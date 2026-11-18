@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT))
 from nixlms_core import NixLMsNeuralCore  # noqa: E402
 from nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
+from nixlms_core.supabase_store import SnapshotWorker, SupabaseStore  # noqa: E402
 
 
 def inspect_frameworks():
@@ -73,8 +74,28 @@ def inspect_frameworks():
     return result
 
 
+# Restaurar o estado durável ANTES de abrir JSON/SQLite nos módulos cognitivos.
+supabase_store = None
+supabase_worker = None
+try:
+    supabase_store = SupabaseStore.from_env(DATA)
+    if supabase_store is not None:
+        print("[NixUI] Restaurando estado persistente do Supabase...")
+        print("[NixUI]", supabase_store.restore())
+    elif RENDER_MODE and os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+        raise RuntimeError("NIXLMS_DATABASE_URL é obrigatória neste serviço Render.")
+except Exception as exc:
+    if RENDER_MODE and os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+        raise RuntimeError("Supabase obrigatório, mas indisponível: " + type(exc).__name__) from exc
+    print("[NixUI] Supabase indisponível; execução local sem persistência cloud:", type(exc).__name__)
+    supabase_store = None
+
 # Uma única instância alimenta chat, biblioteca, memória e diagnóstico.
 assistant = NixLMsNeuralCore(data_dir=DATA)
+assistant.supabase_store = supabase_store
+if supabase_store is not None:
+    supabase_worker = SnapshotWorker(supabase_store, interval=int(os.getenv("NIXLMS_SUPABASE_SYNC_SECONDS", "10")))
+    supabase_worker.start()
 library = assistant.private_library
 media = MediaGenerationManager(DATA, hub=assistant.huggingface)
 started = time.time()
@@ -108,6 +129,11 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(supplied, expected)
 
     def send_json(self, obj, status=200):
+        if supabase_worker is not None:
+            try:
+                supabase_worker.flush()
+            except Exception as exc:
+                supabase_store._last_error = type(exc).__name__ + ": " + str(exc)[:300]
         raw = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -135,7 +161,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if RENDER_MODE and path == "/api/health":
-            return self.send_json({"ok": True, "service": "nixlms"})
+            persistence = "not_configured"
+            healthy = True
+            if supabase_store is not None:
+                try:
+                    supabase_store.ping()
+                    persistence = "connected"
+                except Exception as exc:
+                    persistence = "unavailable"
+                    healthy = False
+                    supabase_store._last_error = type(exc).__name__
+            elif os.getenv("NIXLMS_REQUIRE_SUPABASE") == "1":
+                healthy = False
+            return self.send_json({
+                "ok": healthy, "service": "nixlms",
+                "persistence": persistence,
+            }, 200 if healthy else 503)
         if not RENDER_MODE and not self.local():
             return self.send_json({"error": "Somente acesso local."}, 403)
         if not self.authorized_api(path):
@@ -152,6 +193,7 @@ class Handler(BaseHTTPRequestHandler):
                 "runtime": {
                     "scheduler_running": assistant.scheduler.running,
                     "idle_learning": assistant.idle_learning.status(),
+                    "persistence": supabase_store.status() if supabase_store else {"configured": False},
                 },
                 "python": platform.python_version(),
                 "platform": platform.platform(),

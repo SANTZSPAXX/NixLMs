@@ -93,8 +93,8 @@ Fontes:
 - PR #62: runs #44351251086/#44351250703; 4 ambientes, 315 testes por ambiente; CodeQL aprovado.
 - PR #63: run #44355049320; 4 ambientes, 318 testes por ambiente. Não foi observado job CodeQL neste head.
 - PR #69: runs #44375657168/#44375657242; 4 ambientes, 323 testes por ambiente; CodeQL aprovado.
-- PR #70: run #44379056345; 4 ambientes, 337 testes por ambiente; CodeQL aprovado.
-- PR #71: run #44416546444; 4 ambientes, 327 testes por ambiente; CodeQL aprovado.
+- PR #70: run #44379056345; 4 ambientes, 337 testes por ambiente e 2 benchmarks aprovados. Não houve execução CodeQL observada; a PR está empilhada sobre #69, não diretamente em main.
+- PR #71: run #44416546444; 4 ambientes, 327 testes por ambiente e 2 benchmarks aprovados. Não houve execução CodeQL observada; a PR está empilhada sobre #69, não diretamente em main.
 - PR #72: runs #44417488132/#44417488269; 4 ambientes, 314 testes por ambiente; CodeQL aprovado.
 - PR #74: run #44421737137; 4 ambientes, 314 testes por ambiente e 2 benchmarks aprovados; CodeQL #44421737022 aprovou e registrou 69/69 arquivos Python e 2/2 workflows analisados.
 

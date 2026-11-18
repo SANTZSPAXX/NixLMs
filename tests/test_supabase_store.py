@@ -32,8 +32,11 @@ class SupabaseStoreTests(unittest.TestCase):
             content = SupabaseStore._read_consistent(path)
             fd_path = Path(tmp) / "restored.sqlite3"
             fd_path.write_bytes(content)
-            with sqlite3.connect(fd_path) as db:
+            db = sqlite3.connect(fd_path)
+            try:
                 self.assertEqual(db.execute("select v from t").fetchone()[0], "persisted")
+            finally:
+                db.close()
 
 
 if __name__ == "__main__":

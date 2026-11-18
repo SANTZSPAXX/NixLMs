@@ -1,3 +1,10 @@
+## QA 2026-11-18 — detecção conservadora de dependências multimodais
+
+- Usa metadados da distribuição e disponibilidade do módulo para inventariar pacotes sem importá-los.
+- Bloqueia instalação quando metadados e módulo divergem, evitando reinstalação sobre ambientes inconsistentes.
+- Rejeita requisitos com URLs ou caminhos diretos no perfil multimodal.
+- Adiciona testes de regressão para divergências de PyTorch/distribuições e URLs diretas.
+
 ## Instalação multimodal somente por ação explícita
 
 - Remove a instalação automática de dependências multimodais do startup do servidor e da célula Colab.

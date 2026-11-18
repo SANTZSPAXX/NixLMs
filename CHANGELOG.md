@@ -5,6 +5,8 @@
 - Adiciona CLI de planejamento/instalação manual com verificação de ambiente virtual, inventário de pacotes ausentes, confirmação digitada e relatório de alterações.
 - Bloqueia a instalação automática de PyTorch CPU quando a arquitetura não possui wheel x86-64 confirmada pelo helper; Linux ARM64 exige seleção manual oficial.
 - Adiciona regressões para garantir que runtime e Colab não executem instalação.
+- O plano de instalação também bloqueia Python abaixo de 3.10 e registra SO/arquitetura; versões já instaladas são preservadas, sem promessa de compatibilidade apenas por presença.
+
 
 ## Integração Hugging Face gratuita e local
 

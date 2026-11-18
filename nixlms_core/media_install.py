@@ -87,12 +87,15 @@ def build_install_plan(
     version_probe=None,
     system_name: str | None = None,
     machine: str | None = None,
+    python_version: tuple[int, int] | None = None,
 ) -> dict:
     """Build a no-network package plan using metadata/spec discovery only."""
     module_probe = module_probe or _module_available
     version_probe = version_probe or _installed_version
     system_name = system_name or platform.system()
     machine = machine or platform.machine()
+    python_version = tuple(python_version or sys.version_info[:2])
+    python_supported = python_version >= (3, 10)
     packages = []
     seen = set()
     for requirement in _iter_requirements(Path(requirements_file), Path(root)):
@@ -118,12 +121,23 @@ def build_install_plan(
     missing_requirements = [
         item["requirement"] for item in packages if not item["installed"]
     ]
-    blocked = not torch_installed and not cpu_index_supported
+    blocked = (not python_supported) or (not torch_installed and not cpu_index_supported)
+    if not python_supported:
+        blocked_reason = "Este perfil exige Python 3.10 ou superior."
+    elif not torch_installed and not cpu_index_supported:
+        blocked_reason = (
+            "PyTorch ausente: selecione e instale manualmente um wheel compatível "
+            "com esta plataforma em https://pytorch.org/get-started/locally/."
+        )
+    else:
+        blocked_reason = None
     return {
         "automatic_install": False,
         "requirements_file": Path(requirements_file).name,
         "platform": system_name,
         "architecture": machine,
+        "python_version": ".".join(str(part) for part in python_version),
+        "python_supported": python_supported,
         "torch": {
             "installed": torch_installed,
             "version": version_probe("torch") if torch_installed else None,
@@ -137,11 +151,7 @@ def build_install_plan(
         "packages": packages,
         "missing_requirements": missing_requirements,
         "blocked": blocked,
-        "blocked_reason": (
-            "PyTorch ausente: selecione e instale manualmente um wheel compatível "
-            "com esta plataforma em https://pytorch.org/get-started/locally/."
-            if blocked else None
-        ),
+        "blocked_reason": blocked_reason,
     }
 
 

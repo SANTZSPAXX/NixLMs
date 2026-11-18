@@ -102,5 +102,20 @@ class MediaInstallTests(unittest.TestCase):
         self.assertIn("--no-upgrade", requirements_call)
 
 
+    def test_python_below_3_10_is_blocked(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text("diffusers>=0.30\n", encoding="utf-8")
+            plan = media_install.build_install_plan(
+                requirements, root=root, module_probe=lambda module: True,
+                version_probe=lambda distribution: "1.0",
+                system_name="Windows", machine="AMD64", python_version=(3, 9),
+            )
+        self.assertTrue(plan["blocked"])
+        self.assertFalse(plan["python_supported"])
+        self.assertIn("Python 3.10", plan["blocked_reason"])
+
+
 if __name__ == "__main__":
     unittest.main()

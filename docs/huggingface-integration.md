@@ -138,7 +138,7 @@ Crie e ative um ambiente virtual antes de preparar o stack:
 
 ```powershell
 python -m venv .venv-media
-.\\.venv-media\\Scripts\\Activate.ps1
+.\.venv-media\Scripts\Activate.ps1
 ```
 
 ```bash
@@ -158,10 +158,11 @@ Depois, se decidir prosseguir, execute o comando explícito:
 python -m nixlms_core.media_install --install
 ```
 
-O instalador recusa execução fora de ambiente virtual, lista os pacotes diretos
-ausentes, informa SO/arquitetura, solicita que o operador digite
+O instalador exige Python 3.10+ e recusa execução fora de ambiente virtual,
+lista os pacotes diretos ausentes, informa SO/arquitetura, solicita que o operador digite
 `INSTALAR` e apresenta um relatório das distribuições adicionadas/alteradas.
-Ele preserva módulos já presentes e usa `--no-upgrade`; dependências transitivas
+Ele preserva módulos já presentes e usa `--no-upgrade`; a detecção verifica presença,
+não garante que a versão já instalada satisfaça todos os limites do arquivo. Dependências transitivas
 resolvidas pelo pip também aparecem no relatório final. Nenhum modelo ou dataset
 é baixado por esse comando.
 

@@ -28,7 +28,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Validate control-center JavaScript
-        run: node --check nixlms_web/static/app.js
+        run: |
+          node --check nixlms_web/static/app.js
+          node --check nixlms_web/static/media.js
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 

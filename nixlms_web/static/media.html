@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07121d">
+<title>NixLMs — Laboratório de mídia</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+.media-wrap{max-width:1100px;margin:28px auto;padding:0 22px}.media-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.media-field{display:grid;gap:8px;margin:14px 0}.media-field input,.media-field select,.media-field textarea{width:100%;box-sizing:border-box;background:#081725;color:#e8f1fa;border:1px solid #29445a;border-radius:9px;padding:12px;font:inherit}.media-field textarea{min-height:115px}.media-result{white-space:pre-wrap;overflow-wrap:anywhere}.media-result img,.media-result video{max-width:100%;border-radius:12px;margin-top:12px}.media-note{color:#a9bbca;font-size:.9rem;line-height:1.5}.media-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.media-toggle{display:flex;align-items:center;gap:10px;margin:16px 0}.media-toggle input{width:18px;height:18px}
+</style>
+</head>
+<body>
+<div class="shell">
+<main style="width:100%">
+<header><div><small class="eyebrow">NIXLMs / MULTIMODAL LAB</small><h1>Laboratório de mídia</h1></div><div class="top-right"><a class="ghost" href="/">← Centro de controle</a></div></header>
+<div class="media-wrap">
+<article class="panel notice">
+<b>Geração local e gratuita</b>
+<p class="media-note">Sem token e sem inferência hospedada. A geração usa CPU ou GPU local, conforme disponível. Modelos de imagem/vídeo podem ocupar vários GB; o download só ocorre após confirmação. No computador com 8 GB de RAM, geração de vídeo pode ser inviável ou extremamente lenta. Para vídeo, prefira Colab com GPU.</p>
+<div id="media-status" class="hint">Verificando módulos...</div>
+</article>
+<div class="media-grid">
+<article class="panel details">
+<div class="panel-head">MODELO</div>
+<div class="media-field"><label for="mode">Operação</label><select id="mode"><option value="text-to-image">Texto → imagem</option><option value="image-to-image">Imagem → imagem</option><option value="image-to-video">Imagem → vídeo</option></select></div>
+<div class="media-field"><label for="repo">ID público no Hugging Face (autor/modelo)</label><input id="repo" placeholder="stabilityai/sd-turbo"></div>
+<div class="media-actions"><button class="primary" id="download">Baixar modelo</button><button class="ghost" id="refresh">Atualizar status</button></div>
+<p class="media-note">Download limitado a 4 GiB para imagem e 10 GiB para vídeo. Apenas arquivos de configuração e pesos Safetensors são aceitos; código remoto e pesos pickle não são executados.</p>
+</article>
+<article class="panel details">
+<div class="panel-head">GERAÇÃO</div>
+<div class="media-field"><label for="prompt">Prompt</label><textarea id="prompt" maxlength="4000" placeholder="Descreva a imagem ou a animação..."></textarea></div>
+<div class="media-field"><label for="image-path">Imagem de entrada (para imagem→imagem e imagem→vídeo)</label><input id="image-path" placeholder="ex.: referencia.png"></div>
+<div class="media-field"><label for="steps">Etapas de inferência (1–40)</label><input id="steps" type="number" min="1" max="40" value="20"></div>
+<div class="media-field"><label for="size">Resolução</label><select id="size"><option value="512">512 × 512</option><option value="384">384 × 384</option><option value="256">256 × 256</option><option value="640">640 × 640</option><option value="768">768 × 768</option></select></div>
+<div class="media-field"><label for="frames">Frames de vídeo (1–24)</label><input id="frames" type="number" min="1" max="24" value="16"></div>
+<label class="media-toggle"><input id="nsfw" type="checkbox"> Ativar modo NSFW (conteúdo adulto fictício)</label>
+<div class="media-actions"><button class="primary" id="generate">Gerar</button></div>
+<p class="media-note">O modo NSFW fica desligado por padrão. É limitado a personagens adultos fictícios; prompts envolvendo menores ou pessoas reais são bloqueados. Não use imagens sem autorização.</p>
+</article>
+</div>
+<article class="panel details" style="margin-top:16px">
+<div class="panel-head">RESULTADO</div><div id="media-result" class="media-result">Nenhuma geração executada nesta sessão.</div>
+</article>
+</div>
+</main>
+</div>
+<script src="/media.js"></script>
+</body>
+</html>

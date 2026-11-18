@@ -17,10 +17,6 @@ import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
-
-from .huggingface import HuggingFaceError
-
 
 class MediaGenerationError(RuntimeError):
     """Erro controlado do subsistema de geração multimodal."""
@@ -88,7 +84,7 @@ class MediaGenerationManager:
         prompt = str(prompt or "").strip()
         if not prompt or len(prompt) > 4000:
             raise MediaGenerationError("Prompt vazio ou acima de 4.000 caracteres.")
-        if self.BLOCKED_PROMPT.search(prompt):
+        if nsfw and self.BLOCKED_PROMPT.search(prompt):
             raise MediaGenerationError("Prompt bloqueado: conteúdo sexual ou sugestivo envolvendo menores não é permitido.")
         if nsfw and not self.settings()["nsfw_enabled"]:
             raise MediaGenerationError("Modo NSFW desativado. Ative-o explicitamente nas configurações locais.")
@@ -116,6 +112,7 @@ class MediaGenerationManager:
             "auto_install": os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0",
             "model_downloads_require_confirmation": True,
             "inference": "local-only",
+            "bootstrap": self._read_json(self.bootstrap_path, {"status": "not_started"}),
         }
 
     def bootstrap_async(self, enabled=True):
@@ -317,11 +314,17 @@ class MediaGenerationManager:
         mode = str(mode or "").lower()
         if mode not in {"text-to-image", "image-to-image", "image-to-video"}:
             raise MediaGenerationError("Modo inválido.")
-        prompt = self._validate_prompt(prompt, nsfw=bool(nsfw))
+        if not isinstance(nsfw, bool):
+            raise MediaGenerationError("O sinalizador NSFW deve ser booleano.")
+        prompt = self._validate_prompt(prompt, nsfw=nsfw)
         if nsfw and not self.settings()["nsfw_enabled"]:
             raise MediaGenerationError("Modo NSFW desativado.")
         steps, width, height, frames = int(steps), int(width), int(height), int(frames)
-        if not 1 <= steps <= 40 or width not in {256, 384, 512, 640, 768} or height not in {256, 384, 512, 640, 768} or not 1 <= frames <= 24:
+        guidance = float(guidance)
+        strength = float(strength)
+        if (not 1 <= steps <= 40 or width not in {256, 384, 512, 640, 768}
+                or height not in {256, 384, 512, 640, 768} or not 1 <= frames <= 24
+                or not 0.0 <= guidance <= 20.0 or not 0.1 <= strength <= 0.95):
             raise MediaGenerationError("Parâmetros fora dos limites seguros.")
         pipe = self._pipeline(repo_id, mode)
         kwargs = {"prompt": prompt, "num_inference_steps": steps}

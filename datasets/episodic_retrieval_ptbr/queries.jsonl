@@ -22,9 +22,9 @@
 {"query_id":"q022","query":"como evitar muitas tentativas juntas depois de erro?","category":"consulta_curta","split":"test","expects_no_answer":false}
 {"query_id":"q023","query":"por que uma requisicao precisa de tempo maximo?","category":"consulta_curta","split":"test","expects_no_answer":false}
 {"query_id":"q024","query":"threads dividem memoria do processo?","category":"consulta_curta","split":"test","expects_no_answer":false}
-{"query_id":"q025","query":"qual foi a temperatura exata registrada no observatorio em 14 de abril?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q026","query":"qual identificador foi atribuido ao pedido de compra do laboratorio?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q027","query":"qual era o resultado da partida final do torneio regional de damas?","category":"sem_resposta","split":"validation","expects_no_answer":true}
-{"query_id":"q028","query":"quantos quilometros tinha a rota medida pelo satelite na terça-feira?","category":"sem_resposta","split":"test","expects_no_answer":true}
-{"query_id":"q029","query":"qual fabricante produziu o sensor instalado no farol da ilha?","category":"sem_resposta","split":"test","expects_no_answer":true}
-{"query_id":"q030","query":"qual foi o valor medido no experimento de pressão do laboratório 7?","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q025","query":"zafirox qubit nebulosa","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q026","query":"nimbora telescopio cratera","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q027","query":"veltrax meteorito espectrometro","category":"sem_resposta","split":"validation","expects_no_answer":true}
+{"query_id":"q028","query":"xandor radiofrequencia osciloscopio","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q029","query":"lumera satelite fotometria","category":"sem_resposta","split":"test","expects_no_answer":true}
+{"query_id":"q030","query":"quironita paleontologia estratigrafia","category":"sem_resposta","split":"test","expects_no_answer":true}

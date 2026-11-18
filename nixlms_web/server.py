@@ -116,7 +116,8 @@ if supabase_store is not None:
                                        {"tags": item.get("tags", [])}))
             for item in assistant.episodic.items:
                 passage = str(item.get("user_input", "")) + " " + str(item.get("assistant_output", ""))
-                vector_records.append(("episode:" + str(item.get("id", "")), "episode",
+                episode_id = str(item.get("id") or hashlib.sha256(passage.encode("utf-8")).hexdigest())
+                vector_records.append(("episode:" + episode_id, "episode",
                                        passage, assistant.encoder.encode(passage),
                                        {"source": item.get("source", "unknown")}))
             for chunk in existing_chunks:

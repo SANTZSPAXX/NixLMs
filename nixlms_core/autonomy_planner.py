@@ -252,6 +252,7 @@ class AutonomyPlanner:
             "active_goals": len(goals),
             "ready_steps": ready,
             "registered_tasks": sorted(self._tasks),
+            "language_planning_available": self.language_engine is not None,
             "next_actions": self.preview(),
             "execution_scope": "internal_allowlist_only",
             "requires_approval": False,

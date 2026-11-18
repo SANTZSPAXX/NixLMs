@@ -243,6 +243,27 @@ class LearningEngine:
             },
         }
 
+    def _stage_candidate_data(self, candidate_dir, rows, live_state):
+        """Cria um sandbox mínimo sem copiar bancos privados ou modelos externos."""
+        candidate_dir = Path(candidate_dir)
+        candidate_dir.mkdir(parents=True, exist_ok=False)
+
+        # O candidato precisa apenas de train/validation e do estado usado
+        # pelo gate. O split test permanece fora do sandbox de treino.
+        candidate_rows = [
+            row for row in rows
+            if row.get("split", "train") in {"train", "validation"}
+        ]
+        save_json(candidate_dir / "dataset.json", candidate_rows)
+        for filename, payload in live_state.items():
+            save_json(candidate_dir / filename, payload)
+
+        for filename in self.INCREMENTAL_CALIBRATION_FILES:
+            source = self.agent.data_dir / filename
+            if source.is_file() and not source.is_symlink():
+                shutil.copy2(source, candidate_dir / filename)
+        return candidate_dir
+
     def _validation_metrics(self):
         """Compara o estado atual somente com exemplos QA do split validation."""
         self._require_clean_splits()
@@ -564,12 +585,7 @@ class LearningEngine:
 
         with tempfile.TemporaryDirectory(prefix="nixlms-incremental-") as temporary:
             candidate_dir = Path(temporary) / "candidate"
-            shutil.copytree(
-                self.agent.data_dir, candidate_dir, dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns("checkpoints"),
-            )
-            for filename, payload in live_state.items():
-                save_json(candidate_dir / filename, payload)
+            self._stage_candidate_data(candidate_dir, rows, live_state)
             candidate = self.agent.__class__(
                 candidate_dir, config=copy.deepcopy(self.agent.config), llm_model=None
             )

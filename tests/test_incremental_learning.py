@@ -35,6 +35,59 @@ class SafeIncrementalLearningTests(unittest.TestCase):
                          "weights_updated": False},
         }
 
+    def test_candidate_staging_excludes_private_databases_and_model_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ai = self._agent(tmp)
+            root = Path(tmp)
+            model_file = root / "huggingface" / "models" / "large.safetensors"
+            model_file.parent.mkdir(parents=True, exist_ok=True)
+            model_file.write_bytes(b"x" * 1024)
+            media_file = root / "media" / "models" / "large.onnx"
+            media_file.parent.mkdir(parents=True, exist_ok=True)
+            media_file.write_bytes(b"y" * 1024)
+            (root / "lif_calibration.json").write_text(
+                json.dumps({"threshold": 0.4}), encoding="utf-8"
+            )
+            (root / "decoder_calibration.json").write_text(
+                json.dumps({"min_confidence": 0.5}), encoding="utf-8"
+            )
+
+            ai.learning.dataset.add(
+                "pergunta teste isolada do sandbox", "resposta teste isolada", "test"
+            )
+            rows = ai.learning.dataset.load()
+            expected_rows = [
+                row for row in rows
+                if row.get("split", "train") in {"train", "validation"}
+            ]
+            live_state = ai.learning._live_model_state()
+            with tempfile.TemporaryDirectory() as staging:
+                candidate_dir = Path(staging) / "candidate"
+                ai.learning._stage_candidate_data(candidate_dir, rows, live_state)
+
+                staged_rows = json.loads(
+                    (candidate_dir / "dataset.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(staged_rows, expected_rows)
+                self.assertFalse(any(row.get("split") == "test" for row in staged_rows))
+                expected = set(
+                    ai.learning.INCREMENTAL_MODEL_FILES
+                    + ai.learning.INCREMENTAL_CALIBRATION_FILES
+                    + ("dataset.json",)
+                )
+                self.assertEqual({path.name for path in candidate_dir.iterdir()}, expected)
+                for filename in ai.learning.INCREMENTAL_MODEL_FILES:
+                    self.assertTrue((candidate_dir / filename).is_file())
+                for filename in ai.learning.INCREMENTAL_CALIBRATION_FILES:
+                    self.assertTrue((candidate_dir / filename).is_file())
+                self.assertFalse((candidate_dir / "private_library.sqlite3").exists())
+                self.assertFalse((candidate_dir / "scheduler.sqlite3").exists())
+                self.assertFalse((candidate_dir / "autonomy.sqlite3").exists())
+                self.assertFalse((candidate_dir / "episodes.json").exists())
+                self.assertFalse((candidate_dir / "episodic_memory.json").exists())
+                self.assertFalse((candidate_dir / "huggingface").exists())
+                self.assertFalse((candidate_dir / "media").exists())
+
     def test_validation_metrics_never_read_test_rows_or_update_weights(self):
         with tempfile.TemporaryDirectory() as tmp:
             ai = self._agent(tmp)

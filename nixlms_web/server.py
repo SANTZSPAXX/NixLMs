@@ -303,7 +303,15 @@ class Handler(BaseHTTPRequestHandler):
                     assistant._retrieval_encoder_error = None
                     assistant.memory._embedding_cache.clear()
                     return self.send_json({"role": role, "active_encoder": active})
-                raise HuggingFaceError("Use role=generator ou role=embeddings.")
+                if role in {"vision", "speech"}:
+                    active = assistant.huggingface.activate_perception(repo_id, role)
+                    if role == "vision":
+                        assistant.perception.vision_model_path = Path(active["path"])
+                    else:
+                        assistant.perception.speech_model_path = Path(active["path"])
+                    assistant.perception._pipelines.clear()
+                    return self.send_json({"role": role, "active_perception": active})
+                raise HuggingFaceError("Use role=generator, embeddings, vision ou speech.")
             if path == "/api/huggingface/deactivate":
                 role = str(data.get("role", "generator")).lower()
                 if role == "generator":
@@ -314,8 +322,15 @@ class Handler(BaseHTTPRequestHandler):
                     assistant.retrieval_encoder = assistant.encoder
                     assistant._retrieval_encoder_error = None
                     assistant.memory._embedding_cache.clear()
+                elif role in {"vision", "speech"}:
+                    assistant.huggingface.deactivate_perception(role)
+                    if role == "vision":
+                        assistant.perception.vision_model_path = None
+                    else:
+                        assistant.perception.speech_model_path = None
+                    assistant.perception._pipelines.clear()
                 else:
-                    raise HuggingFaceError("Use role=generator ou role=embeddings.")
+                    raise HuggingFaceError("Use role=generator, embeddings, vision ou speech.")
                 return self.send_json({"active": False, "role": role})
             if path == "/api/chat":
                 msg = str(data.get("message", "")).strip()

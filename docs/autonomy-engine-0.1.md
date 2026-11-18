@@ -34,6 +34,8 @@ result = engine.run_cycle([
 
 Para escopo local/externo, a solicitação fica em `pending_approval`. O runtime deve apresentar detalhes ao operador e chamar `approve(request_id, approved_by=...)` somente após consentimento explícito, ou `deny(...)`.
 
+**Limite de autenticação:** `approved_by` é apenas um rótulo de auditoria; o motor não autentica o operador. A interface/runtime que expõe aprovação deve validar a identidade e obter consentimento explícito antes de chamar `approve()`. Não exponha esse método diretamente a entradas não confiáveis.
+
 Os callbacks são funções Python fornecidas pelo runtime; não devem aceitar caminhos arbitrários, URLs arbitrárias, argumentos de shell ou outros alvos fora de suas próprias allowlists.
 
 ## Integração e limites desta versão

@@ -62,7 +62,7 @@ class HuggingFaceLocalGenerationTests(unittest.TestCase):
             self.assertEqual(answer, "Resposta GGUF local.")
             self.assertEqual(generator.status()["backend"], "llama.cpp_cpu")
             self.assertEqual(calls["n_threads"], 2)
-            self.assertEqual(calls["model_path"], str(root / "model.gguf"))
+            self.assertTrue(Path(calls["model_path"]).samefile(root / "model.gguf"))
 
     def test_language_engine_can_use_hf_local_when_ollama_is_disabled(self):
         engine = LanguageEngine()

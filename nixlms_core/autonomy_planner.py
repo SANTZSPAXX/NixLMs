@@ -147,7 +147,11 @@ class AutonomyPlanner:
 
     def accept_goal_draft(self, draft):
         """Persist a previously reviewed draft; this method performs no task actions."""
-        if not isinstance(draft, dict) or draft.get("requires_human_confirmation") is not True:
+        if (not isinstance(draft, dict)
+                or set(draft) != {"title", "description", "steps",
+                                  "requires_human_confirmation", "executable_actions"}
+                or draft.get("requires_human_confirmation") is not True
+                or draft.get("executable_actions") != 0):
             raise ValueError("Rascunho inválido ou sem confirmação humana.")
         clean = self._validate_goal_draft(draft)
         goal = self.goals.create_goal(clean["title"], clean["description"])

@@ -24,7 +24,7 @@ async function loadHuggingFaceStatus(){
   $("#hf-anonymous").textContent=d.anonymous_public_access?"ATIVO":"INDISPONÍVEL";
   $("#hf-download-support").textContent=d.download_support?"DISPONÍVEL":"INSTALAR";
   $("#hf-inference-support").textContent=d.inference_support?"DISPONÍVEL":"INSTALAR";
-  $("#hf-active").textContent=d.active_model?.repo_id||"Nenhum";
+  $("#hf-active").textContent="Geração: "+(d.active_model?.repo_id||"—")+" · Embeddings: "+(d.active_encoder?.repo_id||"—");
   $("#hf-status").textContent="Acesso anônimo: sem token · Inferência hospedada: desativada · Repositórios locais: "+d.repositories.length;
   $("#hf-local-list").innerHTML=d.repositories.length?d.repositories.map(x=>'<div class="result"><b>'+esc(x.repo_id)+'</b><small>'+esc(x.repo_type)+' · revisão '+esc(String(x.revision||"").slice(0,12))+' · '+bytes(x.downloaded_bytes||0)+'</small></div>').join(""):"Nenhum recurso local registrado.";
   return d;
@@ -48,9 +48,9 @@ async function showHuggingFaceDetails(type,id){
   const status=await api("/api/huggingface/status");
   const local=status.repositories.some(x=>x.repo_type===type&&x.repo_id===id);
   const files=(d.siblings||[]).slice(0,20).map(x=>({path:x.path,size:x.size}));
-  box.innerHTML='<div class="panel-head">RECURSO · '+esc(type.toUpperCase())+'</div><p><b>'+esc(d.id)+'</b></p><p>Licença: '+esc(d.license||"não informada")+' · Gated: '+esc(String(d.gated))+' · Privado: '+esc(String(d.private))+'</p><p>Tarefa: '+esc(d.pipeline_tag||d.library_name||"não informada")+' · Downloads: '+esc(d.downloads??"—")+' · Likes: '+esc(d.likes??"—")+'</p><p>Revisão SHA: '+esc(d.sha||"não informada")+'</p><p>'+esc(d.description||"Sem descrição no card.")+'</p><pre>'+esc(JSON.stringify(files,null,2))+'</pre><div class="hf-actions">'+(type!=="space"&&!local&&!d.private&&!d.gated?'<button class="primary" id="hf-detail-download">Baixar artefatos permitidos</button>':"")+(type==="model"&&local?'<button class="primary" id="hf-detail-activate">Ativar em CPU</button>':"")+'<a class="ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Abrir no Hub ↗</a></div>';
+  box.innerHTML='<div class="panel-head">RECURSO · '+esc(type.toUpperCase())+'</div><p><b>'+esc(d.id)+'</b></p><p>Licença: '+esc(d.license||"não informada")+' · Gated: '+esc(String(d.gated))+' · Privado: '+esc(String(d.private))+'</p><p>Tarefa: '+esc(d.pipeline_tag||d.library_name||"não informada")+' · Downloads: '+esc(d.downloads??"—")+' · Likes: '+esc(d.likes??"—")+'</p><p>Revisão SHA: '+esc(d.sha||"não informada")+'</p><p>'+esc(d.description||"Sem descrição no card.")+'</p><pre>'+esc(JSON.stringify(files,null,2))+'</pre><div class="hf-actions">'+(type!=="space"&&!local&&!d.private&&!d.gated?'<button class="primary" id="hf-detail-download">Baixar artefatos permitidos</button>':"")+(type==="model"&&local&&d.pipeline_tag==="text-generation"?'<button class="primary" id="hf-detail-activate">Ativar geração CPU</button>':"")+(type==="model"&&local&&["sentence-similarity","feature-extraction"].includes(d.pipeline_tag)?'<button class="primary" id="hf-detail-activate-embeddings">Ativar embeddings CPU</button>':"")+'<a class="ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Abrir no Hub ↗</a></div>';
   if($("#hf-detail-download"))$("#hf-detail-download").onclick=()=>downloadHuggingFace(type,id);
-  if($("#hf-detail-activate"))$("#hf-detail-activate").onclick=()=>activateHuggingFace(id);
+  if($("#hf-detail-activate"))$("#hf-detail-activate").onclick=()=>activateHuggingFace(id,"generator");\n  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
  }catch(e){box.textContent=e.message}
 }
 async function downloadHuggingFace(type,id){
@@ -64,7 +64,7 @@ async function downloadHuggingFace(type,id){
   await showHuggingFaceDetails(type,id);
  }catch(e){toast(e.message)}
 }
-async function activateHuggingFace(id){
+async function activateHuggingFace(id,role="generator"){
  try{
   const d=await api("/api/huggingface/activate",{method:"POST",body:JSON.stringify({repo_id:id})});
   toast("Modelo local ativado em CPU: "+d.active_model.repo_id);
@@ -74,4 +74,4 @@ async function activateHuggingFace(id){
 $("#hf-search").onclick=searchHuggingFace;
 $("#hf-query").onkeydown=e=>{if(e.key==="Enter")searchHuggingFace()};
 $("#hf-refresh").onclick=()=>loadHuggingFaceStatus().then(()=>toast("Hugging Face atualizado."));
-$("#hf-deactivate").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:"{}"});toast("Modelo Hugging Face desativado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
+$("#hf-deactivate").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"generator"})});toast("Modelo Hugging Face desativado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};\n$("#hf-deactivate-embedding").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"embeddings"})});toast("Encoder nativo restaurado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};

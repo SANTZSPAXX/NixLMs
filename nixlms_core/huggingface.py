@@ -140,7 +140,7 @@ class HuggingFaceHub:
             "pipeline_tag": item.get("pipeline_tag"),
             "library_name": item.get("library_name"),
             "license": card.get("license") or next(
-                (tag.split(":", 1)[1] for tag in item.get("tags", [])
+                (tag.split(":", 1)[1] for tag in (item.get("tags") or [])
                  if isinstance(tag, str) and tag.startswith("license:")), None
             ),
             "tags": [str(tag) for tag in (item.get("tags") or [])[:30]],
@@ -462,10 +462,12 @@ class HuggingFaceHub:
             evaluate_installed = importlib.util.find_spec("evaluate") is not None
             peft_installed = importlib.util.find_spec("peft") is not None
             diffusers_installed = importlib.util.find_spec("diffusers") is not None
+            llama_cpp_installed = importlib.util.find_spec("llama_cpp") is not None
         except (ImportError, ValueError):
             transformers_installed = torch_installed = False
             datasets_installed = evaluate_installed = False
             peft_installed = diffusers_installed = False
+            llama_cpp_installed = False
         repositories = self._load_registry()
         return {
             "anonymous_public_access": True,
@@ -474,7 +476,8 @@ class HuggingFaceHub:
             "paid_remote_inference": False,
             "hub_package_installed": hub_installed,
             "download_support": hub_installed,
-            "inference_support": transformers_installed and torch_installed,
+            "inference_support": (transformers_installed and torch_installed) or llama_cpp_installed,
+            "gguf_support": llama_cpp_installed,
             "datasets_support": datasets_installed,
             "evaluation_support": evaluate_installed,
             "fine_tuning_support": peft_installed,

@@ -52,16 +52,24 @@ class SafeIncrementalLearningTests(unittest.TestCase):
                 json.dumps({"min_confidence": 0.5}), encoding="utf-8"
             )
 
+            ai.learning.dataset.add(
+                "pergunta teste isolada do sandbox", "resposta teste isolada", "test"
+            )
             rows = ai.learning.dataset.load()
+            expected_rows = [
+                row for row in rows
+                if row.get("split", "train") in {"train", "validation"}
+            ]
             live_state = ai.learning._live_model_state()
             with tempfile.TemporaryDirectory() as staging:
                 candidate_dir = Path(staging) / "candidate"
                 ai.learning._stage_candidate_data(candidate_dir, rows, live_state)
 
-                self.assertEqual(
-                    json.loads((candidate_dir / "dataset.json").read_text(encoding="utf-8")),
-                    rows,
+                staged_rows = json.loads(
+                    (candidate_dir / "dataset.json").read_text(encoding="utf-8")
                 )
+                self.assertEqual(staged_rows, expected_rows)
+                self.assertFalse(any(row.get("split") == "test" for row in staged_rows))
                 expected = set(
                     ai.learning.INCREMENTAL_MODEL_FILES
                     + ai.learning.INCREMENTAL_CALIBRATION_FILES

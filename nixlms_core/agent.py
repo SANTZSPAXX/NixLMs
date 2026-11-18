@@ -149,6 +149,7 @@ class NixLMsNeuralCore:
         self.starter_dataset_seeded = False
         self.idle_learning = IdleLearningManager(self)
         self.scheduler.register_handler("idle_learning_cycle", self._scheduled_idle_learning)
+        self.scheduler.register_handler("autonomy_cycle", self._scheduled_autonomy_cycle)
 
         if not self.memory.knowledge:
             self.memory.knowledge.extend(DEFAULTS)
@@ -268,6 +269,20 @@ class NixLMsNeuralCore:
     def _scheduled_idle_learning(self, payload):
         return self.idle_learning.run_if_idle(payload)
 
+    def _scheduled_autonomy_cycle(self, payload):
+        """Advance only trusted, dependency-ready internal goal steps."""
+        payload = payload if isinstance(payload, dict) else {}
+        requested_limit = payload.get("limit", self.autonomy.policy.max_actions_per_cycle)
+        try:
+            limit = max(1, min(
+                int(requested_limit),
+                self.autonomy.policy.max_actions_per_cycle,
+                100,
+            ))
+        except (TypeError, ValueError):
+            limit = 1
+        return self.run_autonomy_cycle(limit=limit)
+
     def _seed_starter_dataset(self):
         """Seed curated examples only when an actual runtime starts on a clean install."""
         if self.learning.dataset.path.exists():
@@ -317,11 +332,35 @@ class NixLMsNeuralCore:
                 max_attempts=1,
                 job_id=job_id,
             )
+        autonomy_enabled = os.getenv("NIXLMS_AUTONOMY_ENABLED", "1").strip().lower() not in {
+            "0", "false", "no", "off"
+        }
+        try:
+            autonomy_interval = int(os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300"))
+        except ValueError:
+            autonomy_interval = 300
+        autonomy_interval = max(60, min(3600, autonomy_interval))
+        autonomy_job_id = "nixlms-autonomy-cycle-v1"
+        if autonomy_enabled:
+            existing_jobs = self.scheduler.list_jobs(limit=1000)
+            if not any(job.get("id") == autonomy_job_id for job in existing_jobs):
+                self.scheduler.schedule_interval(
+                    "autonomy_cycle",
+                    autonomy_interval,
+                    payload={"limit": self.autonomy.policy.max_actions_per_cycle},
+                    first_delay_seconds=min(60, autonomy_interval),
+                    priority=-5,
+                    max_attempts=3,
+                    job_id=autonomy_job_id,
+                )
         started = self.scheduler.start()
         return {
             "diagnostics": self.startup_diagnostics,
             "scheduler_started": self.scheduler.running,
             "scheduler_started_now": started,
+            "autonomy_enabled": autonomy_enabled,
+            "autonomy_interval_seconds": autonomy_interval,
+            "autonomy_planner": self.autonomy_planner.status(),
             "idle_learning": self.idle_learning.status(),
             "private_library": self.private_library.stats(),
         }
@@ -927,6 +966,16 @@ class NixLMsNeuralCore:
                 "registered_actions": self.autonomy.registered_actions(),
                 "pending_approval": len(self.autonomy.list_requests(status="pending_approval")),
                 "planner": self.autonomy_planner.status(),
+                "runtime_loop": {
+                    "enabled": os.getenv("NIXLMS_AUTONOMY_ENABLED", "1").strip().lower()
+                    not in {"0", "false", "no", "off"},
+                    "interval_seconds": max(60, min(
+                        3600, int(os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300"))
+                    )) if os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300").lstrip("-").isdigit() else 300,
+                    "handler_registered": "autonomy_cycle" in self.scheduler.stats().get("registered_handlers", []),
+                    "scope": "internal",
+                    "behavior": "starts dependency-ready goal steps; does not execute or complete their work",
+                },
             },
             "scheduler": self.scheduler.stats(),
             "startup_diagnostics": self.startup_diagnostics,

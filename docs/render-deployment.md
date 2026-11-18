@@ -34,6 +34,14 @@ A interface usa Web Speech API do navegador. A síntese de voz ocorre no disposi
 - Não há terminal remoto nem execução de código fornecido pelo usuário.
 - Use HTTPS do Render; o servidor valida a origem HTTPS nas requisições POST quando o cabeçalho Origin está presente.
 
+## Persistência e operação
+
+- Confirme no Dashboard que o disco `nixlms-data` está anexado em `/var/data` antes de importar dados.
+- O serviço usa `NIXLMS_DATA_DIR=/var/data`; não salve dados persistentes em caminhos fora desse diretório.
+- Verifique `/api/diagnostics` para confirmar que o diretório de dados existe e é gravável.
+- Faça um teste real: grave uma memória, importe um documento pequeno, reinicie/reimplante e confirme que ambos continuam disponíveis.
+- Exporte periodicamente a biblioteca/memória para cópia externa. Snapshots diários do disco ajudam na recuperação, mas não protegem contra exclusão lógica e não substituem backup independente.
+
 ## Teste após deploy
 
 1. Abra `/api/health` e confirme `ok: true`.

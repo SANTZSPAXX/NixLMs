@@ -76,7 +76,8 @@ def create_server(host=None, port=None, assistant=None, key_store=None):
                 if assistant is None:
                     from nixlms_core import NixLMsNeuralCore
                     assistant = NixLMsNeuralCore(data_dir=data_dir)
-                    assistant.start_runtime()
+                    if hasattr(assistant, "start_runtime"):
+                        assistant.start_runtime()
                 with assistant_lock: answer = assistant.respond(prompt, use_language=True, record=True)
                 if self.path == "/v1/chat": return self.send_json({"reply":answer,"model":"nixlms"})
                 return self.send_json({"id":"chatcmpl-"+uuid.uuid4().hex,"object":"chat.completion",

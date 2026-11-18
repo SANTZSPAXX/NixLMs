@@ -39,6 +39,16 @@ class MediaGenerationTests(unittest.TestCase):
         with self.assertRaisesRegex(MediaGenerationError, "menores"):
             self.manager._validate_prompt("fictional adult with a child", nsfw=True)
 
+    def test_portuguese_minor_prompt_is_rejected(self):
+        self.manager.set_nsfw(True)
+        with self.assertRaisesRegex(MediaGenerationError, "menores"):
+            self.manager._validate_prompt("personagem fictício adolescente", nsfw=True)
+
+    def test_portuguese_real_person_prompt_is_rejected(self):
+        self.manager.set_nsfw(True)
+        with self.assertRaisesRegex(MediaGenerationError, "pessoas reais"):
+            self.manager._validate_prompt("pessoa real em retrato adulto", nsfw=True)
+
     def test_real_person_prompt_is_rejected_in_nsfw_mode(self):
         self.manager.set_nsfw(True)
         with self.assertRaisesRegex(MediaGenerationError, "pessoas reais"):

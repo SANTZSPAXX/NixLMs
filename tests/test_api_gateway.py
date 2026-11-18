@@ -4,6 +4,8 @@ from nixlms_api.keys import APIKeyStore
 from nixlms_api.server import RateLimiter, create_server
 
 class FakeAssistant:
+    def start_runtime(self):
+        return {"scheduler_started": False}
     def respond(self, message, use_language=True, record=True):
         return "Nix recebeu: " + message
 

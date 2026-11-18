@@ -169,7 +169,7 @@ class HuggingFaceHub:
             lfs = item.get("lfs") if isinstance(item.get("lfs"), dict) else {}
             siblings.append({
                 "path": str(item.get("rfilename") or ""),
-                "size": item.get("size", lfs.get("size")),
+                "size": item.get("size") if item.get("size") is not None else lfs.get("size"),
             })
         result.update({
             "description": str(card.get("description") or payload.get("description") or "")[:2000],
@@ -324,7 +324,7 @@ class HuggingFaceHub:
         entry = {
             "repo_id": repo_id, "repo_type": repo_type,
             "path": str(target), "revision": revision,
-            "license": info.get("license"), "pipeline_tag": info.get("pipeline_tag"),
+            "license": info.get("license"), "pipeline_tag": info.get("pipeline_tag"),\n            "library_name": info.get("library_name"),
             "estimated_bytes": estimated_bytes, "downloaded_bytes": actual_bytes,
             "files": files, "downloaded_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -421,7 +421,7 @@ class HuggingFaceHub:
         ), None)
         if not entry:
             raise HuggingFaceError("Encoder não encontrado no registro de downloads locais.")
-        if entry.get("pipeline_tag") not in {"sentence-similarity", "feature-extraction"}:
+        if (\n            entry.get("pipeline_tag") not in {"sentence-similarity", "feature-extraction"}\n            or entry.get("library_name") != "sentence-transformers"\n        ):
             raise HuggingFaceError(
                 "Ativação de embeddings exige sentence-similarity ou feature-extraction."
             )

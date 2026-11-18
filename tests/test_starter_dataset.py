@@ -9,6 +9,7 @@ class StarterDatasetTests(unittest.TestCase):
     def test_clean_install_gets_curated_train_and_validation_samples(self):
         with tempfile.TemporaryDirectory(prefix="nixlms-starter-test-") as temp:
             core = NixLMsNeuralCore(data_dir=Path(temp) / "data")
+            core.start_runtime()
             audit = core.learning.dataset.audit_splits()
             self.assertTrue(audit["valid"], audit["violations"])
             self.assertTrue(core.starter_dataset_seeded)
@@ -27,6 +28,7 @@ class StarterDatasetTests(unittest.TestCase):
                 encoding="utf-8",
             )
             core = NixLMsNeuralCore(data_dir=data_dir)
+            core.start_runtime()
             rows = core.learning.dataset.load()
             self.assertFalse(core.starter_dataset_seeded)
             self.assertEqual(len(rows), 1)

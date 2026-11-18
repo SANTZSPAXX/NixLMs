@@ -82,7 +82,7 @@ class PerceptionManager:
                     task,
                     model=str(model_path.resolve()),
                     device=-1,
-                    model_kwargs={"local_files_only": True},
+                    model_kwargs={\n                        "local_files_only": True,\n                        "trust_remote_code": False,\n                        "use_safetensors": True,\n                    },
                 )
             return self._pipelines[key]
 

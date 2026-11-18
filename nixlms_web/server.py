@@ -379,7 +379,9 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(exc, (ValueError, UnicodeError, json.JSONDecodeError)):
                 return self.send_json({"error": str(exc)}, 400)
             return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)
-\n\ndef main():
+
+
+def main():
     host, port = "127.0.0.1", int(os.getenv("NIXLMS_PORT", "8765"))
     try:
         server = ThreadingHTTPServer((host, port), Handler)

@@ -20,6 +20,10 @@ class MediaGenerationTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_web_server_module_has_valid_python_syntax(self):
+        server_path = Path(__file__).resolve().parents[1] / "nixlms_web" / "server.py"
+        compile(server_path.read_text(encoding="utf-8"), str(server_path), "exec")
+
     def test_nsfw_is_disabled_by_default(self):
         self.assertFalse(self.manager.settings()["nsfw_enabled"])
         with self.assertRaisesRegex(MediaGenerationError, "desativado"):

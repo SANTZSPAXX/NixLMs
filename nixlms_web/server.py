@@ -286,17 +286,37 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return self.send_json({"download": result})
             if path == "/api/huggingface/activate":
-                active = assistant.huggingface.activate_model(
-                    str(data.get("repo_id", ""))
-                )
-                assistant.language.configure_huggingface_local(
-                    active["path"], active["repo_id"]
-                )
-                return self.send_json({"active_model": active})
+                role = str(data.get("role", "generator")).lower()
+                repo_id = str(data.get("repo_id", ""))
+                if role == "generator":
+                    active = assistant.huggingface.activate_model(repo_id)
+                    assistant.language.configure_huggingface_local(
+                        active["path"], active["repo_id"]
+                    )
+                    return self.send_json({"role": role, "active_model": active})
+                if role == "embeddings":
+                    active = assistant.huggingface.activate_encoder(repo_id)
+                    from nixlms_core.pretrained_encoder import TransformersSentenceEncoder
+                    assistant.retrieval_encoder = TransformersSentenceEncoder(
+                        active["path"], device="cpu", local_files_only=True
+                    )
+                    assistant._retrieval_encoder_error = None
+                    assistant.memory._embedding_cache.clear()
+                    return self.send_json({"role": role, "active_encoder": active})
+                raise HuggingFaceError("Use role=generator ou role=embeddings.")
             if path == "/api/huggingface/deactivate":
-                assistant.huggingface.deactivate_model()
-                assistant.language.configure_huggingface_local(None)
-                return self.send_json({"active": False})
+                role = str(data.get("role", "generator")).lower()
+                if role == "generator":
+                    assistant.huggingface.deactivate_model()
+                    assistant.language.configure_huggingface_local(None)
+                elif role == "embeddings":
+                    assistant.huggingface.deactivate_encoder()
+                    assistant.retrieval_encoder = assistant.encoder
+                    assistant._retrieval_encoder_error = None
+                    assistant.memory._embedding_cache.clear()
+                else:
+                    raise HuggingFaceError("Use role=generator ou role=embeddings.")
+                return self.send_json({"active": False, "role": role})
             if path == "/api/chat":
                 msg = str(data.get("message", "")).strip()
                 if not msg or len(msg) > 8000:

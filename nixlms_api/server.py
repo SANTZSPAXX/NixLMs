@@ -20,7 +20,7 @@ class RateLimiter:
 
 def create_server(host=None, port=None, assistant=None, key_store=None):
     host = host or os.getenv("NIXLMS_API_HOST", "127.0.0.1")
-    port = int(port or os.getenv("NIXLMS_API_PORT", "8766"))
+    port = int(os.getenv("NIXLMS_API_PORT", "8766")) if port is None else int(port)
     if host not in {"127.0.0.1", "localhost", "::1"} and os.getenv("NIXLMS_API_ALLOW_REMOTE") != "1":
         raise RuntimeError("Acesso remoto bloqueado. Defina NIXLMS_API_ALLOW_REMOTE=1 somente atrás de HTTPS/firewall.")
     data_dir = Path(os.getenv("NIXLMS_DATA_DIR", str(ROOT / "data"))).expanduser()
@@ -69,13 +69,14 @@ def create_server(host=None, port=None, assistant=None, key_store=None):
                 else:
                     messages = data.get("messages")
                     if not isinstance(messages,list): raise ValueError("messages deve ser uma lista.")
-                    prompt = "\n".join(str(item.get("content","")) for item in messages
+                    prompt = "\\n".join(str(item.get("content","")) for item in messages
                         if isinstance(item,dict) and item.get("role") in {"system","user"})
                 if not prompt or len(prompt)>16000: raise ValueError("Mensagem vazia ou acima de 16000 caracteres.")
                 nonlocal assistant
                 if assistant is None:
                     from nixlms_core import NixLMsNeuralCore
                     assistant = NixLMsNeuralCore(data_dir=data_dir)
+                    assistant.start_runtime()
                 with assistant_lock: answer = assistant.respond(prompt, use_language=True, record=True)
                 if self.path == "/v1/chat": return self.send_json({"reply":answer,"model":"nixlms"})
                 return self.send_json({"id":"chatcmpl-"+uuid.uuid4().hex,"object":"chat.completion",

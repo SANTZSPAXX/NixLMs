@@ -4,7 +4,7 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: [main, "feature/**", "fix/**", "test/**"]
+    branches: [main, "feature/**", "test/**"]
   pull_request:
   workflow_dispatch:
 jobs:

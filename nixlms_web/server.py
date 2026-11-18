@@ -1,6 +1,6 @@
 """Servidor HTTP local da interface NixLMs: loopback, sem shell remoto."""
 from __future__ import annotations
-import importlib.util, json, mimetypes, os, platform, re, sys, time
+import importlib.util, json, mimetypes, os, platform, re, sys, time, threading
 from importlib import metadata
 from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -46,6 +46,7 @@ def inspect_frameworks():
 assistant=NixLMs()
 library=PrivateKnowledgeLibrary(DATA/"private_library.sqlite3")
 started=time.time()
+assistant_lock=threading.RLock()
 
 class Handler(BaseHTTPRequestHandler):
     server_version="NixLMsLocalUI/1.0"
@@ -111,7 +112,9 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/chat":
                 msg=str(data.get("message","")).strip()
                 if not msg or len(msg)>8000: return self.send_json({"error":"Mensagem vazia ou longa demais."},400)
-                return self.send_json({"reply":assistant.respond(msg)})
+                with assistant_lock:
+                    reply = assistant.respond(msg)
+                return self.send_json({"reply":reply})
             if path=="/api/library/search":
                 q=str(data.get("query","")).strip()
                 if not q or len(q)>1000: return self.send_json({"error":"Consulta inválida."},400)

@@ -284,7 +284,7 @@ O modo E5 usa somente arquivos locais/cache, não baixa pesos e exclui o carrega
 
 ## Benchmark piloto de qualidade da recuperação episódica em PT-BR
 
-A qualidade do ranking agora pode ser medida com um corpus sintético nativo de português brasileiro, sem tocar em data/episodic_memory.json ou em qualquer memória pessoal. O piloto contém 50 episódios, 30 consultas e 32 julgamentos graduados, incluindo paráfrases, linguagem coloquial, variações ortográficas, referências contextuais e seis consultas sem resposta.
+A qualidade do ranking agora pode ser medida com um corpus sintético nativo de português brasileiro, com exemplos genéricos independentes de conversas de operadores, sem tocar em data/episodic_memory.json ou em qualquer memória pessoal. O piloto contém 50 episódios, 30 consultas e 32 julgamentos graduados, incluindo paráfrases, linguagem coloquial, variações ortográficas, consultas curtas autossuficientes e seis consultas sem resposta.
 
 Execute o baseline lexical offline, sem instalar dependências:
 

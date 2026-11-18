@@ -1,5 +1,14 @@
 # Changelog
 
+## Autonomy Planner 0.2
+
+- Conecta objetivos persistentes ao motor de autonomia com seleção determinística de etapas prontas e dependências satisfeitas.
+- Registra uma única ação interna allowlisted (`goal.start_step`), revalida elegibilidade e transiciona somente `pending` para `in_progress`.
+- Expõe preview, status e `run_autonomy_cycle()`; ciclo explícito, síncrono e limitado a uma etapa por padrão.
+- Não inventa planos, não conclui etapas, não usa LLM para gerar comandos e não executa ações externas.
+
+# Changelog
+
 ## Concorrência do gerenciador Ollama
 
 - Serializa chamadas concorrentes a `start_service()` com lock por instância, evitando que inicializações simultâneas criem processos filhos duplicados e percam a referência de cleanup.

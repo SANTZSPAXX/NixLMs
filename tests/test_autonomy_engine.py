@@ -52,6 +52,13 @@ class AutonomyEngineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.engine.request_action("shell.execute", {"command": "echo unsafe"})
 
+    def test_empty_allowed_scopes_blocks_every_action(self):
+        policy = AutonomyPolicy(allowed_scopes=set())
+        engine = AutonomyEngine(Path(self.temp.name) / "none.sqlite3", policy)
+        engine.register_action("internal.read", lambda payload: None)
+        with self.assertRaises(PermissionError):
+            engine.request_action("internal.read")
+
     def test_disallowed_scope_is_rejected(self):
         policy = AutonomyPolicy(allowed_scopes={"internal"})
         engine = AutonomyEngine(Path(self.temp.name) / "restricted.sqlite3", policy)

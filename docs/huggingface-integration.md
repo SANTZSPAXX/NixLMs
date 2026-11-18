@@ -127,11 +127,55 @@ O painel **Laboratório de mídia** (`/media`) adiciona três fluxos locais:
 
 O ID do modelo público é escolhido pelo operador. O download exige confirmação, usa SHA fixo, `token=False`, arquivos de configuração e pesos Safetensors, e não executa `trust_remote_code`. O limite é 4 GiB para imagem e 10 GiB para vídeo. Os resultados ficam em `data/media/output`; imagens de entrada devem ser colocadas manualmente em `data/media/input`. Os arquivos de entrada são limitados a 20 MB e não podem escapar desse diretório.
 
-### Preparação automática de dependências
+### Instalação manual e explícita de dependências
 
-Ao iniciar o servidor web, a NixLMs verifica as dependências multimodais ausentes e tenta instalá-las em segundo plano, sem atualizar pacotes já instalados. Se PyTorch estiver ausente, instala a distribuição oficial CPU; se já houver PyTorch CUDA/CPU, preserva a instalação existente. O estado é registrado em `data/media/bootstrap.json` e a tentativa é limitada a uma por 24 horas. Defina `NIXLMS_AUTO_INSTALL_MEDIA=0` para desativar o bootstrap automático. Falha de instalação não deve impedir o núcleo conversacional de iniciar.
+A inicialização do servidor, runtime, agendador, ciclo ocioso e notebook Colab
+**não instala, atualiza nem compila pacotes**. A variável
+`NIXLMS_AUTO_INSTALL_MEDIA` deixou de controlar instalações e não é usada pelo
+runtime. A célula multimodal do Colab apenas inspeciona e informa o estado.
 
-A instalação automática usa internet, espaço em disco e tempo de CPU. Não baixa pesos de modelos automaticamente. O download de cada modelo continua sendo uma ação separada e confirmada pelo operador. A preparação automática acontece no servidor local e também na nova célula **Geração multimodal local** do notebook Colab, usando o ambiente Python ativo de cada runtime.
+Crie e ative um ambiente virtual antes de preparar o stack:
+
+```powershell
+python -m venv .venv-media
+.\\.venv-media\\Scripts\\Activate.ps1
+```
+
+```bash
+python3 -m venv .venv-media
+source .venv-media/bin/activate
+```
+
+Primeiro consulte o plano, sem instalar ou acessar a rede:
+
+```text
+python -m nixlms_core.media_install --plan
+```
+
+Depois, se decidir prosseguir, execute o comando explícito:
+
+```text
+python -m nixlms_core.media_install --install
+```
+
+O instalador recusa execução fora de ambiente virtual, lista os pacotes diretos
+ausentes, informa SO/arquitetura, solicita que o operador digite
+`INSTALAR` e apresenta um relatório das distribuições adicionadas/alteradas.
+Ele preserva módulos já presentes e usa `--no-upgrade`; dependências transitivas
+resolvidas pelo pip também aparecem no relatório final. Nenhum modelo ou dataset
+é baixado por esse comando.
+
+Quando PyTorch estiver ausente, o instalador usa o índice oficial CPU somente
+em Windows/Linux x86-64. Em Linux ARM64 (ou outra plataforma sem wheel
+confirmado por este helper), a instalação fica bloqueada até o operador
+preparar PyTorch no mesmo ambiente virtual usando o seletor oficial:
+https://pytorch.org/get-started/locally/. Depois, execute novamente
+`python -m nixlms_core.media_install --plan` e `--install` para os demais
+pacotes. Uma instalação existente de PyTorch, inclusive CUDA, não é substituída.
+
+A geração multimodal continua opcional e pode exigir bastante disco/RAM. No
+computador de 8 GB sem GPU, não instale esse perfil por padrão; o núcleo
+conversacional não depende dele. O runtime nunca chama o instalador.
 
 ### NSFW
 

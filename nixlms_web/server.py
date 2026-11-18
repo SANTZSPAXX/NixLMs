@@ -429,8 +429,9 @@ def main():
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
-    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0")
-    print("Preparação de mídia:", bootstrap)
+    print("Dependências multimodais: instalação automática desativada.")
+    print("Plano: python -m nixlms_core.media_install --plan")
+    print("Instalação: python -m nixlms_core.media_install --install (exige ambiente virtual e confirmação)")
     print(f"NixLMs UI: http://127.0.0.1:{port} (somente este computador)")
     print("Motor: NixLMsNeuralCore")
     print("Autodiagnóstico:", runtime["diagnostics"]["status"])

@@ -191,3 +191,21 @@
 - Adiciona testes com encoders determinísticos/fakes e benchmark reproduzível para 100, 500 e 2.000 episódios; o modo E5 usa exclusivamente um modelo local informado pelo usuário.
 
 
+
+## Benchmark piloto de qualidade da recuperação episódica em PT-BR
+
+- Adiciona corpus sintético offline com 50 episódios, 30 consultas e qrels graduados, incluindo paráfrases, coloquialismos, variações ortográficas, referências contextuais e consultas sem resposta.
+- Adiciona avaliador determinístico com nDCG@k, MRR@k, Recall@k, Precision@k, cobertura e métricas de abstenção/falsos positivos, além de resultados por categoria e split.
+- Mantém o modo lexical sem dependências; encoder nativo e multilingual E5 são opcionais e exigem checkpoint/diretório local explicitamente informado.
+- Gera relatório JSON com hash do conjunto e IDs, sem gravar na memória pessoal nem incluir conteúdo textual das consultas/passagens.
+- Adiciona testes de métricas, integridade dos qrels, determinismo, não mutação do conjunto, checkpoint local e execução offline.
+
+
+
+## Segurança do benchmark de recuperação episódica PT-BR
+
+- Rejeita caminhos de saída que coincidam com a memória episódica de produção ou com os arquivos de entrada do benchmark (conjunto padrão e diretório selecionado).
+- Resolve caminhos antes da comparação para também bloquear aliases com segmentos relativos e symlinks já existentes.
+- Rejeita `min-score` NaN e infinitos tanto na API de avaliação quanto no CLI, evitando métricas enganosas e JSON não padrão.
+- Adiciona testes para caminhos protegidos, destino separado permitido e limiares não finitos.
+

@@ -36,6 +36,10 @@ O callback deve ser determinístico, limitado em recursos, idempotente quando po
 
 Se o callback falhar ou o verificador rejeitar o resultado, a etapa fica em `failed`. O operador deve investigar e reabrir a etapa manualmente. Etapas `in_progress` após encerramento abrupto não são reproduzidas automaticamente.
 
+## Planejamento com linguagem natural
+
+Quando um modelo local estiver disponível, o planner oferece `draft_goal(intent)`. Ele solicita um rascunho JSON limitado a 12 etapas, valida dependências e rejeita propriedades inesperadas. O rascunho não é salvo automaticamente e contém `requires_human_confirmation=true` e `executable_actions=0`. Somente depois da revisão do operador, `accept_goal_draft(draft)` cria o objetivo e suas etapas manuais. O modelo não pode registrar handlers, escolher callbacks executáveis nem executar o plano por si só.
+
 ## Modelo de linguagem
 
 A Nix oferece integração opcional com Ollama local (modelo padrão configurado: `qwen2.5:0.5b`) e gerador Hugging Face local quando já instalado. Nenhum modelo é baixado automaticamente. Sem modelo generativo disponível, o núcleo legado continua funcionando, mas não oferece planejamento geral por linguagem natural.

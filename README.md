@@ -351,3 +351,18 @@ Comandos: `/diagnostico`, `/ocioso status` e `/status`. Consulte [docs/startup-d
 A NixLMs possui um acervo local em `data/private_library.sqlite3`. Importe pastas e documentos com `/biblioteca importar CAMINHO`; pesquise com `/biblioteca buscar TEXTO`. A recuperação adiciona trechos relevantes ao contexto da IA sem depender de rede. A primeira versão aceita TXT, Markdown, RST, Python, JSON, YAML e TOML em UTF-8, com limites de tamanho e quantidade por importação.
 
 O acervo não altera pesos nem transforma conteúdo em fatos automaticamente. Para aprendizagem supervisionada, crie candidatos QA com `/biblioteca candidato pergunta => resposta`, revise com `/biblioteca aprovar ID` e exporte apenas aprovados com `/biblioteca exportar`. A exportação usa somente o split `train`; a validação deve ser curada separadamente. Consulte [docs/private-knowledge-library.md](docs/private-knowledge-library.md).
+
+
+## Biblioteca de frameworks de IA
+
+A NixLMs mantém um catálogo opcional de frameworks para treinamento, embeddings, recuperação e inferência. O núcleo não exige esses pacotes e não instala frameworks ou baixa modelos automaticamente. Consulte [docs/ai-framework-library.md](docs/ai-framework-library.md).
+
+Inventário local, sem carregar frameworks pesados:
+
+```powershell
+python -m nixlms_core.framework_registry
+python -m nixlms_core.framework_registry --all
+python -m nixlms_core.framework_registry --json
+```
+
+Para instalar o stack opcional CPU no Windows, use um ambiente virtual e execute `scripts/install-ml-cpu.ps1 -InstallTorch`. TensorFlow e llama-cpp-python são alternativas separadas e opcionais.

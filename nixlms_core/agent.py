@@ -125,6 +125,15 @@ class NixLMsNeuralCore:
         self.language = LanguageEngine(model=llm_model)
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
+        self.starter_dataset_seeded = False
+        if not self.learning.dataset.load() and os.getenv("NIXLMS_DISABLE_STARTER_DATASET") != "1":
+            starter_dataset = (
+                Path(__file__).resolve().parents[1]
+                / "datasets" / "starter_ptbr.jsonl"
+            )
+            if starter_dataset.is_file():
+                self.learning.dataset.import_jsonl(starter_dataset)
+                self.starter_dataset_seeded = True
         self.idle_learning = IdleLearningManager(self)
         self.scheduler.register_handler("idle_learning_cycle", self._scheduled_idle_learning)
 

@@ -50,7 +50,8 @@ async function showHuggingFaceDetails(type,id){
   const files=(d.siblings||[]).slice(0,20).map(x=>({path:x.path,size:x.size}));
   box.innerHTML='<div class="panel-head">RECURSO · '+esc(type.toUpperCase())+'</div><p><b>'+esc(d.id)+'</b></p><p>Licença: '+esc(d.license||"não informada")+' · Gated: '+esc(String(d.gated))+' · Privado: '+esc(String(d.private))+'</p><p>Tarefa: '+esc(d.pipeline_tag||d.library_name||"não informada")+' · Downloads: '+esc(d.downloads??"—")+' · Likes: '+esc(d.likes??"—")+'</p><p>Revisão SHA: '+esc(d.sha||"não informada")+'</p><p>'+esc(d.description||"Sem descrição no card.")+'</p><pre>'+esc(JSON.stringify(files,null,2))+'</pre><div class="hf-actions">'+(type!=="space"&&!local&&!d.private&&!d.gated?'<button class="primary" id="hf-detail-download">Baixar artefatos permitidos</button>':"")+(type==="model"&&local&&d.pipeline_tag==="text-generation"?'<button class="primary" id="hf-detail-activate">Ativar geração CPU</button>':"")+(type==="model"&&local&&["sentence-similarity","feature-extraction"].includes(d.pipeline_tag)?'<button class="primary" id="hf-detail-activate-embeddings">Ativar embeddings CPU</button>':"")+'<a class="ghost" href="'+esc(d.url)+'" target="_blank" rel="noopener">Abrir no Hub ↗</a></div>';
   if($("#hf-detail-download"))$("#hf-detail-download").onclick=()=>downloadHuggingFace(type,id);
-  if($("#hf-detail-activate"))$("#hf-detail-activate").onclick=()=>activateHuggingFace(id,"generator");\n  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
+  if($("#hf-detail-activate"))$("#hf-detail-activate").onclick=()=>activateHuggingFace(id,"generator");
+  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");\n  if($("#hf-detail-activate-embeddings"))$("#hf-detail-activate-embeddings").onclick=()=>activateHuggingFace(id,"embeddings");
  }catch(e){box.textContent=e.message}
 }
 async function downloadHuggingFace(type,id){
@@ -66,12 +67,13 @@ async function downloadHuggingFace(type,id){
 }
 async function activateHuggingFace(id,role="generator"){
  try{
-  const d=await api("/api/huggingface/activate",{method:"POST",body:JSON.stringify({repo_id:id})});
-  toast("Modelo local ativado em CPU: "+d.active_model.repo_id);
+  const d=await api("/api/huggingface/activate",{method:"POST",body:JSON.stringify({repo_id:id,role})});
+  toast((role==="embeddings"?"Embeddings":"Modelo")+" local ativado em CPU: "+(d.active_model?.repo_id||d.active_encoder?.repo_id));
   await loadHuggingFaceStatus();
  }catch(e){toast(e.message)}
 }
 $("#hf-search").onclick=searchHuggingFace;
 $("#hf-query").onkeydown=e=>{if(e.key==="Enter")searchHuggingFace()};
 $("#hf-refresh").onclick=()=>loadHuggingFaceStatus().then(()=>toast("Hugging Face atualizado."));
-$("#hf-deactivate").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"generator"})});toast("Modelo Hugging Face desativado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};\n$("#hf-deactivate-embedding").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"embeddings"})});toast("Encoder nativo restaurado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
+$("#hf-deactivate").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"generator"})});toast("Modelo Hugging Face desativado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};
+$("#hf-deactivate-embedding").onclick=async()=>{try{await api("/api/huggingface/deactivate",{method:"POST",body:JSON.stringify({role:"embeddings"})});toast("Encoder nativo restaurado.");loadHuggingFaceStatus()}catch(e){toast(e.message)}};

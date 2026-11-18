@@ -5,6 +5,7 @@ baixado, executado ou promovido automaticamente para pesos neurais.
 """
 import hashlib
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
@@ -20,11 +21,20 @@ class PrivateKnowledgeLibrary:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
+    @contextmanager
     def _connect(self):
         db = sqlite3.connect(str(self.path), timeout=10)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=10000")
-        return db
+        db.execute("PRAGMA foreign_keys=ON")
+        try:
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def _initialize(self):
         with self._connect() as db:

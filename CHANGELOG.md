@@ -1,3 +1,11 @@
+## Biblioteca privada de conhecimento offline
+
+- Adiciona acervo SQLite local com importação limitada de TXT, Markdown, RST, Python, JSON, YAML e TOML; deduplicação SHA-256, divisão em trechos e busca FTS5 com fallback.
+- Injeta até três trechos relevantes como contexto de recuperação, mantendo a origem identificada.
+- Adiciona fila de candidatos QA pendentes; aprovação/rejeição explícita e exportação apenas de aprovados para split train.
+- Não baixa, executa ou promove documentos automaticamente para fatos ou pesos neurais; validação continua separada.
+- Adiciona comandos `/biblioteca`, métricas de status, documentação e testes.
+
 ## Runtime autodiagnostics and idle learning
 
 - Runs non-destructive startup diagnostics for core modules, local storage, dataset integrity, model persistence and scheduler handlers.

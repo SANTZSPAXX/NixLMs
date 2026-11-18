@@ -20,6 +20,7 @@ from .planning import GoalManager
 from .autonomy import AutonomyEngine
 from .autonomy_planner import AutonomyPlanner
 from .idle_learning import IdleLearningManager
+from .private_library import PrivateKnowledgeLibrary
 from .scheduler import TaskScheduler
 from .attention import AttentionSystem
 from .language import LanguageEngine
@@ -104,6 +105,7 @@ class NixLMsNeuralCore:
         self.episodic = EpisodicMemory(
             self.data_dir / "episodic_memory.json", self.config.max_memory_items
         )
+        self.private_library = PrivateKnowledgeLibrary(self.data_dir / "private_library.sqlite3")
         self.cognition = CognitiveEngine(self.config.confidence_threshold)
         self.learner = FeedbackLearner(self.network)
         self.mental_map = MentalMap(self.data_dir / "mental_map.json")
@@ -171,6 +173,7 @@ class NixLMsNeuralCore:
             "autonomy_engine": self.autonomy,
             "learning_engine": self.learning,
             "idle_learning": self.idle_learning,
+            "private_library": self.private_library,
         }
         for name, component in required.items():
             record("module_" + name, component is not None)
@@ -260,6 +263,7 @@ class NixLMsNeuralCore:
             "scheduler_started": self.scheduler.running,
             "scheduler_started_now": started,
             "idle_learning": self.idle_learning.status(),
+            "private_library": self.private_library.stats(),
         }
 
     def _save_encoder(self):
@@ -638,6 +642,13 @@ class NixLMsNeuralCore:
             text, episodic_encoder, limit=3,
             exclude_user_inputs=excluded_questions,
         )
+        library_results = self.private_library.search(text, limit=3)
+        for result in library_results:
+            memory_context.append({
+                "question": f"Trecho da biblioteca privada: {result['title']}",
+                "answer": result["content"],
+                "source": "private_offline_library",
+            })
         for _, episode in episodic_context:
             feedback = episode.get("feedback") or "sem feedback"
             memory_context.append({
@@ -779,6 +790,7 @@ class NixLMsNeuralCore:
             "world_fact_sources": sorted({str(fact.get("source", "unknown")) for fact in world_facts}),
             "active_goals_considered": len(goal_context),
             "episodic_experiences_recalled": len(episodic_context),
+            "private_library_chunks_recalled": len(library_results),
             "encoder": "trainable_word_bigram_char_subword"
         }
         if record:
@@ -846,6 +858,7 @@ class NixLMsNeuralCore:
             "scheduler": self.scheduler.stats(),
             "startup_diagnostics": self.startup_diagnostics,
             "idle_learning": self.idle_learning.status(),
+            "private_library": self.private_library.stats(),
             "dataset_audit": self.learning.dataset.audit_splits(),
             "architecture": "semantic_subword_encoder_surrogate_trained_recurrent_lif_autoregressive_decoder_memory_world_model_goal_manager",
             "lif_network": {

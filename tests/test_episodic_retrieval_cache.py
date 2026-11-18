@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -212,6 +213,31 @@ class EpisodicRetrievalCacheTests(unittest.TestCase):
             memory.recall("usar", encoder, limit=10, min_score=0)
             self.assertEqual(encoder.calls, 2)
             self.assertEqual(memory.stats()["episodic_passage_encoder_calls"], 2)
+
+
+    def test_concurrent_record_recall_and_stats_are_serialized(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = EpisodicMemory(
+                Path(tmp) / "episodic.json",
+                max_items=100,
+                embedding_cache_size=100,
+            )
+            encoder = CountingEncoder()
+
+            def operation(index):
+                memory.record(
+                    "pergunta " + str(index),
+                    "resposta " + str(index),
+                )
+                memory.recall("pergunta", encoder, limit=10, min_score=0)
+                return memory.stats()["episodic_items"]
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(operation, range(32)))
+
+            self.assertEqual(len(memory.items), 32)
+            self.assertEqual(memory.stats()["episodic_items"], 32)
+            self.assertEqual(len(results), 32)
 
 
 class PretrainedEncoderBatchTests(unittest.TestCase):

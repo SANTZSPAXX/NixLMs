@@ -122,11 +122,15 @@ As métricas são proxies de tarefas específicas, não prova de compreensão ge
 
 ## Windows
 
+Para iniciar a interface neural local (padrão), execute:
+
 ```powershell
-python neural_core.py
+python -m nixlms_web.server
 ```
 
-Ou execute `iniciar_neural.bat`.
+Ou dê duplo clique em `iniciar.bat`. A interface escuta somente em `127.0.0.1:8765`; para escolher outra porta, defina `NIXLMS_PORT`. Para iniciar apenas a CLI neural, execute `python neural_core.py` ou `iniciar_neural.bat`. O protótipo anterior `nixlms.py` continua disponível explicitamente em `iniciar_legacy.bat`.
+
+Os testes da interface usam um diretório temporário e uma porta livre; não escrevem no diretório de dados pessoal.
 
 ## Google Colab
 
@@ -348,7 +352,7 @@ Comandos: `/diagnostico`, `/ocioso status` e `/status`. Consulte [docs/startup-d
 
 ## Biblioteca privada offline
 
-A NixLMs possui um acervo local em `data/private_library.sqlite3`. Importe pastas e documentos com `/biblioteca importar CAMINHO`; pesquise com `/biblioteca buscar TEXTO`. A recuperação adiciona trechos relevantes ao contexto da IA sem depender de rede. A primeira versão aceita TXT, Markdown, RST, Python, JSON, YAML e TOML em UTF-8, com limites de tamanho e quantidade por importação.
+A NixLMs possui um acervo local em `data/private_library.sqlite3`. Importe pastas e documentos com `/biblioteca importar CAMINHO`; pesquise com `/biblioteca buscar TEXTO`. A recuperação adiciona trechos relevantes ao contexto do LLM quando ele está disponível e também pode responder diretamente com um excerto identificado do documento quando o modo está offline, sem afirmar que o conteúdo foi verificado. A primeira versão aceita TXT, Markdown, RST, Python, JSON, YAML e TOML em UTF-8, com limites de tamanho e quantidade por importação.
 
 O acervo não altera pesos nem transforma conteúdo em fatos automaticamente. Para aprendizagem supervisionada, crie candidatos QA com `/biblioteca candidato pergunta => resposta`, revise com `/biblioteca aprovar ID` e exporte apenas aprovados com `/biblioteca exportar`. A exportação usa somente o split `train`; a validação deve ser curada separadamente. Consulte [docs/private-knowledge-library.md](docs/private-knowledge-library.md).
 

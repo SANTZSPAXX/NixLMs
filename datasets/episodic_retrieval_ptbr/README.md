@@ -9,7 +9,7 @@ Este diretório contém um conjunto pequeno, sintético e offline para avaliar a
 - qrels.tsv: 32 julgamentos graduados; 2 significa diretamente relevante e 1 significa apoio contextual secundário.
 - Consultas sem resposta têm expects_no_answer=true e não possuem linha em qrels.tsv.
 
-As consultas cobrem paráfrases, linguagem coloquial, variações de acentuação/digitação, referências contextuais e abstenção. O corpus e as consultas foram escritos para este piloto; não contêm conversas, dados pessoais ou memórias reais de usuários.
+As consultas cobrem paráfrases, linguagem coloquial, variações de acentuação/digitação, consultas curtas autossuficientes e abstenção. O corpus v2 foi substituído por 50 exemplos genéricos de software, computação e ciências, com consultas autossuficientes. Não usa conversas, dados pessoais ou memórias de operadores. A categoria `consulta_curta` mede consultas curtas sem histórico; não representa resolução de referência conversacional.
 
 ## Rubrica e limites
 
@@ -25,3 +25,8 @@ Este piloto não é uma implementação de MTEB-BR nem uma amostra representativ
 - Model card multilingual-e5-small, incluindo prefixos query: e passage: — https://huggingface.co/intfloat/multilingual-e5-small
 
 O projeto mantém avaliador próprio com biblioteca padrão do Python; não instala BEIR, MTEB, PyTorch ou Sentence Transformers como dependências obrigatórias.
+
+
+## Versão 2 e proveniência
+
+O conjunto v2 substitui integralmente os exemplos da versão piloto anterior. Os episódios e consultas foram reescritos como cenários genéricos e autossuficientes, sem referências a conversas ou dados de operadores. A categoria anteriormente chamada `contextual` foi removida porque o avaliador não recebia histórico conversacional; agora a categoria `consulta_curta` não reivindica essa capacidade.

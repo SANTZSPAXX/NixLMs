@@ -1,0 +1,43 @@
+# Dados privados e estado de execução local
+/data/
+/**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambientes e configurações locais
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Bancos, logs e temporários
+*.sqlite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.tmp
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Modelos e pesos locais (não versionar artefatos grandes/privados)
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.h5
+
+# Sistema operacional e IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -22,7 +22,8 @@ MAX_BODY = 5 * 1024 * 1024
 ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
-from nixlms_core import NixLMsNeuralCore  # noqa: E402\nfrom nixlms_core.huggingface import HuggingFaceError  # noqa: E402
+from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
 
 

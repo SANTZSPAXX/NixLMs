@@ -68,10 +68,7 @@ class AutonomyPlannerTests(unittest.TestCase):
         goal = self.goals.create_goal("Lote")
         for index in range(4):
             self.goals.add_step(goal["id"], "Etapa " + str(index))
-        planner = AutonomyPlanner(
-            self.goals, self.engine, max_actions_per_cycle=1
-        ) if False else self.planner
-        result = planner.run_cycle(limit=1)
+        result = self.planner.run_cycle(limit=1)
         self.assertEqual(result["processed"], 1)
         states = [step["status"] for step in self.goals.get_goal(goal["id"])["steps"]]
         self.assertEqual(states.count("in_progress"), 1)
@@ -83,6 +80,11 @@ class AutonomyPlannerTests(unittest.TestCase):
         self.planner.run_cycle()
         with self.assertRaises(ValueError):
             self.planner._start_step({"goal_id": goal["id"], "step_id": step["id"]})
+
+    def test_zero_preview_limit_returns_no_actions(self):
+        goal = self.goals.create_goal("Limite zero")
+        self.goals.add_step(goal["id"], "Não iniciar")
+        self.assertEqual(self.planner.preview(limit=0), [])
 
     def test_empty_goals_produce_no_action(self):
         self.assertEqual(self.planner.run_cycle()["processed"], 0)

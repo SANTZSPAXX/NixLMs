@@ -13,7 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import metadata
 from pathlib import Path
-from urllib.parse import urlparse, urlsplit
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
@@ -22,7 +22,7 @@ MAX_BODY = 5 * 1024 * 1024
 ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
-from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core import NixLMsNeuralCore  # noqa: E402\nfrom nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 
 
 def inspect_frameworks():
@@ -136,6 +136,29 @@ class Handler(BaseHTTPRequestHandler):
                 "stats": library.stats(),
                 "documents": library.list_documents(100),
             })
+        if path.startswith("/api/huggingface/"):
+            query = parse_qs(urlsplit(self.path).query)
+            try:
+                if path == "/api/huggingface/status":
+                    return self.send_json(assistant.huggingface.status())
+                if path == "/api/huggingface/search":
+                    repo_type = query.get("type", ["model"])[0]
+                    search_text = query.get("q", [""])[0]
+                    limit = query.get("limit", ["12"])[0]
+                    return self.send_json({
+                        "results": assistant.huggingface.search(
+                            repo_type, search_text, limit=limit
+                        )
+                    })
+                if path == "/api/huggingface/details":
+                    repo_type = query.get("type", ["model"])[0]
+                    repo_id = query.get("repo_id", [""])[0]
+                    return self.send_json(
+                        assistant.huggingface.details(repo_type, repo_id)
+                    )
+            except HuggingFaceError as exc:
+                return self.send_json({"error": str(exc)}, 400)
+            return self.send_json({"error": "Endpoint Hugging Face não encontrado."}, 404)
         if path == "/api/diagnostics":
             diagnostic = assistant.run_startup_diagnostics()
             checks = {
@@ -247,6 +270,25 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = self.read_json()
             path = urlparse(self.path).path
+            if path == "/api/huggingface/download":
+                result = assistant.huggingface.download(
+                    str(data.get("repo_type", "model")),
+                    str(data.get("repo_id", "")),
+                    max_bytes=data.get("max_bytes"),
+                )
+                return self.send_json({"download": result})
+            if path == "/api/huggingface/activate":
+                active = assistant.huggingface.activate_model(
+                    str(data.get("repo_id", ""))
+                )
+                assistant.language.configure_huggingface_local(
+                    active["path"], active["repo_id"]
+                )
+                return self.send_json({"active_model": active})
+            if path == "/api/huggingface/deactivate":
+                assistant.huggingface.deactivate_model()
+                assistant.language.configure_huggingface_local(None)
+                return self.send_json({"active": False})
             if path == "/api/chat":
                 msg = str(data.get("message", "")).strip()
                 if not msg or len(msg) > 8000:
@@ -282,7 +324,7 @@ class Handler(BaseHTTPRequestHandler):
                 target.write_text(content, encoding="utf-8")
                 return self.send_json(library.import_path(target))
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
-        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
+        except HuggingFaceError as exc:\n            return self.send_json({"error": str(exc)}, 400)\n        except (ValueError, UnicodeError, json.JSONDecodeError) as exc:
             return self.send_json({"error": str(exc)}, 400)
         except Exception as exc:
             return self.send_json({"error": "Falha interna: " + type(exc).__name__}, 500)

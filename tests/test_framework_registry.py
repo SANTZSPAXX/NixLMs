@@ -1,7 +1,9 @@
 import json
 import unittest
+from unittest.mock import patch
 
 from nixlms_core.framework_registry import FRAMEWORKS, inspect_frameworks, main
+from nixlms_core.framework_status import classify_installation
 
 
 class FrameworkRegistryTests(unittest.TestCase):
@@ -34,6 +36,27 @@ class FrameworkRegistryTests(unittest.TestCase):
         self.assertIn("PyTorch", recommended)
         self.assertIn("ONNX Runtime CPU", recommended)
         self.assertNotIn("TensorFlow CPU", recommended)
+
+    def test_installation_state_requires_metadata_and_module(self):
+        self.assertEqual(classify_installation("1.2", True)["installation_state"], "installed")
+        self.assertTrue(classify_installation("1.2", True)["installed"])
+        self.assertEqual(classify_installation(None, False)["installation_state"], "absent")
+
+    def test_metadata_without_module_is_ambiguous_not_installed(self):
+        with patch("nixlms_core.framework_registry._installed_version", return_value="1.2"), \
+             patch("nixlms_core.framework_registry.importlib.util.find_spec", return_value=None):
+            item = inspect_frameworks((FRAMEWORKS[0],))[0]
+        self.assertFalse(item["installed"])
+        self.assertTrue(item["ambiguous_install"])
+        self.assertEqual(item["installation_state"], "metadata_only")
+
+    def test_module_without_distribution_metadata_is_ambiguous(self):
+        with patch("nixlms_core.framework_registry._installed_version", return_value=None), \
+             patch("nixlms_core.framework_registry.importlib.util.find_spec", return_value=object()):
+            item = inspect_frameworks((FRAMEWORKS[0],))[0]
+        self.assertFalse(item["installed"])
+        self.assertTrue(item["ambiguous_install"])
+        self.assertEqual(item["installation_state"], "module_only")
 
 
 if __name__ == "__main__":

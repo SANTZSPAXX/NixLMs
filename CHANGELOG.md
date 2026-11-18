@@ -1,3 +1,11 @@
+## Initial engineering roadmap and goal seeding
+
+- Adds five initial engineering goals covering core reliability, memory/learning, reasoning/world model, safe autonomy, and multimodal interfaces.
+- Adds 21 dependency-ordered steps with stable, generated IDs at seed time.
+- Adds idempotent `/objetivo semear-roadmap`; existing goals, step progress, IDs, descriptions and unrelated operator data are preserved.
+- Keeps all steps pending; seeding does not execute work or claim completion.
+- Adds tests for seed counts, dependencies, idempotence and preservation of existing progress.
+
 # Changelog
 
 ## Autonomy Planner 0.2

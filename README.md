@@ -324,3 +324,16 @@ O modo E5 usa CPU e local_files_only; não baixa pesos nem aceita um identificad
 
 O conjunto é sintético e os qrels são uma curadoria editorial inicial sem anotação independente. Não é uma implementação de MTEB-BR/BEIR e seus números não são diretamente comparáveis a esses benchmarks. Consulte datasets/episodic_retrieval_ptbr/README.md para a rubrica, os limites e as referências.
 
+
+
+## Objetivos iniciais de engenharia
+
+A NixLMs inclui um roadmap inicial idempotente com cinco objetivos: confiabilidade do núcleo; memória e aprendizagem verificável; raciocínio e modelo de mundo; autonomia segura; e interfaces multimodais. Para criar os objetivos e as etapas no armazenamento local, execute:
+
+```text
+/objetivo semear-roadmap
+/objetivo listar
+/status
+```
+
+O comando adiciona somente objetivos/etapas ausentes por título e preserva o progresso já existente em `data/goals.json`. Todas as etapas novas começam como `pending`. O planner 0.2 apenas inicia uma etapa liberada (`in_progress`); não executa o trabalho nem o conclui automaticamente. Consulte [docs/initial-roadmap-goals.md](docs/initial-roadmap-goals.md).

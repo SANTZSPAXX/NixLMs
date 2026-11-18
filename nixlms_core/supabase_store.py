@@ -87,6 +87,12 @@ class SupabaseStore:
                 if digest != row["sha256"]:
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
+                if target.suffix.lower() in {".sqlite3", ".db"}:
+                    for suffix in ("-wal", "-shm"):
+                        try:
+                            Path(str(target) + suffix).unlink()
+                        except FileNotFoundError:
+                            pass
                 fd, temp_name = tempfile.mkstemp(prefix=".nix-restore-", dir=str(target.parent))
                 try:
                     with os.fdopen(fd, "wb") as stream:

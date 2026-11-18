@@ -48,18 +48,23 @@ class WebInterfaceTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertIn("NixLMs", body)
 
-    def test_status_endpoint_connected(self):
+    def test_status_endpoint_connected_to_neural_core(self):
         data = self.get_json("/api/status")
+        self.assertEqual(data["engine"], "NixLMsNeuralCore")
         self.assertIn("knowledge", data)
         self.assertIn("library", data)
         self.assertIn("documents", data["library"])
+        self.assertIn("core", data)
+        self.assertIn("world_model", data["core"])
+        self.assertIn("autonomy", data["core"])
+        self.assertIn("runtime", data)
 
     def test_framework_inventory_does_not_require_registry_module(self):
         data = self.get_json("/api/frameworks")
         self.assertTrue(isinstance(data, list))
         self.assertTrue(any(item["name"] == "PyTorch" for item in data))
 
-    def test_chat_endpoint_uses_legacy_core(self):
+    def test_chat_endpoint_uses_neural_core(self):
         import json
         request = urllib.request.Request(
             BASE + "/api/chat",
@@ -71,6 +76,16 @@ class WebInterfaceTests(unittest.TestCase):
             data = json.loads(response.read().decode("utf-8"))
         self.assertIn("reply", data)
         self.assertTrue(data["reply"])
+        self.assertEqual(data["engine"], "NixLMsNeuralCore")
+        self.assertEqual(data["response_source"], "greeting_rule")
+
+    def test_diagnostics_include_real_core_checks(self):
+        data = self.get_json("/api/diagnostics")
+        self.assertIn("checks", data)
+        self.assertIn("module_memory", data["checks"])
+        self.assertIn("dataset_integrity", data["checks"])
+        self.assertIn("scheduler_running", data)
+        self.assertIn("idle_learning", data)
 
     def test_static_assets_exist_and_css_is_valid_prefix(self):
         base = ROOT / "nixlms_web" / "static"

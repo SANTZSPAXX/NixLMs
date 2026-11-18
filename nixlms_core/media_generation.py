@@ -243,6 +243,8 @@ class MediaGenerationManager:
                 raise MediaGenerationError("Download excedeu o limite após a transferência.")
             if not (temporary / "model_index.json").is_file():
                 raise MediaGenerationError("Modelo Diffusers inválido: model_index.json ausente.")
+            if not any(temporary.rglob("*.safetensors")):
+                raise MediaGenerationError("Modelo sem pesos Safetensors permitidos; download cancelado.")
             os.replace(temporary, target)
         except Exception:
             shutil.rmtree(temporary, ignore_errors=True)
@@ -261,7 +263,11 @@ class MediaGenerationManager:
     def _model_entry(self, repo_id, mode):
         repo_id = self._repo_id(repo_id)
         entry = next((x for x in self._registry() if x.get("repo_id") == repo_id), None)
-        if not entry or entry.get("mode") != mode:
+        compatible = entry and (
+            entry.get("mode") == mode
+            or (mode == "image-to-image" and entry.get("mode") == "text-to-image")
+        )
+        if not compatible:
             raise MediaGenerationError("Baixe primeiro um modelo compatível com este modo.")
         path = Path(entry.get("path", "")).resolve()
         if self.models_dir.resolve() not in path.parents or not (path / "model_index.json").is_file():

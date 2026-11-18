@@ -340,10 +340,23 @@ class NixLMsNeuralCore:
         except ValueError:
             autonomy_interval = 300
         autonomy_interval = max(60, min(3600, autonomy_interval))
-        autonomy_job_id = "nixlms-autonomy-cycle-v1"
+        existing_jobs = self.scheduler.list_jobs(limit=1000)
+        autonomy_jobs = [
+            job for job in existing_jobs
+            if job.get("handler") == "autonomy_cycle"
+        ]
         if autonomy_enabled:
-            existing_jobs = self.scheduler.list_jobs(limit=1000)
-            if not any(job.get("id") == autonomy_job_id for job in existing_jobs):
+            active_job = next(
+                (job for job in autonomy_jobs if job.get("status") in {"pending", "running"}),
+                None,
+            )
+            if active_job is None:
+                used_ids = {job.get("id") for job in autonomy_jobs}
+                version = 1
+                autonomy_job_id = "nixlms-autonomy-cycle-v" + str(version)
+                while autonomy_job_id in used_ids:
+                    version += 1
+                    autonomy_job_id = "nixlms-autonomy-cycle-v" + str(version)
                 self.scheduler.schedule_interval(
                     "autonomy_cycle",
                     autonomy_interval,
@@ -353,6 +366,10 @@ class NixLMsNeuralCore:
                     max_attempts=3,
                     job_id=autonomy_job_id,
                 )
+        else:
+            for job in autonomy_jobs:
+                if job.get("status") == "pending":
+                    self.scheduler.cancel(job["id"])
         started = self.scheduler.start()
         return {
             "diagnostics": self.startup_diagnostics,

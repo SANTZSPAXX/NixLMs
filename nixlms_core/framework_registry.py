@@ -10,6 +10,8 @@ import importlib.metadata
 import importlib.util
 import json
 from dataclasses import asdict, dataclass
+
+from .framework_status import classify_installation
 from typing import Iterable
 
 
@@ -105,11 +107,11 @@ def inspect_frameworks(frameworks: Iterable[Framework] = FRAMEWORKS) -> list[dic
             module_available = importlib.util.find_spec(item.module) is not None
         except (ImportError, ModuleNotFoundError, ValueError):
             module_available = False
+        state = classify_installation(version, module_available)
         report.append({
             **asdict(item),
-            "installed": version is not None or module_available,
+            **state,
             "version": version,
-            "module_available": module_available,
         })
     return report
 
@@ -126,13 +128,21 @@ def main(argv: list[str] | None = None) -> int:
     report = inspect_frameworks()
     if not args.all:
         report = [item for item in report
-                  if item["default_recommendation"] or item["installed"]]
+                  if item["default_recommendation"] or item["installed"]
+                  or item["ambiguous_install"]]
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("Inventário de frameworks NixLMs (nenhuma instalação foi executada)")
         for item in report:
-            state = f"instalado {item['version'] or ''}".strip() if item["installed"] else "ausente"
+            if item["installation_state"] == "installed":
+                state = f"instalado {item['version'] or ''}".strip()
+            elif item["installation_state"] == "metadata_only":
+                state = "inconsistente: metadados sem módulo"
+            elif item["installation_state"] == "module_only":
+                state = "inconsistente: módulo sem metadados"
+            else:
+                state = "ausente"
             print(f"- {item['name']}: {state} | grupo={item['install_group']} | {item['purpose']}")
     return 0
 

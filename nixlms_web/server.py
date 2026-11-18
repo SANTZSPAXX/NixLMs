@@ -1,6 +1,8 @@
 """Servidor HTTP local da interface NixLMs: loopback, sem shell remoto."""
 from __future__ import annotations
-import json, mimetypes, os, platform, re, sys, time
+import importlib.util, json, mimetypes, os, platform, re, sys, time
+from importlib import metadata
+from urllib.parse import urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,7 +15,34 @@ ALLOWED={".txt",".md",".rst",".py",".json",".yaml",".yml",".toml"}
 sys.path.insert(0,str(ROOT))
 from nixlms import NixLMs
 from nixlms_core.private_library import PrivateKnowledgeLibrary
-from nixlms_core.framework_registry import inspect_frameworks
+def inspect_frameworks():
+    """Inventário leve sem importar os frameworks."""
+    candidates = [
+        ("PyTorch", "torch", "Treinamento e inferência tensorial", "torch"),
+        ("NumPy", "numpy", "Computação numérica", "numpy"),
+        ("SciPy", "scipy", "Algoritmos científicos", "scipy"),
+        ("scikit-learn", "sklearn", "Aprendizado de máquina clássico", "scikit-learn"),
+        ("Transformers", "transformers", "Modelos Transformer", "transformers"),
+        ("Sentence Transformers", "sentence_transformers", "Embeddings semânticos", "sentence-transformers"),
+        ("FAISS CPU", "faiss", "Busca vetorial", "faiss-cpu"),
+        ("ONNX Runtime", "onnxruntime", "Inferência otimizada", "onnxruntime"),
+        ("Safetensors", "safetensors", "Armazenamento de pesos", "safetensors"),
+        ("Tokenizers", "tokenizers", "Tokenização", "tokenizers"),
+        ("TensorFlow", "tensorflow", "Treinamento e inferência", "tensorflow"),
+        ("llama-cpp-python", "llama_cpp", "Inferência local GGUF", "llama-cpp-python"),
+    ]
+    result = []
+    for name, module, purpose, distribution in candidates:
+        try:
+            installed = importlib.util.find_spec(module) is not None
+        except (ImportError, ValueError, ModuleNotFoundError):
+            installed = False
+        try:
+            version = metadata.version(distribution) if installed else None
+        except metadata.PackageNotFoundError:
+            version = None
+        result.append({"name": name, "purpose": purpose, "installed": installed, "version": version})
+    return result
 assistant=NixLMs()
 library=PrivateKnowledgeLibrary(DATA/"private_library.sqlite3")
 started=time.time()
@@ -22,8 +51,16 @@ class Handler(BaseHTTPRequestHandler):
     server_version="NixLMsLocalUI/1.0"
     def log_message(self,fmt,*args): print("[NixUI]",fmt%args)
     def local(self):
-        host=self.headers.get("Host","")
-        return host.startswith(("127.0.0.1:","localhost:","[::1]:"))
+        # O socket deve receber conexões apenas do próprio runtime.
+        try:
+            import ipaddress
+            if not ipaddress.ip_address(self.client_address[0]).is_loopback:
+                return False
+            parsed = urlsplit("//" + self.headers.get("Host", ""))
+            host_ok = parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        except (ValueError, IndexError):
+            return False
+        return host_ok or os.getenv("NIXLMS_COLAB_PROXY") == "1"
     def send_json(self,obj,status=200):
         raw=json.dumps(obj,ensure_ascii=False).encode()
         self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
@@ -61,8 +98,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.local(): return self.send_json({"error":"Somente acesso local."},403)
         origin=self.headers.get("Origin","")
-        if origin and not origin.startswith(("http://127.0.0.1:","http://localhost:")):
-            return self.send_json({"error":"Origem não permitida."},403)
+        if origin:
+            try:
+                parsed_origin = urlsplit(origin)
+                origin_ok = parsed_origin.scheme in {"http", "https"} and parsed_origin.hostname in {"127.0.0.1", "localhost", "::1"}
+            except ValueError:
+                origin_ok = False
+            if not origin_ok and os.getenv("NIXLMS_COLAB_PROXY") != "1":
+                return self.send_json({"error":"Origem não permitida."},403)
         try:
             data=self.read_json(); path=urlparse(self.path).path
             if path=="/api/chat":

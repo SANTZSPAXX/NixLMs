@@ -36,20 +36,19 @@ class AutonomyPlanner:
             return []
         proposals = []
         with self._lock:
-            goals = self.goals.list_goals(status="active")
-        for goal in goals:
-            for step in self.goals.next_actions(goal["id"]):
-                proposals.append({
-                    "action": self.ACTION_NAME,
-                    "payload": {
-                        "goal_id": goal["id"],
-                        "step_id": step["id"],
-                    },
-                    "goal_title": goal.get("title", ""),
-                    "step_title": step.get("title", ""),
-                })
-                if len(proposals) >= count:
-                    return proposals
+            for goal in self.goals.list_goals(status="active"):
+                for step in self.goals.next_actions(goal["id"]):
+                    proposals.append({
+                        "action": self.ACTION_NAME,
+                        "payload": {
+                            "goal_id": goal["id"],
+                            "step_id": step["id"],
+                        },
+                        "goal_title": goal.get("title", ""),
+                        "step_title": step.get("title", ""),
+                    })
+                    if len(proposals) >= count:
+                        return proposals
         return proposals
 
     def _start_step(self, payload):
@@ -76,13 +75,14 @@ class AutonomyPlanner:
 
     def run_cycle(self, limit=None):
         """Execute only bounded internal transitions through AutonomyEngine."""
-        proposals = self.preview(limit=limit)
-        results = self.engine.run_cycle(proposals)
-        return {
-            "proposed": len(proposals),
-            "processed": len(results),
-            "results": results,
-        }
+        with self._lock:
+            proposals = self.preview(limit=limit)
+            results = self.engine.run_cycle(proposals)
+            return {
+                "proposed": len(proposals),
+                "processed": len(results),
+                "results": results,
+            }
 
     def status(self):
         goals = self.goals.list_goals(status="active")

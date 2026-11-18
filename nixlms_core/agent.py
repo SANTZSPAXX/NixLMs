@@ -697,6 +697,8 @@ class NixLMsNeuralCore:
             try:
                 vector_matches = store.search_vectors(self.encoder.encode(text), limit=3)
                 for match in vector_matches:
+                    if float(match.get("similarity", 0.0)) < 0.15:
+                        continue
                     memory_context.append({
                         "question": "Memória vetorial persistente (" + str(match.get("memory_type", "memory")) + ")",
                         "answer": str(match.get("content", ""))[:4000],

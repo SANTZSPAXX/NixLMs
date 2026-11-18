@@ -25,7 +25,7 @@ async function loadHuggingFaceStatus(){
   $("#hf-download-support").textContent=d.download_support?"DISPONÍVEL":"INSTALAR";
   $("#hf-inference-support").textContent=d.inference_support?"DISPONÍVEL":"INSTALAR";
   $("#hf-active").textContent="Geração: "+(d.active_model?.repo_id||"—")+" · Embeddings: "+(d.active_encoder?.repo_id||"—");
-  $("#hf-status").textContent="Acesso anônimo: sem token · Inferência hospedada: desativada · Repositórios locais: "+d.repositories.length;
+  $("#hf-status").textContent="Acesso anônimo: sem token · Inferência hospedada: desativada · Visão: "+(d.active_perception?.vision?.repo_id||"—")+" · Áudio: "+(d.active_perception?.speech?.repo_id||"—")+" · Repositórios locais: "+d.repositories.length;
   $("#hf-local-list").innerHTML=d.repositories.length?d.repositories.map(x=>'<div class="result"><b>'+esc(x.repo_id)+'</b><small>'+esc(x.repo_type)+' · revisão '+esc(String(x.revision||"").slice(0,12))+' · '+bytes(x.downloaded_bytes||0)+'</small></div>').join(""):"Nenhum recurso local registrado.";
   return d;
  }catch(e){$("#hf-status").textContent=e.message;throw e}

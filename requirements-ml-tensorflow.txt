@@ -1,0 +1,3 @@
+# Alternativa opcional ao stack PyTorch; não é necessária para o núcleo NixLMs.
+# Instale em ambiente virtual separado para evitar conflitos de dependências.
+tensorflow-cpu

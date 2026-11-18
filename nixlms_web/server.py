@@ -474,7 +474,20 @@ class Handler(BaseHTTPRequestHandler):
                 if target.exists():
                     target = inbox / (str(int(time.time())) + "_" + safe_name)
                 target.write_text(content, encoding="utf-8")
-                return self.send_json(library.import_path(target))
+                result = library.import_path(target)
+                if supabase_store is not None:
+                    try:
+                        for chunk in library.list_chunks(limit=500):
+                            vector_text = str(chunk["content"])
+                            supabase_store.upsert_vector(
+                                "library:" + str(chunk["document_id"]) + ":" + str(chunk["chunk_index"]),
+                                "library", vector_text,
+                                assistant.encoder.encode(vector_text),
+                                {"title": chunk["title"], "document_id": chunk["document_id"]},
+                            )
+                    except Exception as exc:
+                        supabase_store._last_error = "vector_index:" + type(exc).__name__
+                return self.send_json(result)
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
         except (HuggingFaceError, MediaGenerationError) as exc:
             return self.send_json({"error": str(exc)}, 400)

@@ -63,7 +63,7 @@ Run [#44153228925](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44153228925
 - Ubuntu/Python 3.12: 176 testes, success.
 - Windows/Python 3.12: 176 testes, success.
 - Job `episodic-benchmark`: success.
-- Job `episodic-quality-benchmark`: success; artefato enviado.
+- Job `episodic-quality-benchmark`: success; artefato enviado (ID 14386102603).
 
 Os logs dos seis jobs foram consultados. Avisos não bloqueantes incluem depreciação do runtime Node.js 20 das actions e avisos Node `punycode`/`url.parse`. A CI anterior não valida os commits desta branch de correção.
 
@@ -76,14 +76,15 @@ Limitações: conjunto sintético pequeno; qrels editoriais sem anotação indep
 ## Testes desta correção
 
 - Nenhum teste local foi executado neste ambiente.
-- CI real da PR #37: [run #44211753611](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44211753611), HEAD `f4f625d8ce417893ae02e8dba2a24698a3896a03`, concluída com sucesso.
+- CI real da PR #37: [run #44211940434](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44211940434), HEAD `b7350afde8830a875dc0911e737ed412b569c929`, concluída com sucesso (6/6 jobs).
 - Ubuntu/Python 3.10: 182 testes, success.
 - Ubuntu/Python 3.11: 182 testes, success.
 - Ubuntu/Python 3.12: 182 testes, success.
 - Windows/Python 3.12: 182 testes, success.
-- Job `episodic-benchmark`: success; artefato enviado.
+- Job `episodic-benchmark`: success; artefato enviado (ID 14385449940).
 - Job `episodic-quality-benchmark`: success; artefato enviado.
-- Os seis logs foram consultados. Os testes de caminho protegido, destino separado e NaN/±infinito aparecem como `ok` no log Python 3.12.
+- Os seis logs foram consultados. Cada matriz executou 182 testes e terminou em `OK`; os testes de caminho protegido, destino separado e NaN/±infinito aparecem como `ok` no log Python 3.12.
+- Os dois artefatos do run #44211940434 foram publicados. O JSON de qualidade foi baixado e inspecionado; preservou o hash do dataset e as métricas por split.
 - A aprovação da CI da PR #36 não foi atribuída a esta correção.
 - Não foi executado E5 real nem checkpoint nativo real.
 - Nenhum arquivo da memória pessoal foi lido ou alterado por este ciclo.

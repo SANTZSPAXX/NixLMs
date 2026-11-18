@@ -58,6 +58,8 @@ HELP = """Comandos:
   /hf baixar model|dataset ID          baixa artefatos públicos após confirmação
   /hf ativar ID | /hf desativar         ativa/desativa geração local CPU
   /hf ativar-embedding ID               ativa embeddings multilíngues locais
+  /hf ativar-visao ID | /hf ativar-audio ID ativa percepção local de imagem/áudio
+  /hf desativar-visao | /hf desativar-audio desativa percepção correspondente
   /hf desativar-embedding               restaura encoder semântico nativo
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair
@@ -165,6 +167,24 @@ def _huggingface_command(ai, message):
             ai._retrieval_encoder_error = None
             ai.memory._embedding_cache.clear()
             print("Encoder semântico nativo restaurado.")
+        elif action in {"ativar-visao", "ativar-audio"} and payload.strip():
+            role = "vision" if action == "ativar-visao" else "speech"
+            active = hub.activate_perception(payload.strip(), role)
+            if role == "vision":
+                ai.perception.vision_model_path = Path(active["path"])
+            else:
+                ai.perception.speech_model_path = Path(active["path"])
+            ai.perception._pipelines.clear()
+            print("Modelo de percepção ativado:", active)
+        elif action in {"desativar-visao", "desativar-audio"}:
+            role = "vision" if action == "desativar-visao" else "speech"
+            hub.deactivate_perception(role)
+            if role == "vision":
+                ai.perception.vision_model_path = None
+            else:
+                ai.perception.speech_model_path = None
+            ai.perception._pipelines.clear()
+            print("Modelo de percepção desativado:", role)
         else:
             print("Comando inválido. Consulte /ajuda.")
     except (HuggingFaceError, OSError, ValueError) as exc:

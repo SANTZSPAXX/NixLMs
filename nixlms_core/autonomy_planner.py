@@ -3,7 +3,7 @@
 This planner selects only user-authored, dependency-ready goal steps. It does
 not invent goals, mark work complete, call an LLM, or perform external I/O.
 """
-from copy import deepcopy
+import threading
 
 
 class AutonomyPlanner:
@@ -14,6 +14,7 @@ class AutonomyPlanner:
     def __init__(self, goal_manager, autonomy_engine, *, max_actions_per_cycle=1):
         self.goals = goal_manager
         self.engine = autonomy_engine
+        self._lock = threading.RLock()
         policy_limit = autonomy_engine.policy.max_actions_per_cycle
         self.max_actions_per_cycle = max(
             1, min(int(max_actions_per_cycle), int(policy_limit), 100)
@@ -31,8 +32,12 @@ class AutonomyPlanner:
         count = self.max_actions_per_cycle if limit is None else max(
             0, min(int(limit), self.max_actions_per_cycle)
         )
+        if count <= 0:
+            return []
         proposals = []
-        for goal in self.goals.list_goals(status="active"):
+        with self._lock:
+            goals = self.goals.list_goals(status="active")
+        for goal in goals:
             for step in self.goals.next_actions(goal["id"]):
                 proposals.append({
                     "action": self.ACTION_NAME,
@@ -54,13 +59,14 @@ class AutonomyPlanner:
         step_id = str(payload.get("step_id", "")).strip()
         if not goal_id or not step_id:
             raise ValueError("goal_id e step_id são obrigatórios.")
-        goal = self.goals.get_goal(goal_id)
-        if goal is None:
-            raise ValueError("Objetivo não encontrado.")
-        ready_ids = {step["id"] for step in self.goals.next_actions(goal_id)}
-        if step_id not in ready_ids:
-            raise ValueError("Etapa não está pendente ou possui dependências não concluídas.")
-        step = self.goals.set_step_status(goal_id, step_id, "in_progress")
+        with self._lock:
+            goal = self.goals.get_goal(goal_id)
+            if goal is None:
+                raise ValueError("Objetivo não encontrado.")
+            ready_ids = {step["id"] for step in self.goals.next_actions(goal_id)}
+            if step_id not in ready_ids:
+                raise ValueError("Etapa não está pendente ou possui dependências não concluídas.")
+            step = self.goals.set_step_status(goal_id, step_id, "in_progress")
         return {
             "goal_id": goal_id,
             "step_id": step_id,

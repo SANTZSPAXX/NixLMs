@@ -1,0 +1,5 @@
+# Inferência local com Transformers. PyTorch CPU é instalado separadamente.
+-r requirements-hf-hub.txt
+transformers>=4.45,<6
+safetensors>=0.4
+accelerate>=1,<2

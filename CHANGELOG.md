@@ -1,10 +1,11 @@
 # Changelog
 
-## Segurança do destino de saída do benchmark PT-BR
+## Segurança do benchmark de recuperação episódica PT-BR
 
 - Rejeita caminhos de saída que coincidam com a memória episódica de produção ou com os arquivos de entrada do benchmark (conjunto padrão e diretório selecionado).
 - Resolve caminhos antes da comparação para também bloquear aliases com segmentos relativos e symlinks já existentes.
-- Adiciona testes para memória de produção, entradas padrão/customizadas e caminho separado permitido.
+- Rejeita `min-score` NaN e infinitos tanto na API de avaliação quanto no CLI, evitando métricas enganosas e JSON não padrão.
+- Adiciona testes para caminhos protegidos, destino separado permitido e limiares não finitos.
 
 ## Benchmark piloto de qualidade da recuperação episódica em PT-BR
 

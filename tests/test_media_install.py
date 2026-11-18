@@ -30,7 +30,7 @@ class MediaInstallTests(unittest.TestCase):
                 module_probe=lambda module: module in installed_modules,
                 version_probe=lambda distribution: "1.0" if distribution else None,
                 system_name="Linux",
-                machine="x86_64",
+                machine="x86_64", python_version=(3, 12),
             )
         self.assertFalse(plan["blocked"])
         self.assertTrue(plan["torch"]["installed"])
@@ -47,7 +47,7 @@ class MediaInstallTests(unittest.TestCase):
             plan = media_install.build_install_plan(
                 requirements, root=root, module_probe=lambda module: False,
                 version_probe=lambda distribution: None,
-                system_name="Linux", machine="aarch64",
+                system_name="Linux", machine="aarch64", python_version=(3, 12),
             )
         self.assertTrue(plan["blocked"])
         self.assertEqual(plan["torch"]["action"], "manual_platform_selection")
@@ -102,7 +102,7 @@ class MediaInstallTests(unittest.TestCase):
         self.assertIn("--no-upgrade", requirements_call)
 
 
-    def test_python_below_3_10_is_blocked(self):
+    def test_python_below_3_11_is_blocked(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             requirements = root / "requirements.txt"
@@ -110,17 +110,17 @@ class MediaInstallTests(unittest.TestCase):
             plan = media_install.build_install_plan(
                 requirements, root=root, module_probe=lambda module: True,
                 version_probe=lambda distribution: "1.0",
-                system_name="Windows", machine="AMD64", python_version=(3, 9),
+                system_name="Windows", machine="AMD64", python_version=(3, 10),
             )
         self.assertTrue(plan["blocked"])
         self.assertFalse(plan["python_supported"])
-        self.assertIn("Python 3.10", plan["blocked_reason"])
+        self.assertIn("Python 3.11", plan["blocked_reason"])
 
 
     def test_blocked_plan_never_prompts_or_runs_pip(self):
         plan = {
             "automatic_install": False, "blocked": True,
-            "blocked_reason": "Este perfil exige Python 3.10 ou superior.",
+            "blocked_reason": "Este perfil exige Python 3.11 ou superior.",
             "torch": {"installed": False}, "missing_requirements": ["diffusers>=0.30"],
         }
         with patch.object(media_install, "is_virtual_environment", return_value=True), \

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import hmac
+import atexit
 import json
 import mimetypes
 import os
@@ -96,6 +97,7 @@ assistant.supabase_store = supabase_store
 if supabase_store is not None:
     supabase_worker = SnapshotWorker(supabase_store, interval=int(os.getenv("NIXLMS_SUPABASE_SYNC_SECONDS", "10")))
     supabase_worker.start()
+    atexit.register(supabase_worker.stop)
 library = assistant.private_library
 media = MediaGenerationManager(DATA, hub=assistant.huggingface)
 started = time.time()
@@ -505,6 +507,8 @@ def main():
         print("\nEncerrando interface...")
     finally:
         assistant.scheduler.stop()
+        if supabase_worker is not None:
+            print("Sincronização final Supabase:", supabase_worker.stop())
         server.server_close()
 
 

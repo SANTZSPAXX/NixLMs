@@ -69,7 +69,7 @@ def _private_library_command(ai, message):
         print("Use /biblioteca importar|buscar|listar|status|candidato|aprovar|rejeitar|exportar ...")
         return
     action = parts[1].lower()
-    payload = parts[2] if len(parts) > 2 else ""
+    payload = " ".join(parts[2:]) if len(parts) > 2 else ""
     library = ai.private_library
     try:
         if action == "status":

@@ -1,0 +1,16 @@
+# Camada opcional de ciência de dados/IA para CPU.
+# Instale PyTorch CPU separadamente pelo índice oficial:
+#   python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Depois:
+#   python -m pip install -r requirements-ml-cpu.txt
+#
+# Recomendado testar em ambiente virtual e Python 3.11+.
+numpy
+scipy
+scikit-learn
+transformers
+sentence-transformers
+faiss-cpu
+onnxruntime
+safetensors
+tokenizers

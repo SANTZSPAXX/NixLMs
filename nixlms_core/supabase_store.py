@@ -8,11 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import sqlite3
 import tempfile
 import threading
-import time
 from pathlib import Path, PurePosixPath
 
 try:
@@ -205,7 +203,7 @@ class SupabaseStore:
                 """SELECT memory_id, memory_type, content, metadata,
                           1 - (embedding <=> %s::extensions.vector(64)) AS similarity
                    FROM public.nix_memory_vectors
-                   WHERE (%s IS NULL OR memory_type = %s)
+                   WHERE (%s::text IS NULL OR memory_type = %s::text)
                    ORDER BY embedding <=> %s::extensions.vector(64)
                    LIMIT %s""",
                 (vector_literal, memory_type, memory_type, vector_literal,

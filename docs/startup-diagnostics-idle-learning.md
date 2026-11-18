@@ -14,7 +14,7 @@ Antes de treinar, ele:
 - audita a integridade e separação dos dados;
 - exige pelo menos quatro exemplos QA em `validation`;
 - exige dados no split `train`;
-- limita o dataset de treino a 500 registros para manter o custo previsível;
+- limita o dataset de treino a 100 registros para manter o custo previsível;
 - executa no máximo uma época por tentativa.
 
 O treino usa `train_incremental`: o candidato é treinado isoladamente, comparado com o baseline em validation e só promovido quando supera os critérios de qualidade. Checkpoint e rollback continuam sob responsabilidade do mecanismo de aprendizagem. Sem validação suficiente, com vazamento de dados ou orçamento excedido, o ciclo apenas registra o motivo e não altera pesos.

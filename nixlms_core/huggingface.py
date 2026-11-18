@@ -143,7 +143,7 @@ class HuggingFaceHub:
                 (tag.split(":", 1)[1] for tag in item.get("tags", [])
                  if isinstance(tag, str) and tag.startswith("license:")), None
             ),
-            "tags": [str(tag) for tag in item.get("tags", [])[:30]],
+            "tags": [str(tag) for tag in (item.get("tags") or [])[:30]],
             "sha": item.get("sha"),
             "last_modified": item.get("lastModified"),
             "url": "https://huggingface.co/" + str(item.get("id") or item.get("modelId") or ""),
@@ -455,8 +455,14 @@ class HuggingFaceHub:
         try:
             transformers_installed = importlib.util.find_spec("transformers") is not None
             torch_installed = importlib.util.find_spec("torch") is not None
+            datasets_installed = importlib.util.find_spec("datasets") is not None
+            evaluate_installed = importlib.util.find_spec("evaluate") is not None
+            peft_installed = importlib.util.find_spec("peft") is not None
+            diffusers_installed = importlib.util.find_spec("diffusers") is not None
         except (ImportError, ValueError):
             transformers_installed = torch_installed = False
+            datasets_installed = evaluate_installed = False
+            peft_installed = diffusers_installed = False
         repositories = self._load_registry()
         return {
             "anonymous_public_access": True,
@@ -466,6 +472,10 @@ class HuggingFaceHub:
             "hub_package_installed": hub_installed,
             "download_support": hub_installed,
             "inference_support": transformers_installed and torch_installed,
+            "datasets_support": datasets_installed,
+            "evaluation_support": evaluate_installed,
+            "fine_tuning_support": peft_installed,
+            "diffusers_support": diffusers_installed,
             "repositories": repositories,
             "active_model": self.active_model(),
             "active_encoder": self.active_encoder(),
@@ -541,12 +551,19 @@ class HuggingFaceLocalGenerator:
                 max_length=self.max_input_tokens,
             )
             inputs = {key: value.to("cpu") for key, value in inputs.items()}
+            generation_options = {
+                "max_new_tokens": self.max_new_tokens,
+                "do_sample": False,
+                "use_cache": True,
+            }
+            pad_token_id = (
+                tokenizer.eos_token_id
+                if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
+            )
+            if pad_token_id is not None:
+                generation_options["pad_token_id"] = pad_token_id
             with torch.inference_mode():
-                output = model.generate(
-                    **inputs, max_new_tokens=self.max_new_tokens,
-                    do_sample=False, use_cache=True,
-                    pad_token_id=tokenizer.eos_token_id,
-                )
+                output = model.generate(**inputs, **generation_options)
             generated = output[0][inputs["input_ids"].shape[1]:]
             answer = tokenizer.decode(generated, skip_special_tokens=True).strip()
             if not answer:

@@ -140,6 +140,26 @@ class HuggingFaceHubTests(unittest.TestCase):
         with self.assertRaises(HuggingFaceError):
             hub.activate_model("intfloat/multilingual-e5-small")
 
+    def test_vision_and_speech_activation_require_matching_pipeline(self):
+        root = Path(self.temp.name) / "data"
+        hub = HuggingFaceHub(root, opener=self.opener, downloader=lambda *a, **k: None)
+        vision_path = hub.models_dir / "org" / "vision-model"
+        vision_path.mkdir(parents=True)
+        (vision_path / "config.json").write_text("{}", encoding="utf-8")
+        (vision_path / "model.safetensors").write_bytes(b"weights")
+        hub._save_registry([{
+            "repo_id": "org/vision-model", "repo_type": "model",
+            "path": str(vision_path), "revision": "a" * 40,
+            "pipeline_tag": "image-to-text",
+        }])
+        active = hub.activate_perception("org/vision-model", "vision")
+        self.assertEqual(active["task"], "image-to-text")
+        self.assertEqual(hub.active_perception()["vision"]["repo_id"], "org/vision-model")
+        self.assertTrue(hub.deactivate_perception("vision"))
+        self.assertEqual(hub.active_perception(), {})
+        with self.assertRaises(HuggingFaceError):
+            hub.activate_perception("org/vision-model", "speech")
+
     def test_status_does_not_require_optional_huggingface_packages(self):
         with patch("nixlms_core.huggingface.importlib.util.find_spec", return_value=None):
             status = self.hub.status()

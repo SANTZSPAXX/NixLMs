@@ -72,7 +72,7 @@ específica. Não é parte do caminho recomendado para o computador-alvo.
 
 ### Perfil multimodal — somente instalação manual
 
-O perfil de imagem/vídeo é opcional, requer Python 3.10+ e não é preparado no startup. Em ambiente
+O perfil de imagem/vídeo é opcional, requer Python 3.11+ para o perfil PyTorch stable atual e não é preparado no startup. Em ambiente
 virtual, use `python -m nixlms_core.media_install --plan` para visualizar o
 inventário de pacotes ausentes e `python -m nixlms_core.media_install --install`
 para solicitar a instalação com confirmação explícita. O instalador não baixa

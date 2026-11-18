@@ -95,7 +95,7 @@ def build_install_plan(
     system_name = system_name or platform.system()
     machine = machine or platform.machine()
     python_version = tuple(python_version or sys.version_info[:2])
-    python_supported = python_version >= (3, 10)
+    python_supported = python_version >= (3, 11)
     packages = []
     seen = set()
     for requirement in _iter_requirements(Path(requirements_file), Path(root)):
@@ -123,7 +123,7 @@ def build_install_plan(
     ]
     blocked = (not python_supported) or (not torch_installed and not cpu_index_supported)
     if not python_supported:
-        blocked_reason = "Este perfil exige Python 3.10 ou superior."
+        blocked_reason = "Este perfil exige Python 3.11 ou superior."
     elif not torch_installed and not cpu_index_supported:
         blocked_reason = (
             "PyTorch ausente: selecione e instale manualmente um wheel compatível "

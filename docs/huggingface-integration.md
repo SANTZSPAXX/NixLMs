@@ -158,7 +158,7 @@ Depois, se decidir prosseguir, execute o comando explícito:
 python -m nixlms_core.media_install --install
 ```
 
-O instalador exige Python 3.10+ e recusa execução fora de ambiente virtual,
+O instalador exige Python 3.11+ (PyTorch stable atual) e recusa execução fora de ambiente virtual,
 lista os pacotes diretos ausentes, informa SO/arquitetura, solicita que o operador digite
 `INSTALAR` e apresenta um relatório das distribuições adicionadas/alteradas.
 Ele preserva módulos já presentes e usa `--no-upgrade`; a detecção verifica presença,

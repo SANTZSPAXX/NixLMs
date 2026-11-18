@@ -132,5 +132,20 @@ class MediaInstallTests(unittest.TestCase):
         run.assert_not_called()
 
 
+    def test_python_3_11_is_supported_for_cpu_x64_plan(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requirements = root / "requirements.txt"
+            requirements.write_text("diffusers>=0.30\n", encoding="utf-8")
+            plan = media_install.build_install_plan(
+                requirements, root=root, module_probe=lambda module: True,
+                version_probe=lambda distribution: "1.0",
+                system_name="Windows", machine="AMD64", python_version=(3, 11),
+            )
+        self.assertFalse(plan["blocked"])
+        self.assertTrue(plan["python_supported"])
+
+
+
 if __name__ == "__main__":
     unittest.main()

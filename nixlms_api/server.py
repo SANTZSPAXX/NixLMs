@@ -73,12 +73,13 @@ def create_server(host=None, port=None, assistant=None, key_store=None):
                         if isinstance(item,dict) and item.get("role") in {"system","user"})
                 if not prompt or len(prompt)>16000: raise ValueError("Mensagem vazia ou acima de 16000 caracteres.")
                 nonlocal assistant
-                if assistant is None:
-                    from nixlms_core import NixLMsNeuralCore
-                    assistant = NixLMsNeuralCore(data_dir=data_dir)
-                    if hasattr(assistant, "start_runtime"):
-                        assistant.start_runtime()
-                with assistant_lock: answer = assistant.respond(prompt, use_language=True, record=True)
+                with assistant_lock:
+                    if assistant is None:
+                        from nixlms_core import NixLMsNeuralCore
+                        assistant = NixLMsNeuralCore(data_dir=data_dir)
+                        if hasattr(assistant, "start_runtime"):
+                            assistant.start_runtime()
+                    answer = assistant.respond(prompt, use_language=True, record=True)
                 if self.path == "/v1/chat": return self.send_json({"reply":answer,"model":"nixlms"})
                 return self.send_json({"id":"chatcmpl-"+uuid.uuid4().hex,"object":"chat.completion",
                     "created":int(time.time()),"model":"nixlms",

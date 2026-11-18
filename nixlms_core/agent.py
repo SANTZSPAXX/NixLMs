@@ -248,7 +248,7 @@ class NixLMsNeuralCore:
             record(
                 "scheduler_handlers",
                 {"memory_housekeeping", "dataset_audit", "goal_review",
-                 "idle_learning_cycle"}.issubset(
+                 "idle_learning_cycle", "autonomy_cycle"}.issubset(
                     set(scheduler_stats.get("registered_handlers", []))
                 ),
                 scheduler_stats.get("registered_handlers", []),

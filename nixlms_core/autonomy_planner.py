@@ -3,6 +3,7 @@
 Natural-language text is never interpreted as executable code. A task must name
 an action registered by trusted application code and provide a result verifier.
 """
+import json
 import threading
 
 
@@ -50,8 +51,10 @@ class AutonomyPlanner:
                     raise ValueError("Objetivo não encontrado.")
                 step = next((item for item in goal.get("steps", [])
                              if item.get("id") == step_id), None)
+                task_spec = step.get("task") if step is not None else None
                 if (step is None or step.get("status") != "pending"
-                        or step.get("task", {}).get("name") != name):
+                        or not isinstance(task_spec, dict)
+                        or task_spec.get("name") != name):
                     raise ValueError("Etapa não está pendente ou não corresponde à tarefa.")
                 ready_ids = {item["id"] for item in self.goals.next_actions(goal_id)}
                 if step_id not in ready_ids:
@@ -59,6 +62,11 @@ class AutonomyPlanner:
                 self.goals.set_step_status(goal_id, step_id, "in_progress")
             try:
                 result = callback(task_payload)
+                encoded_result = json.dumps(
+                    result, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+                )
+                if len(encoded_result.encode("utf-8")) > self.engine.policy.max_result_bytes:
+                    raise ValueError("Resultado da tarefa excede o limite configurado.")
                 if verifier(result, task_payload) is not True:
                     raise RuntimeError("Verificação da tarefa não confirmou o resultado.")
                 self.goals.set_step_status(goal_id, step_id, "completed")

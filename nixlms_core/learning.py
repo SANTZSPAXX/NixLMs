@@ -243,6 +243,24 @@ class LearningEngine:
             },
         }
 
+    def _stage_candidate_data(self, candidate_dir, rows, live_state):
+        """Cria um sandbox mínimo sem copiar bancos privados ou modelos externos."""
+        candidate_dir = Path(candidate_dir)
+        candidate_dir.mkdir(parents=True, exist_ok=False)
+
+        # O candidato precisa apenas do snapshot do dataset e do estado usado
+        # pelo treinamento/validação. A cópia do diretório inteiro também
+        # duplicava SQLite, histórico, biblioteca privada e pesos baixados.
+        save_json(candidate_dir / "dataset.json", rows)
+        for filename, payload in live_state.items():
+            save_json(candidate_dir / filename, payload)
+
+        for filename in self.INCREMENTAL_CALIBRATION_FILES:
+            source = self.agent.data_dir / filename
+            if source.is_file():
+                shutil.copy2(source, candidate_dir / filename)
+        return candidate_dir
+
     def _validation_metrics(self):
         """Compara o estado atual somente com exemplos QA do split validation."""
         self._require_clean_splits()
@@ -564,12 +582,7 @@ class LearningEngine:
 
         with tempfile.TemporaryDirectory(prefix="nixlms-incremental-") as temporary:
             candidate_dir = Path(temporary) / "candidate"
-            shutil.copytree(
-                self.agent.data_dir, candidate_dir, dirs_exist_ok=True,
-                ignore=shutil.ignore_patterns("checkpoints"),
-            )
-            for filename, payload in live_state.items():
-                save_json(candidate_dir / filename, payload)
+            self._stage_candidate_data(candidate_dir, rows, live_state)
             candidate = self.agent.__class__(
                 candidate_dir, config=copy.deepcopy(self.agent.config), llm_model=None
             )

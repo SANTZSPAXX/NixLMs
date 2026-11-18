@@ -2,6 +2,7 @@
 """Interface de terminal da NixLMs Neural Core 0.7."""
 from pathlib import Path
 from nixlms_core import NixLMsNeuralCore
+from nixlms_core.roadmap import seed_initial_roadmap
 
 HELP = """Comandos:
   /ensinar pergunta => resposta       salva ou atualiza conhecimento
@@ -15,6 +16,7 @@ HELP = """Comandos:
                                       registra fato com proveniência
   /fato-buscar texto                   pesquisa fatos do modelo de mundo
   /objetivo criar título               cria um objetivo
+  /objetivo semear-roadmap              cria objetivos e etapas iniciais sem sobrescrever progresso
   /objetivo listar                     lista objetivos
   /objetivo etapa ID || título [|| dependência1,dependência2]
                                       adiciona etapa a um objetivo
@@ -51,6 +53,8 @@ def _objective_command(ai, message):
         if action == "criar":
             goal = ai.goals.create_goal(payload)
             print("Objetivo criado:", goal)
+        elif action == "semear-roadmap" and not payload.strip():
+            print("Roadmap inicial:", seed_initial_roadmap(ai.goals))
         elif action == "listar":
             print(ai.goals.list_goals())
         elif action == "etapa":

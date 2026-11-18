@@ -7,6 +7,9 @@ import math
 
 
 class TransformersSentenceEncoder:
+    DEFAULT_PASSAGE_BATCH_SIZE = 8
+    MAX_PASSAGE_BATCH_SIZE = 32
+
     def __init__(self, model_path, device="cpu", local_files_only=True,
                  max_seq_length=256, model_loader=None):
         self.model_path = str(model_path).strip()
@@ -23,8 +26,6 @@ class TransformersSentenceEncoder:
         self._model = None
         self.dimensions = None
         self.updates = 0
-        # Backend pré-treinado já chega com representações aprendidas; usa o
-        # teto semântico do sistema híbrido, sem depender de updates contrastivos.
         self.semantic_weight = 0.85
 
     def _load(self):
@@ -78,8 +79,54 @@ class TransformersSentenceEncoder:
     def encode_query(self, text):
         return self._encode(text, "query: ")
 
+    def encode_passages(self, texts, batch_size=DEFAULT_PASSAGE_BATCH_SIZE):
+        """Codifica passagens em lotes pequenos, mantendo o prefixo E5."""
+        try:
+            batch_size = int(batch_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("batch_size deve ser um inteiro positivo.") from exc
+        if batch_size < 1:
+            raise ValueError("batch_size deve ser um inteiro positivo.")
+        batch_size = min(self.MAX_PASSAGE_BATCH_SIZE, batch_size)
+
+        values = [str(text).strip() for text in texts]
+        model = self._load()
+        vectors = [None] * len(values)
+        nonempty_indices = [
+            index for index, value in enumerate(values) if value
+        ]
+
+        for offset in range(0, len(nonempty_indices), batch_size):
+            indices = nonempty_indices[offset:offset + batch_size]
+            inputs = ["passage: " + values[index] for index in indices]
+            result = model.encode(
+                inputs, batch_size=min(batch_size, len(inputs)),
+                normalize_embeddings=True, convert_to_numpy=True,
+                show_progress_bar=False,
+            )
+            if hasattr(result, "tolist"):
+                result = result.tolist()
+            if len(result) != len(indices):
+                raise ValueError(
+                    "O backend retornou uma quantidade de embeddings inconsistente."
+                )
+            for index, vector in zip(indices, result):
+                if hasattr(vector, "tolist"):
+                    vector = vector.tolist()
+                vector = self._normalize(vector)
+                if len(vector) != self.dimensions:
+                    raise ValueError(
+                        "O backend retornou dimensão de embedding inconsistente."
+                    )
+                vectors[index] = vector
+
+        for index, vector in enumerate(vectors):
+            if vector is None:
+                vectors[index] = [0.0] * self.dimensions
+        return vectors
+
     def encode_passage(self, text):
-        return self._encode(text, "passage: ")
+        return self.encode_passages([text], batch_size=1)[0]
 
     def encode(self, text):
         return self.encode_query(text)
@@ -89,4 +136,5 @@ class TransformersSentenceEncoder:
                 "model_path": self.model_path, "device": self.device,
                 "local_files_only": self.local_files_only,
                 "loaded": self._model is not None, "dimensions": self.dimensions,
-                "semantic_weight": self.semantic_weight}
+                "semantic_weight": self.semantic_weight,
+                "passage_batch_size": self.DEFAULT_PASSAGE_BATCH_SIZE}

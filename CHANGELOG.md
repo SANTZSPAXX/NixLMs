@@ -1,5 +1,11 @@
 # Changelog
 
+## Consentimento explícito do instalador Ollama
+
+- O prompt de instalação agora informa que, no Linux, o fluxo pode atualizar índices do apt, instalar `zstd` e baixar/executar o instalador remoto oficial de `ollama.com`.
+- A descrição do fluxo foi alinhada no README e no notebook Colab.
+
+
 ## Consent-gated Ollama setup and runtime verification
 
 - Adds an explicit `/llm preparar` CLI workflow with separate confirmation before installation, service startup, and Qwen model download.

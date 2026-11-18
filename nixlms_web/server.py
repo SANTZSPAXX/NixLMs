@@ -450,7 +450,8 @@ def main():
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
-    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0")
+    bootstrap_default = "0" if RENDER_MODE else "1"
+    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", bootstrap_default) != "0")
     print("Preparação de mídia:", bootstrap)
     print(f"NixLMs UI: host={host} port={port} remote={RENDER_MODE}")
     print("Motor: NixLMsNeuralCore")

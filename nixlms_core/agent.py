@@ -126,7 +126,7 @@ class NixLMsNeuralCore:
         self.ollama = OllamaManager(self.language)
         self.learning = LearningEngine(self, self.data_dir / "dataset.json")
         self.starter_dataset_seeded = False
-        if not self.learning.dataset.load() and os.getenv("NIXLMS_DISABLE_STARTER_DATASET") != "1":
+        if not self.learning.dataset.path.exists() and os.getenv("NIXLMS_DISABLE_STARTER_DATASET") != "1":
             starter_dataset = (
                 Path(__file__).resolve().parents[1]
                 / "datasets" / "starter_ptbr.jsonl"

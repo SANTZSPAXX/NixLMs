@@ -38,6 +38,33 @@ class AutonomousRuntimeTests(unittest.TestCase):
             finally:
                 ai.scheduler.stop()
 
+    def test_disable_flag_cancels_persisted_pending_autonomy_job(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ,
+            {
+                "NIXLMS_AUTONOMY_ENABLED": "1",
+                "NIXLMS_DISABLE_STARTER_DATASET": "1",
+            },
+        ):
+            first = NixLMsNeuralCore(data_dir=directory)
+            first.start_runtime()
+            first.scheduler.stop()
+
+            with patch.dict(os.environ, {"NIXLMS_AUTONOMY_ENABLED": "0"}):
+                second = NixLMsNeuralCore(data_dir=directory)
+                try:
+                    runtime = second.start_runtime()
+                    self.assertFalse(runtime["autonomy_enabled"])
+                    jobs = second.scheduler.list_jobs(limit=1000)
+                    pending_autonomy = [
+                        job for job in jobs
+                        if job["handler"] == "autonomy_cycle"
+                        and job["status"] == "pending"
+                    ]
+                    self.assertEqual(pending_autonomy, [])
+                finally:
+                    second.scheduler.stop()
+
     def test_autonomy_cycle_starts_only_ready_internal_steps(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(
             os.environ, {"NIXLMS_DISABLE_STARTER_DATASET": "1"}

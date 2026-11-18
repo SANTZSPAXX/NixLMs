@@ -248,16 +248,19 @@ class LearningEngine:
         candidate_dir = Path(candidate_dir)
         candidate_dir.mkdir(parents=True, exist_ok=False)
 
-        # O candidato precisa apenas do snapshot do dataset e do estado usado
-        # pelo treinamento/validação. A cópia do diretório inteiro também
-        # duplicava SQLite, histórico, biblioteca privada e pesos baixados.
-        save_json(candidate_dir / "dataset.json", rows)
+        # O candidato precisa apenas de train/validation e do estado usado
+        # pelo gate. O split test permanece fora do sandbox de treino.
+        candidate_rows = [
+            row for row in rows
+            if row.get("split", "train") in {"train", "validation"}
+        ]
+        save_json(candidate_dir / "dataset.json", candidate_rows)
         for filename, payload in live_state.items():
             save_json(candidate_dir / filename, payload)
 
         for filename in self.INCREMENTAL_CALIBRATION_FILES:
             source = self.agent.data_dir / filename
-            if source.is_file():
+            if source.is_file() and not source.is_symlink():
                 shutil.copy2(source, candidate_dir / filename)
         return candidate_dir
 

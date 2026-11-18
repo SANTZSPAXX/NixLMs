@@ -89,7 +89,14 @@ def create_server(host=None, port=None, assistant=None, key_store=None):
                 return self.send_json({"error":{"message":str(exc),"type":"invalid_request_error"}},400)
             except Exception as exc:
                 return self.send_json({"error":{"message":"Falha interna: "+type(exc).__name__,"type":"server_error"}},500)
-    return ThreadingHTTPServer((host,port),Handler)
+    class NixAPIServer(ThreadingHTTPServer):
+        def server_close(self):
+            super().server_close()
+            current = assistant
+            scheduler = getattr(current, "scheduler", None) if current is not None else None
+            if scheduler is not None:
+                scheduler.stop()
+    return NixAPIServer((host,port),Handler)
 
 def main():
     server=create_server()

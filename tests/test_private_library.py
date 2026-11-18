@@ -43,8 +43,8 @@ class PrivateKnowledgeLibraryTests(unittest.TestCase):
     def test_learning_candidates_require_explicit_approval(self):
         candidate = self.library.add_candidate("O que é SQLite?", "Um banco de dados embutido.", "notes.md")
         self.assertEqual(candidate["status"], "pending")
-        with self.assertRaises(ValueError):
-            self.library.export_approved_qa(self.root / "train.jsonl")
+        empty_export = self.library.export_approved_qa(self.root / "train.jsonl")
+        self.assertEqual(empty_export["reason"], "no_approved_candidates")
         self.library.review_candidate(candidate["id"], True)
         exported = self.library.export_approved_qa(self.root / "train.jsonl")
         self.assertEqual(exported["exported"], 1)

@@ -1,0 +1,3 @@
+# Binding opcional; compilação pode exigir toolchain C/C++ e consumir recursos.
+# Não faz parte da instalação padrão nem do stack CPU recomendado.
+llama-cpp-python

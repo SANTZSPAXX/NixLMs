@@ -244,3 +244,8 @@ A CI executa a suíte em versões suportadas do Python e em Windows/Linux.
 ## Arquitetura
 
 `nixlms_core/` contém encoder, rede LIF, memória, atenção, mapa mental, modelo de mundo, gestão de objetivos, agendador SQLite, aprendizagem, EEG sintético e adaptadores linguísticos/embeddings opcionais.
+
+
+### Concorrência do serviço Ollama
+
+Chamadas concorrentes a `OllamaManager.start_service()` são serializadas por instância. Isso impede que duas inicializações simultâneas criem processos filhos independentes e que um handle de processo seja sobrescrito antes do cleanup. A serialização não encerra serviços preexistentes e não transforma a verificação de bind de serviços externos em uma garantia de isolamento.

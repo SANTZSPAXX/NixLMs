@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from nixlms_core.autonomy import AutonomyEngine
-from nixlms_core.autonomy_planner import AutonomyPlanner
+from nixlms_core.autonomy_planner import AutonomyPlanner, TaskExecutionContext
 from nixlms_core.planning import GoalManager
 
 
@@ -225,6 +225,9 @@ class AutonomyPlannerTests(unittest.TestCase):
         self.planner.run_cycle()
         self.assertEqual(len(keys), 1)
         self.assertEqual(len(keys[0]), 71)
+        self.assertEqual(
+            keys[0], TaskExecutionContext(goal["id"] + "/" + step["id"]).idempotency_key
+        )
         self.assertEqual(self.goals.get_goal(goal["id"])["steps"][0]["status"], "completed")
         self.assertFalse(self.planner.cancel_task(goal["id"], step["id"]))
 
@@ -278,6 +281,7 @@ class AutonomyPlannerTests(unittest.TestCase):
         active = self.planner.active_tasks()
         self.assertEqual(len(active), 1)
         self.assertFalse(active[0]["cancellation_requested"])
+        self.assertTrue(active[0]["cooperative_cancellation"])
         self.assertTrue(self.planner.cancel_task(goal["id"], step["id"]))
         worker.join(2)
         self.assertFalse(worker.is_alive())
@@ -286,6 +290,44 @@ class AutonomyPlannerTests(unittest.TestCase):
         )
         self.assertEqual(result_holder["result"]["results"][0]["status"], "failed")
         self.assertEqual(self.planner.active_tasks(), [])
+
+
+    def test_legacy_callback_is_not_advertised_as_cancellable(self):
+        started = threading.Event()
+        release = threading.Event()
+
+        def callback(payload):
+            started.set()
+            release.wait(2)
+            return {"ok": True}
+
+        self.planner.register_task(
+            "legacy_wait", callback,
+            lambda result, payload: result.get("ok") is True,
+        )
+        goal = self.goals.create_goal("Callback legado")
+        step = self.goals.add_step(
+            goal["id"], "Aguardar callback legado",
+            task={"name": "legacy_wait", "payload": {}},
+        )
+        result_holder = {}
+
+        worker = threading.Thread(
+            target=lambda: result_holder.setdefault("result", self.planner.run_cycle())
+        )
+        worker.start()
+        self.assertTrue(started.wait(2))
+        active = self.planner.active_tasks()
+        self.assertEqual(len(active), 1)
+        self.assertFalse(active[0]["cooperative_cancellation"])
+        self.assertFalse(self.planner.cancel_task(goal["id"], step["id"]))
+        release.set()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(
+            self.goals.get_goal(goal["id"])["steps"][0]["status"], "completed"
+        )
+        self.assertEqual(result_holder["result"]["verified_completed"], 1)
 
 
 if __name__ == "__main__":

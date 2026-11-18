@@ -23,8 +23,9 @@ class TaskExecutionContext:
 
     MAX_TIMEOUT_SECONDS = 3600.0
 
-    def __init__(self, task_id, *, timeout_seconds=None, clock=None):
+    def __init__(self, task_id, *, timeout_seconds=None, clock=None, cooperative_cancellation=True):
         self.task_id = str(task_id)
+        self.cooperative_cancellation = bool(cooperative_cancellation)
         self.idempotency_key = "nixlms-" + hashlib.sha256(
             self.task_id.encode("utf-8")
         ).hexdigest()
@@ -94,6 +95,7 @@ class TaskExecutionContext:
             "timeout_seconds": self.timeout_seconds,
             "remaining_seconds": round(remaining, 3) if remaining is not None else None,
             "cancellation_requested": self.cancellation_requested,
+            "cooperative_cancellation": self.cooperative_cancellation,
         }
 
 
@@ -153,7 +155,8 @@ class AutonomyPlanner:
                 raise ValueError("Contexto da tarefa inválido.")
             task_id = goal_id + "/" + step_id
             context = TaskExecutionContext(
-                task_id, timeout_seconds=timeout_seconds
+                task_id, timeout_seconds=timeout_seconds,
+                cooperative_cancellation=context_aware,
             )
             with self._lock:
                 if task_id in self._active_tasks:
@@ -249,7 +252,7 @@ class AutonomyPlanner:
         task_id = str(goal_id).strip() + "/" + str(step_id).strip()
         with self._lock:
             context = self._active_tasks.get(task_id)
-            if context is None:
+            if context is None or not context.cooperative_cancellation:
                 return False
             context.cancel()
             return True

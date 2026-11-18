@@ -43,9 +43,9 @@ Quando um modelo local estiver disponível, o planner oferece `draft_goal(intent
 ## Timeout, cancelamento e idempotência cooperativos
 
 Tarefas que precisam de limite de tempo ou cancelamento devem ser registradas
-com \`context_aware=True\` e receber dois argumentos:
+com `context_aware=True` e receber dois argumentos:
 
-\`\`\`python
+```python
 def revisar_indice(payload, context):
     context.checkpoint()
     # Em loops ou entre operações bloqueantes, verificar o contexto.
@@ -60,22 +60,22 @@ planner.register_task(
     context_aware=True,
     timeout_seconds=45,
 )
-\`\`\`
+```
 
-- \`timeout_seconds\` é opcional e limitado a 1–3600 segundos; só é aceito com callback context-aware.
-- \`context.checkpoint()\` lança \`TimeoutError\` ao observar o prazo excedido e
-  \`TaskCancelledError\` quando o operador solicita cancelamento.
-- \`context.wait(seconds)\` aguarda de forma cancelável e nunca ultrapassa o
+- `timeout_seconds` é opcional e limitado a 1–3600 segundos; só é aceito com callback context-aware.
+- `context.checkpoint()` lança `TimeoutError` ao observar o prazo excedido e
+  `TaskCancelledError` quando o operador solicita cancelamento.
+- `context.wait(seconds)` aguarda de forma cancelável e nunca ultrapassa o
   prazo restante da tarefa.
-- \`planner.cancel_task(goal_id, step_id)\` sinaliza o cancelamento e retorna
-  \`True\` somente quando a etapa ainda possui execução ativa.
-- \`planner.status()["active_tasks"]\` expõe apenas identificador, chave de
+- `planner.cancel_task(goal_id, step_id)` sinaliza o cancelamento e retorna
+  `True` somente quando a etapa ainda possui execução ativa.
+- `planner.status()["active_tasks"]` expõe apenas identificador, chave de
   idempotência, prazo restante e estado do pedido de cancelamento.
-- A chave \`context.idempotency_key\` é estável para a mesma etapa persistida;
+- A chave `context.idempotency_key` é estável para a mesma etapa persistida;
   handlers podem usá-la para deduplicação. Ela não fornece garantia de
   execução exatamente uma vez.
-- Timeout marca a etapa como \`failed\`; cancelamento cooperativo marca como
-  \`cancelled\`. Nenhum dos dois provoca replay automático.
+- Timeout marca a etapa como `failed`; cancelamento cooperativo marca como
+  `cancelled`. Nenhum dos dois provoca replay automático.
 
 **Limite importante:** o executor não mata threads nem interrompe à força uma
 chamada Python bloqueada. O callback precisa consultar o contexto em pontos

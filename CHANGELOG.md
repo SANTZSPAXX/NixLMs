@@ -1,9 +1,9 @@
 ## Controle cooperativo de tarefas internas
 
 - Adiciona contexto opcional para callbacks confiáveis com prazo monotônico, sinalização de cancelamento e checkpoints cooperativos.
-- Expõe \`cancel_task(goal_id, step_id)\` e \`active_tasks\` para supervisão de execuções em andamento.
+- Expõe `cancel_task(goal_id, step_id)` e `active_tasks` para supervisão de execuções em andamento.
 - Fornece chave de idempotência estável por etapa, sem prometer execução exatamente uma vez.
-- Mantém callbacks legados de um argumento; timeout exige \`context_aware=True\`.
+- Mantém callbacks legados de um argumento; timeout exige `context_aware=True`.
 - Não interrompe threads à força; callbacks precisam cooperar e limitar suas próprias operações de I/O.
 - Adiciona regressões para timeout, cancelamento concorrente, chave estável e ausência de replay.
 

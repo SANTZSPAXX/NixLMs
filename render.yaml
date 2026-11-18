@@ -17,5 +17,9 @@ services:
         value: "0"
       - key: NIXLMS_REQUIRE_SUPABASE
         value: "1"
+      - key: NIXLMS_SUPABASE_SYNC_SECONDS
+        value: "10"
+      - key: NIXLMS_DATABASE_URL
+        sync: false
       - key: NIXLMS_ACCESS_TOKEN
         sync: false

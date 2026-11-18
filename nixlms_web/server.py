@@ -23,6 +23,7 @@ ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
 from nixlms_core import NixLMsNeuralCore  # noqa: E402\nfrom nixlms_core.huggingface import HuggingFaceError  # noqa: E402
+from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
 
 
 def inspect_frameworks():
@@ -69,6 +70,7 @@ def inspect_frameworks():
 # Uma única instância alimenta chat, biblioteca, memória e diagnóstico.
 assistant = NixLMsNeuralCore(data_dir=DATA)
 library = assistant.private_library
+media = MediaGenerationManager(DATA, hub=assistant.huggingface)
 started = time.time()
 assistant_lock = threading.RLock()
 
@@ -139,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/frameworks":
             return self.send_json(inspect_frameworks())
+        if path == "/api/media/status":
+            return self.send_json(media.status())
         if path == "/api/library":
             return self.send_json({
                 "stats": library.stats(),
@@ -246,6 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         routes = {
             "/": "index.html", "/index.html": "index.html",
             "/app.js": "app.js", "/style.css": "style.css",
+            "/media": "media.html", "/media.html": "media.html", "/media.js": "media.js",
         }
         if path not in routes:
             return self.send_json({"error": "Não encontrado."}, 404)
@@ -282,6 +287,23 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data = self.read_json()
             path = urlparse(self.path).path
+            if path == "/api/media/nsfw":
+                return self.send_json(media.set_nsfw(data.get("enabled") is True))
+            if path == "/api/media/download":
+                result = media.download_model(
+                    data.get("repo_id"), data.get("mode"), confirm=data.get("confirm")
+                )
+                return self.send_json({"download": result})
+            if path == "/api/media/generate":
+                result = media.generate(
+                    mode=data.get("mode"), repo_id=data.get("repo_id"),
+                    prompt=data.get("prompt"), image_path=data.get("image_path"),
+                    nsfw=data.get("nsfw", False), negative_prompt=data.get("negative_prompt", ""),
+                    steps=data.get("steps", 20), guidance=data.get("guidance", 7.0),
+                    strength=data.get("strength", 0.65), width=data.get("width", 512),
+                    height=data.get("height", 512), frames=data.get("frames", 16),
+                )
+                return self.send_json({"generation": result})
             if path == "/api/huggingface/download":
                 result = assistant.huggingface.download(
                     str(data.get("repo_type", "model")),
@@ -371,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
                 target.write_text(content, encoding="utf-8")
                 return self.send_json(library.import_path(target))
             return self.send_json({"error": "Endpoint não encontrado."}, 404)
-        except HuggingFaceError as exc:
+        except (HuggingFaceError, MediaGenerationError) as exc:
             return self.send_json({"error": str(exc)}, 400)
         except Exception as exc:
             if type(exc).__name__ == "HuggingFaceError":
@@ -388,6 +410,8 @@ def main():
     except OSError as exc:
         raise SystemExit("Não foi possível iniciar a interface: " + str(exc))
     runtime = assistant.start_runtime()
+    bootstrap = media.bootstrap_async(enabled=os.getenv("NIXLMS_AUTO_INSTALL_MEDIA", "1") != "0")
+    print("Preparação de mídia:", bootstrap)
     print(f"NixLMs UI: http://127.0.0.1:{port} (somente este computador)")
     print("Motor: NixLMsNeuralCore")
     print("Autodiagnóstico:", runtime["diagnostics"]["status"])

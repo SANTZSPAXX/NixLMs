@@ -4,7 +4,6 @@ Os ficheiros são copiados para SQLite local em blocos pesquisáveis. Nada é
 baixado, executado ou promovido automaticamente para pesos neurais.
 """
 import hashlib
-import os
 import sqlite3
 from pathlib import Path
 

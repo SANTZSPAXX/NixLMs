@@ -168,6 +168,34 @@ class Handler(BaseHTTPRequestHandler):
                     "detail": "Agendador ativo" if assistant.scheduler.running else "Agendador parado",
                 },
             })
+            try:
+                dataset_audit = assistant.learning.dataset.audit_splits()
+                dataset_counts = dataset_audit.get("counts", {})
+                training_samples = dataset_counts.get("qa_train", 0) + dataset_counts.get("pair_train", 0)
+                validation_samples = dataset_counts.get("qa_validation", 0)
+                learning_ready = (
+                    dataset_audit.get("valid", False)
+                    and training_samples > 0
+                    and validation_samples >= assistant.idle_learning.min_validation_samples
+                )
+                dataset_status = (
+                    "ok" if learning_ready
+                    else ("warning" if dataset_audit.get("valid", False) else "error")
+                )
+                dataset_detail = (
+                    f"train={training_samples}; validation={validation_samples}; "
+                    f"mínimo_validation={assistant.idle_learning.min_validation_samples}; "
+                    f"integridade={'válida' if dataset_audit.get('valid') else 'inválida'}"
+                )
+            except Exception as exc:
+                learning_ready = False
+                dataset_status = "error"
+                dataset_detail = type(exc).__name__ + ": " + str(exc)
+            checks["idle_learning_dataset"] = {
+                "ok": learning_ready,
+                "status": dataset_status,
+                "detail": dataset_detail,
+            }
             errors = sum(item["status"] == "error" for item in checks.values())
             non_ok = any(
                 item["status"] not in {"ok", "info"} for item in checks.values()

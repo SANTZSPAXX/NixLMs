@@ -329,7 +329,7 @@ class EpisodicMemory:
                 flush_pending()
 
         flush_pending()
-        ranked.sort(key=lambda pair: (pair[0], pair[1].get("timestamp", "")), reverse=True)
+        ranked.sort(key=lambda pair: (pair[0], pair[1].get("timestamp", ""), str(pair[1].get("id", ""))), reverse=True)
         return ranked[:limit]
 
     def _prune_locked(self):

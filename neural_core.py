@@ -9,6 +9,13 @@ HELP = """Comandos:
   /ensinar-par texto A || texto B || 1|0
                                       adiciona par contrastivo (1=similar, 0=diferente)
   /importar arquivo.jsonl             importa exemplos QA e pares contrastivos
+  /biblioteca importar CAMINHO        importa documentos locais para a biblioteca privada
+  /biblioteca buscar TEXTO            pesquisa o acervo offline
+  /biblioteca listar                  lista documentos armazenados
+  /biblioteca status                  estatísticas do acervo
+  /biblioteca candidato Q => A [|| fonte] cria candidato de aprendizagem pendente
+  /biblioteca aprovar ID | rejeitar ID revisa um candidato
+  /biblioteca exportar [CAMINHO]      exporta QA aprovados como split train
   /status                              estado dos módulos
   /diagnostico                         executa novamente o autodiagnóstico
   /ocioso status                       estado do aprendizado autônomo em ociosidade
@@ -42,6 +49,44 @@ HELP = """Comandos:
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair
 """
+
+
+
+def _private_library_command(ai, message):
+    parts = message.split(None, 2)
+    if len(parts) < 2:
+        print("Use /biblioteca importar|buscar|listar|status|candidato|aprovar|rejeitar|exportar ...")
+        return
+    action = parts[1].lower()
+    payload = parts[2] if len(parts) > 2 else ""
+    library = ai.private_library
+    try:
+        if action == "status":
+            print(library.stats())
+        elif action == "listar":
+            print(library.list_documents())
+        elif action == "importar" and payload.strip():
+            print(library.import_path(payload.strip().strip('"')))
+        elif action == "buscar" and payload.strip():
+            print(library.search(payload, limit=8))
+        elif action == "candidato":
+            fields = payload.split("=>", 1)
+            if len(fields) != 2:
+                print("Use /biblioteca candidato pergunta => resposta [|| fonte]")
+                return
+            answer_fields = fields[1].split("||", 1)
+            answer = answer_fields[0].strip()
+            source = answer_fields[1].strip() if len(answer_fields) > 1 else ""
+            print("Candidato:", library.add_candidate(fields[0], answer, source))
+        elif action in {"aprovar", "rejeitar"} and payload.strip().isdigit():
+            print(library.review_candidate(int(payload.strip()), action == "aprovar"))
+        elif action == "exportar":
+            destination = payload.strip().strip('"') or "datasets/private_library_train.jsonl"
+            print(library.export_approved_qa(destination))
+        else:
+            print("Comando inválido. Consulte /ajuda.")
+    except (OSError, ValueError) as exc:
+        print("Falha na biblioteca privada:", str(exc))
 
 
 def _objective_command(ai, message):
@@ -196,6 +241,9 @@ def main():
             break
         if low == "/ajuda":
             print(HELP)
+            continue
+        if low.startswith("/biblioteca"):
+            _private_library_command(ai, msg)
             continue
         if low == "/status":
             print(ai.status())

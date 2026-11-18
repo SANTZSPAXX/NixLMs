@@ -27,6 +27,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Validate control-center JavaScript
+        run: node --check nixlms_web/static/app.js
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 

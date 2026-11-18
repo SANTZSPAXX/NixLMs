@@ -26,6 +26,9 @@ HELP = """Comandos:
   /fato-buscar texto                   pesquisa fatos do modelo de mundo
   /simular sujeito || relação || objeto [|| confiança]
                                       simula hipótese sem persistir ou executar ações
+  /percepcao status                    mostra capacidades multimodais locais
+  /imagem CAMINHO                      descreve imagem com modelo local opcional
+  /audio CAMINHO                       transcreve WAV com modelo local opcional
   /objetivo criar título               cria um objetivo
   /objetivo semear-roadmap              cria objetivos e etapas iniciais sem sobrescrever progresso
   /objetivo listar                     lista objetivos
@@ -261,6 +264,21 @@ def main():
             print(ai.last_trace.get("eeg_bands", "Envie uma mensagem primeiro."))
             if ai.last_trace:
                 print("Atividade LIF:", ai.last_trace.get("active_neurons"), "neurônios ativos;", ai.last_trace.get("spike_activity"), "disparos")
+            continue
+        if low == "/percepcao status":
+            print(ai.perception.status())
+            continue
+        if low.startswith("/imagem "):
+            try:
+                print(ai.perception.describe_image(msg[len("/imagem "):].strip()))
+            except (OSError, RuntimeError, ValueError) as exc:
+                print("Falha na percepção de imagem:", exc)
+            continue
+        if low.startswith("/audio "):
+            try:
+                print(ai.perception.transcribe_audio(msg[len("/audio "):].strip()))
+            except (OSError, RuntimeError, ValueError) as exc:
+                print("Falha na percepção de áudio:", exc)
             continue
         if low == "/mapa":
             print({"concepts": len(ai.mental_map.nodes), "associations": ai.mental_map.associate(ai.last_question, 12)})

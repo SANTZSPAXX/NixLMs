@@ -4,7 +4,7 @@
 
 Não exige bibliotecas Python extras. Requer Python 3.10+.
 
-1. Extraia/clonе o repositório.
+1. Extraia/clone o repositório.
 2. Abra o CMD na pasta `NixLMs`.
 3. Execute `py -3 -m nixlms_web.server` (ou `python -m nixlms_web.server`).
 4. Abra `http://127.0.0.1:8765` no navegador.

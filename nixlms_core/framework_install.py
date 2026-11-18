@@ -45,7 +45,10 @@ def _version(name):
 
 
 def _dist_name(requirement):
-    match = re.match(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)", requirement.strip())
+    value = requirement.strip()
+    if "://" in value or " @ " in value or value.startswith(("git+", "file:")):
+        raise ValueError("URLs e caminhos diretos não são permitidos no perfil.")
+    match = re.match(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)", value)
     if not match:
         raise ValueError("Requisito inválido no catálogo.")
     return _norm(match.group(1))
@@ -270,10 +273,11 @@ def _freeze_diff(before, after):
 
 
 def run_install(mode, plan, *, requirements_file=REQUIREMENTS, run=subprocess.run,
-                input_fn=None, version_probe=None, venv=None):
+                input_fn=None, version_probe=None, module_probe=None, venv=None):
     if mode not in {"frameworks", "torch_cpu"}:
         return {"status": "blocked", "reason": "Modo inválido."}
     version_probe = version_probe or _version
+    module_probe = module_probe or _module_available
     if venv is None:
         venv = bool(plan.get("virtual_environment"))
 
@@ -307,9 +311,12 @@ def run_install(mode, plan, *, requirements_file=REQUIREMENTS, run=subprocess.ru
     conflicts = []
     for item in planned:
         current = version_probe(item["name"])
-        if current is not None:
+        module = MODULE_MAP.get(_norm(item["name"]), _norm(item["name"]).replace("-", "_"))
+        module_present = bool(module_probe(module))
+        if current is not None or module_present:
             conflicts.append({
                 "name": item["name"], "installed_version": current,
+                "module_available_without_metadata": module_present and current is None,
                 "planned_version": item["version"],
             })
     if conflicts:

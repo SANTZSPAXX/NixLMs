@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +113,7 @@ class FrameworkInstallTests(unittest.TestCase):
             "frameworks", plan, requirements_file=self.requirements,
             run=fake_run, input_fn=lambda prompt: "INSTALAR",
             version_probe=lambda name: "2.5.0" if name == "torch" else None,
+            module_probe=lambda name: False,
         )
         self.assertEqual(result["status"], "success")
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
@@ -161,12 +165,63 @@ class FrameworkInstallTests(unittest.TestCase):
         result = installer.run_install(
             "torch_cpu", plan, run=fake_run, input_fn=lambda prompt: "INSTALAR",
             version_probe=lambda name: None,
+            module_probe=lambda name: False,
         )
         self.assertEqual(result["status"], "success")
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
         self.assertIn(installer.TORCH_CPU_INDEX, actual[0])
         self.assertIn("torch==2.7.0", actual[0])
         self.assertIn("--no-deps", actual[0])
+
+    def test_direct_url_requirement_is_rejected(self):
+        self.requirements.write_text(
+            "custom-package @ https://example.invalid/custom.whl\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(ValueError):
+            self.plan()
+
+    def test_resolver_cannot_overwrite_module_without_distribution_metadata(self):
+        plan, calls = self.plan(), []
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if "--help" in command:
+                return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
+            if "--dry-run" in command:
+                report = Path(command[command.index("--report") + 1])
+                report.write_text(json.dumps({"install": [
+                    {"metadata": {"name": "numpy", "version": "2.0.0"}, "requested": True}
+                ]}), encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        result = installer.run_install(
+            "frameworks", plan, requirements_file=self.requirements,
+            run=fake_run, input_fn=lambda prompt: self.fail("não deve pedir confirmação"),
+            version_probe=lambda name: "2.5.0" if name == "torch" else None,
+            module_probe=lambda name: name == "numpy",
+        )
+        self.assertEqual(result["status"], "blocked")
+        self.assertTrue(result["conflicts"][0]["module_available_without_metadata"])
+        self.assertFalse(any(
+            "install" in command and "--dry-run" not in command and "--help" not in command
+            for command in calls
+        ))
+
+    @unittest.skipUnless(os.name == "nt", "Validação de sintaxe PowerShell executada somente no Windows.")
+    def test_powershell_wrapper_parses_on_windows(self):
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if not shell:
+            self.skipTest("PowerShell não disponível no runner.")
+        script = (Path(__file__).resolve().parents[1] / "scripts" / "install-ml-cpu.ps1")
+        quoted = str(script).replace("'", "''")
+        command = (
+            "$tokens=$null; $errors=$null; "
+            f"[System.Management.Automation.Language.Parser]::ParseFile('{quoted}', [ref]$tokens, [ref]$errors) | Out-Null; "
+            "if ($errors.Count -gt 0) { $errors | Out-String | Write-Error; exit 1 }"
+        )
+        subprocess.run(
+            [shell, "-NoProfile", "-Command", command],
+            check=True, capture_output=True, text=True, timeout=20,
+        )
 
     def test_powershell_wrapper_delegates_without_pip_upgrade(self):
         source = (Path(__file__).resolve().parents[1] / "scripts" / "install-ml-cpu.ps1").read_text(encoding="utf-8")

@@ -4,7 +4,7 @@
 - Exige ambiente virtual, Python 3.11+ e compatibilidade conservadora Windows/Linux x86-64.
 - Separa instalação do PyTorch CPU do restante do stack e bloqueia resolução transitiva implícita de torch.
 - Exibe relatório pip dry-run, exige confirmação digitada e instala versões pinadas sem dependências adicionais nem upgrade.
-- Registra diferenças de pip freeze e adiciona testes sem instalar frameworks na CI.
+- Registra diferenças de pip freeze, rejeita referências diretas por URL e valida sintaxe PowerShell no runner Windows.
 
 ## Instalação multimodal somente por ação explícita
 

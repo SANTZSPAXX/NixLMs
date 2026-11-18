@@ -560,37 +560,37 @@ class HuggingFaceLocalGenerator:
     def generate(self, system_prompt, prompt):
         try:
             model, tokenizer = self._load()
-            import torch
             text = (
-                "Instruções do sistema:\n" + str(system_prompt)[:5000]
-                + "\n\nMensagem/contexto:\n" + str(prompt)[:12000]
-                + "\n\nResposta em português brasileiro:"
+                "Instruções do sistema:\\n" + str(system_prompt)[:5000]
+                + "\\n\\nMensagem/contexto:\\n" + str(prompt)[:12000]
+                + "\\n\\nResposta em português brasileiro:"
             )
-            inputs = tokenizer(
-                text, return_tensors="pt", truncation=True,
-                max_length=self.max_input_tokens,
-            )
-            inputs = {key: value.to("cpu") for key, value in inputs.items()}
-            generation_options = {
-                "max_new_tokens": self.max_new_tokens,
-                "do_sample": False,
-                "use_cache": True,
-            }
-            pad_token_id = (
-                tokenizer.eos_token_id
-                if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
-            )
-            if pad_token_id is not None:
-                generation_options["pad_token_id"] = pad_token_id
-            with torch.inference_mode():
-                if self._backend == "llama.cpp_cpu":
+            if self._backend == "llama.cpp_cpu":
                 result = model.create_completion(
                     prompt=text, max_tokens=self.max_new_tokens,
                     temperature=0.1, echo=False,
                 )
                 answer = str(result.get("choices", [{}])[0].get("text", "")).strip()
             else:
-                output = model.generate(**inputs, **generation_options)
+                import torch
+                inputs = tokenizer(
+                    text, return_tensors="pt", truncation=True,
+                    max_length=self.max_input_tokens,
+                )
+                inputs = {key: value.to("cpu") for key, value in inputs.items()}
+                generation_options = {
+                    "max_new_tokens": self.max_new_tokens,
+                    "do_sample": False,
+                    "use_cache": True,
+                }
+                pad_token_id = (
+                    tokenizer.eos_token_id
+                    if tokenizer.eos_token_id is not None else tokenizer.pad_token_id
+                )
+                if pad_token_id is not None:
+                    generation_options["pad_token_id"] = pad_token_id
+                with torch.inference_mode():
+                    output = model.generate(**inputs, **generation_options)
                 generated = output[0][inputs["input_ids"].shape[1]:]
                 answer = tokenizer.decode(generated, skip_special_tokens=True).strip()
             if not answer:

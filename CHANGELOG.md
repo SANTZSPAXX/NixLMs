@@ -1,3 +1,12 @@
+## Biblioteca opcional de frameworks de IA
+
+- Adiciona inventário de frameworks sem dependências, importações pesadas ou downloads.
+- Adiciona grupos opcionais para PyTorch CPU, Transformers, Sentence Transformers, FAISS CPU, ONNX Runtime, NumPy, SciPy, scikit-learn, Safetensors e Tokenizers.
+- Mantém TensorFlow CPU e llama-cpp-python como alternativas separadas, não instaladas por padrão.
+- Adiciona instalador explícito para Windows e arquivos de dependências opcionais; nenhum pacote é instalado no startup.
+- Documenta separação entre frameworks, biblioteca de conhecimento, modelos e datasets.
+- Adiciona testes do inventário sem exigir dependências de ML na CI básica.
+
 ## Biblioteca privada de conhecimento offline
 
 - Adiciona acervo SQLite local com importação limitada de TXT, Markdown, RST, Python, JSON, YAML e TOML; deduplicação SHA-256, divisão em trechos e busca FTS5 com fallback.

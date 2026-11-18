@@ -57,6 +57,8 @@ HELP = """Comandos:
   /hf detalhes model|dataset|space ID  inspeciona card, licença e arquivos
   /hf baixar model|dataset ID          baixa artefatos públicos após confirmação
   /hf ativar ID | /hf desativar         ativa/desativa geração local CPU
+  /hf ativar-embedding ID               ativa embeddings multilíngues locais
+  /hf desativar-embedding               restaura encoder semântico nativo
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair
 """
@@ -148,6 +150,21 @@ def _huggingface_command(ai, message):
             hub.deactivate_model()
             ai.language.configure_huggingface_local(None)
             print("Geração Hugging Face local desativada.")
+        elif action == "ativar-embedding" and payload.strip():
+            active = hub.activate_encoder(payload.strip())
+            from nixlms_core.pretrained_encoder import TransformersSentenceEncoder
+            ai.retrieval_encoder = TransformersSentenceEncoder(
+                active["path"], device="cpu", local_files_only=True
+            )
+            ai._retrieval_encoder_error = None
+            ai.memory._embedding_cache.clear()
+            print("Encoder de embeddings ativado:", active)
+        elif action == "desativar-embedding":
+            hub.deactivate_encoder()
+            ai.retrieval_encoder = ai.encoder
+            ai._retrieval_encoder_error = None
+            ai.memory._embedding_cache.clear()
+            print("Encoder semântico nativo restaurado.")
         else:
             print("Comando inválido. Consulte /ajuda.")
     except (HuggingFaceError, OSError, ValueError) as exc:

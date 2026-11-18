@@ -105,6 +105,7 @@ $("#hf-deactivate-audio").onclick=async()=>{try{await api("/api/huggingface/deac
   const resumeAfterSpeech=()=>{speaking=false;orb.classList.remove("speaking");if(listening&&recognition){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},350)}};
   utterance.onend=resumeAfterSpeech;
   utterance.onerror=resumeAfterSpeech;
+  speaking=true;
   window.speechSynthesis.speak(utterance);
  };
  const setState=(label,detail)=>{

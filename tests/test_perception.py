@@ -56,6 +56,36 @@ class PerceptionManagerTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "diretório de modelo local"):
                     manager.describe_image(image)
 
+
+    def test_image_pipeline_uses_local_model_and_cpu_only(self):
+        import types
+        from unittest.mock import Mock, patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp) / "vision-model"
+            model.mkdir()
+            image = Path(tmp) / "photo.png"
+            image.write_bytes(b"image-bytes")
+            pipeline = Mock(return_value=lambda *_args, **_kwargs: [
+                {"generated_text": "Uma paisagem."}
+            ])
+            module = types.ModuleType("transformers")
+            module.pipeline = pipeline
+            manager = PerceptionManager(vision_model_path=model)
+            with patch.object(manager, "_transformers_available", return_value=True), \\
+                 patch.object(manager, "_torch_available", return_value=True), \\
+                 patch.dict("sys.modules", {"transformers": module}):
+                result = manager.describe_image(image)
+            self.assertEqual(result["description"], "Uma paisagem.")
+            self.assertEqual(result["device"], "cpu")
+            self.assertFalse(result["downloaded_model"])
+            pipeline.assert_called_once_with(
+                "image-to-text",
+                model=str(model.resolve()),
+                device=-1,
+                model_kwargs={"local_files_only": True},
+            )
+
     def test_audio_requires_wav_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             audio = Path(tmp) / "voice.mp3"

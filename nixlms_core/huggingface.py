@@ -46,6 +46,7 @@ class HuggingFaceHub:
         self.registry_path = self.root / "registry.json"
         self.active_path = self.root / "active_model.json"
         self.active_encoder_path = self.root / "active_encoder.json"
+        self.active_perception_path = self.root / "active_perception.json"
         self.timeout = max(1, min(30, int(timeout)))
         self.opener = opener or urlopen
         self.downloader = downloader
@@ -436,6 +437,84 @@ class HuggingFaceHub:
         os.replace(str(temporary), str(self.active_encoder_path))
         return value
 
+    def active_perception(self):
+        try:
+            value = json.loads(self.active_perception_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            return {}
+        if not isinstance(value, dict):
+            return {}
+        valid = {}
+        for role in ("vision", "speech"):
+            item = value.get(role)
+            if not isinstance(item, dict):
+                continue
+            path = Path(str(item.get("path", ""))).resolve()
+            if (
+                self.models_dir.resolve() in path.parents
+                and (path / "config.json").is_file()
+                and any(path.rglob("*.safetensors"))
+            ):
+                valid[role] = item
+        return valid
+
+    def activate_perception(self, repo_id, role):
+        repo_id = self._repo_id(repo_id)
+        role = str(role or "").lower()
+        expected_task = {
+            "vision": "image-to-text",
+            "speech": "automatic-speech-recognition",
+        }
+        if role not in expected_task:
+            raise HuggingFaceError("Use role=vision ou role=speech.")
+        entry = next((
+            item for item in self._load_registry()
+            if item.get("repo_type") == "model" and item.get("repo_id") == repo_id
+        ), None)
+        if not entry:
+            raise HuggingFaceError("Modelo multimodal não encontrado no registro local.")
+        if entry.get("pipeline_tag") != expected_task[role]:
+            raise HuggingFaceError(
+                f"A tarefa do modelo precisa ser {expected_task[role]}."
+            )
+        path = Path(entry.get("path", "")).resolve()
+        if (
+            self.models_dir.resolve() not in path.parents
+            or not (path / "config.json").is_file()
+            or not any(path.rglob("*.safetensors"))
+        ):
+            raise HuggingFaceError("Percepção exige modelo local com config e Safetensors.")
+        value = {
+            "repo_id": repo_id, "path": str(path), "revision": entry.get("revision"),
+            "task": expected_task[role],
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        active = self.active_perception()
+        active[role] = value
+        self.root.mkdir(parents=True, exist_ok=True)
+        temporary = self.active_perception_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(active, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(str(temporary), str(self.active_perception_path))
+        return value
+
+    def deactivate_perception(self, role):
+        role = str(role or "").lower()
+        if role not in {"vision", "speech"}:
+            raise HuggingFaceError("Use role=vision ou role=speech.")
+        active = self.active_perception()
+        removed = role in active
+        active.pop(role, None)
+        if active:
+            temporary = self.active_perception_path.with_suffix(".tmp")
+            temporary.write_text(json.dumps(active, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(str(temporary), str(self.active_perception_path))
+        else:
+            try:
+                self.active_perception_path.unlink()
+            except FileNotFoundError:
+                pass
+        return removed
+
     def deactivate_encoder(self):
         try:
             self.active_encoder_path.unlink()
@@ -485,6 +564,7 @@ class HuggingFaceHub:
             "repositories": repositories,
             "active_model": self.active_model(),
             "active_encoder": self.active_encoder(),
+            "active_perception": self.active_perception(),
             "limits": {
                 "model_bytes": self.HARD_MODEL_LIMIT,
                 "dataset_bytes": self.HARD_DATASET_LIMIT,

@@ -96,13 +96,15 @@ $("#hf-deactivate-audio").onclick=async()=>{try{await api("/api/huggingface/deac
   lastSpoken=String(message||"").trim();
   if(!lastSpoken||muted||!("speechSynthesis" in window))return;
   window.speechSynthesis.cancel();
+  if(recognition&&listening){try{recognition.stop()}catch(e){}}
   const utterance=new SpeechSynthesisUtterance(lastSpoken);
   utterance.lang="pt-BR"; utterance.rate=1.02; utterance.pitch=1;
   const voices=window.speechSynthesis.getVoices();
   utterance.voice=voices.find(v=>/^pt-BR$/i.test(v.lang))||voices.find(v=>/^pt/i.test(v.lang))||null;
   utterance.onstart=()=>{speaking=true;orb.classList.add("speaking")};
-  utterance.onend=()=>{speaking=false;orb.classList.remove("speaking")};
-  utterance.onerror=()=>{speaking=false;orb.classList.remove("speaking")};
+  const resumeAfterSpeech=()=>{speaking=false;orb.classList.remove("speaking");if(listening&&recognition){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},350)}};
+  utterance.onend=resumeAfterSpeech;
+  utterance.onerror=resumeAfterSpeech;
   window.speechSynthesis.speak(utterance);
  };
  const setState=(label,detail)=>{
@@ -149,7 +151,7 @@ $("#hf-deactivate-audio").onclick=async()=>{try{await api("/api/huggingface/deac
    else if(event.error!=="no-speech"&&event.error!=="aborted")setState("Falha no reconhecimento","Verifique o microfone e a conexão do navegador.");
   };
   recognition.onend=()=>{
-   if(listening){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},500)}
+   if(listening&&!speaking){restartTimer=setTimeout(()=>{try{recognition.start()}catch(e){}},500)}
   };
   listening=true;
   try{recognition.start()}catch(e){listening=false;setState("Não foi possível iniciar","Verifique as permissões do microfone.");}

@@ -7,6 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ColabRuntimeWiringTests(unittest.TestCase):
+
+    def test_notebook_stops_previous_runtime_before_module_reload(self):
+        notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
+        bootstrap = "".join(notebook["cells"][1]["source"])
+        self.assertIn("previous_ia.scheduler.stop()", bootstrap)
+        self.assertLess(bootstrap.index("previous_ia.scheduler.stop()"),
+                        bootstrap.index("globals().pop('ia', None)"))
+
     def test_notebook_starts_runtime_after_core_initialization(self):
         notebook = json.loads((ROOT / "NixLMs_Colab.ipynb").read_text(encoding="utf-8"))
         setup = "".join(notebook["cells"][3]["source"])

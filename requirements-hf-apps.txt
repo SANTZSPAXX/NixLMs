@@ -1,0 +1,2 @@
+# Construção local de demos e interfaces ML; não executa Spaces remotos.
+gradio>=5,<7

@@ -116,7 +116,7 @@ Todos os links abaixo apontam para os runs reais; foram consultados os estados d
 | #69 | [#44375657242](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44375657242), CodeQL [#44375657168](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44375657168) | 323 testes por matriz; 2 benchmarks; CodeQL analisou 69/69 Python e 2/2 workflows | Aberta; remove bootstrap automático, mas o consentimento ainda não mostra a árvore transitiva. |
 | #70 | [#44379056345](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44379056345) | 337 testes por matriz; 1 skip nos ambientes Linux para wrapper PowerShell; sem CodeQL associado | Draft; instalador exige venv e confirmação, mas falta binary-only e matriz de origem/licença/footprint. |
 | #71 | [#44416546444](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44416546444) | 327 testes por matriz + 2 benchmarks, todos success | Draft; empilhada sobre #69. |
-| #72 | [PR #72](https://github.com/SANTZSPAXX/NixLMs/pull/72) | CI não confirmada | Draft; base ficou atrás de main após #53/#54. |
+| #72 | [#44417488132](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44417488132), CodeQL [#44417488269](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44417488269) | 314 testes por matriz + 2 benchmarks; CodeQL success | Draft; base ficou atrás de main após #53/#54. |
 
 CodeQL em estado success significa que a análise terminou e enviou SARIF; os logs não forneceram contagem explícita de alertas para todos os runs.
 

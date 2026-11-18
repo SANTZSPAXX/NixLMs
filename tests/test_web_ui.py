@@ -77,6 +77,37 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertTrue(isinstance(data, list))
         self.assertTrue(any(item["name"] == "PyTorch" for item in data))
 
+    def test_huggingface_status_is_anonymous_and_never_paid(self):
+        data = self.get_json("/api/huggingface/status")
+        self.assertTrue(data["anonymous_public_access"])
+        self.assertFalse(data["token_required"])
+        self.assertFalse(data["paid_remote_inference"])
+        self.assertIn("download_support", data)
+        self.assertIn("inference_support", data)
+
+    def test_huggingface_search_rejects_unknown_repo_type(self):
+        try:
+            urllib.request.urlopen(self.base + "/api/huggingface/search?type=private", timeout=5)
+        except urllib.error.HTTPError as response:
+            import json
+            data = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.code, 400)
+            self.assertIn("Tipo inválido", data["error"])
+        else:
+            self.fail("Tipo de repositório inválido deveria ser rejeitado.")
+
+    def test_huggingface_spaces_cannot_be_downloaded_or_executed(self):
+        import json
+        request = urllib.request.Request(
+            self.base + "/api/huggingface/download",
+            data=json.dumps({"repo_type": "space", "repo_id": "owner/demo"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(request, timeout=5)
+        self.assertEqual(context.exception.code, 400)
+
     def test_chat_endpoint_uses_neural_core(self):
         import json
         request = urllib.request.Request(
@@ -109,6 +140,11 @@ class WebInterfaceTests(unittest.TestCase):
         base = ROOT / "nixlms_web" / "static"
         for name in ("index.html", "style.css", "app.js"):
             self.assertTrue((base / name).is_file())
+        html = (base / "index.html").read_text(encoding="utf-8")
+        js = (base / "app.js").read_text(encoding="utf-8")
+        self.assertIn('data-view="huggingface"', html)
+        self.assertIn("/api/huggingface/search", js)
+        self.assertIn("/api/huggingface/download", js)
         css = (base / "style.css").read_text(encoding="utf-8")
         self.assertTrue(css.startswith(":root"))
 

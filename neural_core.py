@@ -2,6 +2,7 @@
 """Interface de terminal da NixLMs Neural Core 0.7."""
 from pathlib import Path
 from nixlms_core import NixLMsNeuralCore
+from nixlms_core.huggingface import HuggingFaceError
 from nixlms_core.roadmap import seed_initial_roadmap
 
 HELP = """Comandos:
@@ -51,6 +52,11 @@ HELP = """Comandos:
   /llm                                 diagnóstico do Ollama local
   /llm preparar                         configura Ollama e Qwen com consentimento
   /llm usar NOME                       seleciona modelo já instalado
+  /hf status                           estado da integração pública HF
+  /hf buscar model|dataset|space TEXTO pesquisa catálogo público anônimo
+  /hf detalhes model|dataset|space ID  inspeciona card, licença e arquivos
+  /hf baixar model|dataset ID          baixa artefatos públicos após confirmação
+  /hf ativar ID | /hf desativar         ativa/desativa geração local CPU
   /positivo | /negativo                feedback da última pergunta
   /ajuda | /sair
 """
@@ -92,6 +98,60 @@ def _private_library_command(ai, message):
             print("Comando inválido. Consulte /ajuda.")
     except (OSError, ValueError) as exc:
         print("Falha na biblioteca privada:", str(exc))
+
+
+def _huggingface_command(ai, message):
+    parts = message.split(None, 3)
+    if len(parts) < 2:
+        print("Use /hf status|buscar|detalhes|baixar|ativar|desativar ...")
+        return
+    action = parts[1].lower()
+    payload = parts[2] if len(parts) > 2 else ""
+    hub = ai.huggingface
+    try:
+        if action == "status":
+            print(hub.status())
+        elif action == "buscar":
+            fields = payload.split(None, 1)
+            if len(fields) != 2:
+                print("Use /hf buscar model|dataset|space TEXTO")
+                return
+            print(hub.search(fields[0], fields[1], limit=12))
+        elif action == "detalhes":
+            fields = payload.split(None, 1)
+            if len(fields) != 2:
+                print("Use /hf detalhes model|dataset|space autor/nome")
+                return
+            print(hub.details(fields[0], fields[1]))
+        elif action == "baixar":
+            fields = payload.split(None, 1)
+            if len(fields) != 2 or fields[0] not in {"model", "dataset"}:
+                print("Use /hf baixar model|dataset autor/nome")
+                return
+            info = hub.details(fields[0], fields[1])
+            total = sum(
+                int(item.get("size") or 0) for item in info.get("siblings", [])
+                if item.get("size") is not None
+            )
+            print("Repositório público:", info["id"])
+            print("Licença declarada:", info.get("license") or "não informada")
+            print("Tamanho total anunciado (antes da allowlist):", total, "bytes")
+            if not _confirm_action("Autoriza baixar somente os arquivos permitidos dentro do limite local?"):
+                print("Download cancelado.")
+                return
+            print("Download:", hub.download(fields[0], fields[1]))
+        elif action == "ativar" and payload.strip():
+            active = hub.activate_model(payload.strip())
+            ai.language.configure_huggingface_local(active["path"], active["repo_id"])
+            print("Modelo local ativado:", active)
+        elif action == "desativar":
+            hub.deactivate_model()
+            ai.language.configure_huggingface_local(None)
+            print("Geração Hugging Face local desativada.")
+        else:
+            print("Comando inválido. Consulte /ajuda.")
+    except (HuggingFaceError, OSError, ValueError) as exc:
+        print("Falha Hugging Face:", str(exc))
 
 
 def _objective_command(ai, message):
@@ -316,6 +376,9 @@ def main():
             continue
         if low.startswith("/objetivo"):
             _objective_command(ai, msg)
+            continue
+        if low == "/hf" or low.startswith("/hf "):
+            _huggingface_command(ai, msg)
             continue
         if low == "/llm":
             models = ai.language.refresh_models()

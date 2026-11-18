@@ -933,7 +933,7 @@ class NixLMsNeuralCore:
         return answer
 
     def run_autonomy_cycle(self, limit=None):
-        """Seleciona e inicia etapas prontas de objetivos; não conclui tarefas."""
+        """Executa tarefas internas verificadas; etapas manuais apenas iniciam."""
         return self.autonomy_planner.run_cycle(limit=limit)
 
     def learn(self, question, answer, reward=1.0, add_to_dataset=False,
@@ -991,7 +991,7 @@ class NixLMsNeuralCore:
                     )) if os.getenv("NIXLMS_AUTONOMY_INTERVAL_SECONDS", "300").lstrip("-").isdigit() else 300,
                     "handler_registered": "autonomy_cycle" in self.scheduler.stats().get("registered_handlers", []),
                     "scope": "internal",
-                    "behavior": "starts dependency-ready goal steps; does not execute or complete their work",
+                    "behavior": "executes registered internal tasks with result verifiers; manual steps remain in_progress",
                 },
             },
             "scheduler": self.scheduler.stats(),

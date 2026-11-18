@@ -29,7 +29,7 @@ HELP = """Comandos:
   /agenda uma-vez HANDLER SEGUNDOS     agenda tarefa única
   /agenda cancelar ID                 cancela tarefa pendente
   /agenda executar                    executa tarefas vencidas agora
-  Handlers: memory_housekeeping, dataset_audit, goal_review
+  Handlers: memory_housekeeping, dataset_audit, goal_review, idle_learning_cycle
   /treinar [epocas]                    treino isolado com validação e checkpoint
   /rollback ID                         restaura checkpoint de aprendizagem
   /calibrar-lif                        calibra limiar LIF com split validation

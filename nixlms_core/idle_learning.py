@@ -7,7 +7,7 @@ class IdleLearningManager:
     """Runs at most one bounded, validation-gated learning attempt per cooldown."""
 
     def __init__(self, agent, *, idle_after_seconds=300, cooldown_seconds=1800,
-                 max_training_rows=500, min_validation_samples=4, clock=None):
+                 max_training_rows=100, min_validation_samples=4, clock=None):
         self.agent = agent
         self.idle_after_seconds = max(1.0, float(idle_after_seconds))
         self.cooldown_seconds = max(self.idle_after_seconds, float(cooldown_seconds))

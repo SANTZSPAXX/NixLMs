@@ -345,7 +345,7 @@ O comando adiciona somente objetivos/etapas ausentes por título e preserva o pr
 
 ## Autodiagnóstico e aprendizado em ociosidade
 
-Ao iniciar o runtime neural (CLI ou interface), a NixLMs executa verificações locais e inicia o scheduler com um ciclo de aprendizado em ociosidade. Em instalação limpa, importa `datasets/starter_ptbr.jsonl` somente se o dataset local estiver vazio; datasets existentes nunca são sobrescritos. É possível desativar a carga inicial com `NIXLMS_DISABLE_STARTER_DATASET=1`. Após cinco minutos sem interação, o ciclo audita o dataset e só tenta uma época de treinamento incremental se houver dados íntegros, pelo menos quatro amostras QA de validação e no máximo 100 registros de treino. Há cooldown de 30 minutos entre tentativas; candidatos só são promovidos após validação. Ollama continua opcional.
+Ao iniciar o runtime neural (CLI ou interface), a NixLMs executa verificações locais e inicia o scheduler com um ciclo de aprendizado em ociosidade. No início do runtime, importa `datasets/starter_ptbr.jsonl` somente se `data/dataset.json` ainda não existir; datasets existentes, inclusive arquivos vazios, nunca são sobrescritos. É possível desativar a carga inicial com `NIXLMS_DISABLE_STARTER_DATASET=1`. Após cinco minutos sem interação, o ciclo audita o dataset e só tenta uma época de treinamento incremental se houver dados íntegros, pelo menos quatro amostras QA de validação e no máximo 100 registros de treino. Há cooldown de 30 minutos entre tentativas; candidatos só são promovidos após validação. Ollama continua opcional.
 
 Comandos: `/diagnostico`, `/ocioso status` e `/status`. Consulte [docs/startup-diagnostics-idle-learning.md](docs/startup-diagnostics-idle-learning.md) para critérios, limites e comportamento.
 

@@ -7,8 +7,6 @@
 - Expõe preview, status e `run_autonomy_cycle()`; ciclo explícito, síncrono e limitado a uma etapa por padrão.
 - Não inventa planos, não conclui etapas, não usa LLM para gerar comandos e não executa ações externas.
 
-# Changelog
-
 ## Concorrência do gerenciador Ollama
 
 - Serializa chamadas concorrentes a `start_service()` com lock por instância, evitando que inicializações simultâneas criem processos filhos duplicados e percam a referência de cleanup.

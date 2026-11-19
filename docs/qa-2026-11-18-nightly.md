@@ -49,6 +49,12 @@ Fontes:
 - https://github.com/facebookresearch/faiss/blob/main/INSTALL.md
 - https://www.tensorflow.org/install/pip
 
+### Atualizações opcionais de dependências
+
+- [PR #56 — Sentence Transformers 6.3.0](https://github.com/SANTZSPAXX/NixLMs/pull/56): CI #44332064482 (quatro matrizes e dois benchmarks) e CodeQL #44332064012 concluíram com sucesso. O log Windows registrou 276 testes. A CI não instala essa versão opcional nem valida wheel/encoder real.
+- [PR #64 — soundfile 0.14.0](https://github.com/SANTZSPAXX/NixLMs/pull/64), [#65 — diffusers 0.43.0](https://github.com/SANTZSPAXX/NixLMs/pull/65), [#66 — imageio 2.38.1](https://github.com/SANTZSPAXX/NixLMs/pull/66) e [#67 — peft 0.21.3](https://github.com/SANTZSPAXX/NixLMs/pull/67): as quatro PRs têm matriz Windows/Ubuntu, benchmarks e CodeQL com sucesso. Os logs Windows registram 313 testes por PR; a CI não instala os pacotes opcionais nem comprova compatibilidade de runtime.
+- Essas PRs de Dependabot estavam com `mergeable=false` na consulta; não foram mescladas. Não tratar CI de testes sem instalação como validação dos pacotes.
+
 ## Integração ponta a ponta em main
 
 | Capacidade | Evidência no código atual | Estado real |

@@ -246,8 +246,12 @@ def _wheel_size(url, timeout=5):
 
 
 def _summarize_report(report, size_probe=None):
-    if not isinstance(report, dict) or not isinstance(report.get("install"), list):
-        raise ValueError("Estrutura de relatório pip não reconhecida.")
+    if (
+        not isinstance(report, dict)
+        or report.get("version") != "1"
+        or not isinstance(report.get("install"), list)
+    ):
+        raise ValueError("Relatório pip inválido ou schema diferente de v1; use pip 23.0+.")
     if len(report["install"]) > MAX_PLAN_PACKAGES:
         raise ValueError("Plano excede o limite de pacotes resolvidos.")
 
@@ -421,7 +425,7 @@ def run_install(
     if not _pip_supports_report(run):
         return {
             "status": "blocked",
-            "reason": "pip 22.2+ com --dry-run e --report é necessário; atualize manualmente no venv.",
+            "reason": "pip 23.0+ com relatório v1, --dry-run e --report é necessário; atualize manualmente no venv.",
         }
 
     try:

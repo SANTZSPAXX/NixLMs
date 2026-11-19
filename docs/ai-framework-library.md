@@ -69,7 +69,7 @@ uma resolução implícita de uma distribuição PyTorch não selecionada:
 Cada modo de instalação:
 - exige Python 3.11+ e ambiente virtual ativo para instalar;
 - limita a instalação automática a Windows/Linux x86-64;
-- resolve dependências diretas e transitivas com pip dry-run/report;
+- resolve dependências diretas e transitivas com pip 23.0+ dry-run/report (schema v1);
 - aplica somente wheels binárias na resolução e na instalação; se não houver wheel
   compatível, falha sem tentar compilar source;
 - exige URL HTTPS de origem permitida, artefato .whl e SHA-256 por pacote;
@@ -145,6 +145,7 @@ wheels compatíveis manualmente. Não declaramos a stack completa validada em AR
 
 - PyTorch e seleção de plataforma/CPU: https://pytorch.org/get-started/locally/
 - pip install report e dry-run: https://pip.pypa.io/en/stable/reference/installation-report/
+- pip installation report (schema v1): https://pip.pypa.io/en/stable/reference/installation-report/
 - pip install options: https://pip.pypa.io/en/stable/cli/pip_install/
 - pip hash-checking mode: https://pip.pypa.io/en/stable/topics/secure-installs/
 - Python virtual environments: https://docs.python.org/3/library/venv.html

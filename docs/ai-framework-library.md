@@ -89,10 +89,12 @@ Cada modo de instalação:
 
 O relatório do pip é uma previsão de resolução, não um lockfile nem uma garantia
 de compatibilidade em hardware não testado. O instalador conserva a URL e o
-SHA-256 de cada wheel e passa o hash no URL direto durante a instalação. O tamanho
-de download depende da resposta HEAD do host e pode ficar indisponível. Se a
-instalação falhar no meio, pode haver pacotes parciais; revise o relatório e o
-ambiente antes de tentar novamente.
+SHA-256 de cada wheel e passa o hash no URL direto durante a instalação. Esse hash
+vem do relatório remoto do índice: verifica que o arquivo recebido corresponde
+ao artefato planejado, mas não é uma assinatura independente nem prova contra o
+comprometimento do próprio índice. O tamanho de download depende da resposta HEAD
+do host e pode ficar indisponível. Se a instalação falhar no meio, pode haver
+pacotes parciais; revise o relatório e o ambiente antes de tentar novamente.
 
 ### Windows PowerShell
 

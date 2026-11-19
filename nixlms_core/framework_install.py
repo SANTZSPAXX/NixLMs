@@ -328,7 +328,7 @@ def _resolve(arguments, run, size_probe=None):
         report_path = Path(temp) / "pip-report.json"
         command = [
             sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-            "--no-cache-dir", "--no-upgrade", "--only-binary=:all:",
+            "--no-cache-dir", "--only-binary=:all:",
             "--dry-run", "--report", str(report_path), *arguments,
         ]
         try:
@@ -477,7 +477,7 @@ def run_install(
     specs = [item["install_url"] for item in planned]
     command = [
         sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-        "--no-index", "--only-binary=:all:", "--no-upgrade", "--no-deps",
+        "--no-index", "--only-binary=:all:", "--no-deps",
         "--require-hashes", *specs,
     ]
     try:

@@ -80,7 +80,7 @@ Cada modo de instalação:
   e fazer HEAD para obter tamanho, mas não altera o ambiente;
 - o comando --install apresenta o plano completo antes de exigir a digitação
   exata de INSTALAR;
-- instala somente URLs e hashes aprovados, usando no-index, no-deps e no-upgrade,
+- instala somente URLs e hashes aprovados, usando no-index, no-deps, no-upgrade e require-hashes,
   sem resolver novamente nomes/versões no índice;
 - bloqueia estados ambíguos quando metadados e módulo não estão presentes juntos;
 - registra a diferença de pip freeze antes/depois;

@@ -1,3 +1,9 @@
+## Inventário de frameworks — estado consistente
+
+- Distingue distribuição e módulo importável; presença parcial é marcada como ambígua, nunca como pacote instalado.
+- Mantém inventário e painel sem importar frameworks pesados ou instalar dependências.
+- Documenta limites de compatibilidade, origem, licença e footprint ainda não verificados por versão/plataforma.
+
 ## Integração Hugging Face gratuita e local
 
 - Adiciona descoberta anônima de modelos, datasets e Spaces públicos sem token.

@@ -113,6 +113,18 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn(data["status"], {"ok", "degraded", "failed"})
         self.assertEqual(data["ok"], data["status"] == "ok")
 
+
+    def test_framework_inventory_exposes_consistent_installation_state(self):
+        data = self.get_json("/api/frameworks")
+        self.assertTrue(data)
+        for item in data:
+            state = item["installation_state"]
+            self.assertIn(state, {"installed", "metadata_only", "module_only", "absent"})
+            self.assertEqual(item["installed"], state == "installed")
+            self.assertEqual(
+                item["ambiguous_install"], state in {"metadata_only", "module_only"}
+            )
+
     def test_static_assets_exist_and_css_is_valid_prefix(self):
         base = ROOT / "nixlms_web" / "static"
         for name in ("index.html", "style.css", "app.js"):
@@ -122,6 +134,8 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn('data-view="huggingface"', html)
         self.assertIn("/api/huggingface/search", js)
         self.assertIn("/api/huggingface/download", js)
+        self.assertIn("installation_state", js)
+        self.assertIn("INCONSISTENTE", js)
         css = (base / "style.css").read_text(encoding="utf-8")
         self.assertTrue(css.startswith(":root"))
 

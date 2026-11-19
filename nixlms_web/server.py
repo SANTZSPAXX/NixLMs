@@ -23,6 +23,7 @@ ALLOWED = {".txt", ".md", ".rst", ".py", ".json", ".yaml", ".yml", ".toml"}
 sys.path.insert(0, str(ROOT))
 
 from nixlms_core import NixLMsNeuralCore  # noqa: E402
+from nixlms_core.framework_status import classify_installation  # noqa: E402
 from nixlms_core.huggingface import HuggingFaceError  # noqa: E402
 from nixlms_core.media_generation import MediaGenerationError, MediaGenerationManager  # noqa: E402
 
@@ -48,22 +49,22 @@ def inspect_frameworks():
         ("TRL", "trl", "Treinamento alinhado opcional", "trl"),
         ("Diffusers", "diffusers", "Geração local multimodal", "diffusers"),
         ("Gradio", "gradio", "Interfaces locais para ML", "gradio"),
-        ("TensorFlow", "tensorflow", "Treinamento e inferência", "tensorflow"),
+        ("TensorFlow CPU", "tensorflow", "Framework alternativo para CPU", "tensorflow-cpu"),
         ("llama-cpp-python", "llama_cpp", "Inferência local GGUF", "llama-cpp-python"),
     ]
     result = []
     for name, module, purpose, distribution in candidates:
         try:
-            installed = importlib.util.find_spec(module) is not None
+            module_available = importlib.util.find_spec(module) is not None
         except (ImportError, ValueError, ModuleNotFoundError):
-            installed = False
+            module_available = False
         try:
-            version = metadata.version(distribution) if installed else None
+            version = metadata.version(distribution)
         except metadata.PackageNotFoundError:
             version = None
         result.append({
-            "name": name, "purpose": purpose,
-            "installed": installed, "version": version,
+            "name": name, "purpose": purpose, "version": version,
+            **classify_installation(version, module_available),
         })
     return result
 

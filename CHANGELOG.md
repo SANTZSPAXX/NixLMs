@@ -3,7 +3,7 @@
 - Faz o comando de planejamento resolver dependências transitivas com pip dry-run/report, sem instalar ou alterar o ambiente.
 - Aplica somente wheels binárias; ausência de wheel compatível bloqueia sem fallback para compilação de source.
 - Exige origem HTTPS permitida, arquivo .whl e SHA-256 por artefato; apresenta tamanho de download quando Content-Length está disponível.
-- Exibe o conjunto completo antes da confirmação digitada e instala somente URLs/hash aprovados, sem nova resolução por índice.
+- Exibe o conjunto completo antes da confirmação digitada e instala somente URLs/hash aprovados com hash-checking mode, sem nova resolução por índice.
 - Torna simétrica a detecção de pacote: metadados e módulo precisam existir juntos; estados parciais bloqueiam alterações.
 - Mantém o inventário sem imports ML pesados, sem dependências obrigatórias e sem downloads de modelos/datasets.
 

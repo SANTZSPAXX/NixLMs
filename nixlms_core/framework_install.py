@@ -11,10 +11,14 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = ROOT / "requirements-ml-cpu.txt"
 TORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
+ALLOWED_WHEEL_HOSTS = {"files.pythonhosted.org", "download.pytorch.org"}
+MAX_PLAN_PACKAGES = 256
 MIN_PYTHON = (3, 11)
 SUPPORTED_SYSTEMS = {"Windows", "Linux"}
 SUPPORTED_MACHINES = {"x86_64", "amd64"}
@@ -120,34 +124,37 @@ def build_install_plan(requirements_file=REQUIREMENTS, *, root=ROOT,
         module = MODULE_MAP.get(dist, dist.replace("-", "_"))
         installed_version = version_probe(dist)
         module_present = bool(module_probe(module))
+        ambiguous_install = (installed_version is not None) != module_present
         packages.append({
             "requirement": requirement,
             "distribution": dist,
             "module": module,
-            "installed": installed_version is not None,
+            "installed": installed_version is not None and module_present,
             "version": installed_version,
             "module_available": module_present,
-            "ambiguous_install": module_present and installed_version is None,
+            "ambiguous_install": ambiguous_install,
         })
 
     torch_version = version_probe("torch")
     torch_module = bool(module_probe("torch"))
-    torch_installed = torch_version is not None
-    missing = [p["requirement"] for p in packages if not p["installed"]]
+    torch_ambiguous = (torch_version is not None) != torch_module
+    torch_installed = torch_version is not None and torch_module
+    missing = [
+        p["requirement"] for p in packages
+        if not p["installed"] and not p["ambiguous_install"]
+    ]
     ambiguous = sorted(p["distribution"] for p in packages if p["ambiguous_install"])
     reasons = []
-    if missing and not env["python_supported"]:
+    if not env["python_supported"] and (missing or ambiguous):
         reasons.append("O stack atual exige Python 3.11 ou superior.")
-    if missing and not env["platform_supported"]:
+    if not env["platform_supported"] and (missing or ambiguous):
         reasons.append("Instalação automática limitada a Windows/Linux x86-64; ARM64 exige seleção manual.")
+    if torch_ambiguous:
+        reasons.append("Metadados e módulo torch divergem; instalação bloqueada para preservar o ambiente.")
     if missing and not torch_installed:
-        reasons.append(
-            "PyTorch ausente; instale-o primeiro com --install-torch-cpu para evitar resolução implícita."
-            if not torch_module else
-            "Módulo torch presente sem metadados de distribuição; instalação bloqueada."
-        )
+        reasons.append("PyTorch ausente; instale-o primeiro com --install-torch-cpu para evitar resolução implícita.")
     if ambiguous:
-        reasons.append("Módulos sem metadados de distribuição: " + ", ".join(ambiguous))
+        reasons.append("Metadados e módulos divergem para: " + ", ".join(ambiguous))
     blocked = bool(reasons)
     return {
         "automatic_install": False,
@@ -157,6 +164,7 @@ def build_install_plan(requirements_file=REQUIREMENTS, *, root=ROOT,
             "installed": torch_installed,
             "version": torch_version,
             "module_available": torch_module,
+            "ambiguous_install": torch_ambiguous,
             "variant": "unknown_not_imported" if torch_installed else "missing",
         },
         "packages": packages,
@@ -165,7 +173,7 @@ def build_install_plan(requirements_file=REQUIREMENTS, *, root=ROOT,
         "blocked": blocked,
         "blocked_reasons": reasons,
         "install_allowed": bool(missing) and not blocked and env["virtual_environment"],
-        "transitive_dependencies": "not_resolved_offline; --install uses pip dry-run report",
+        "transitive_dependencies": "resolved by --plan/--install using pip dry-run report and binary wheels",
     }
 
 
@@ -176,13 +184,14 @@ def build_torch_plan(*, module_probe=None, version_probe=None, system=None,
     env = _environment(system, machine, python, venv)
     version = version_probe("torch")
     module_present = bool(module_probe("torch"))
-    installed = version is not None
+    ambiguous = (version is not None) != module_present
+    installed = version is not None and module_present
     reasons = []
-    if not installed and module_present:
-        reasons.append("Módulo torch presente sem metadados; não será sobrescrito.")
-    if not installed and not env["python_supported"]:
+    if ambiguous:
+        reasons.append("Metadados e módulo torch divergem; instalação bloqueada para preservar o ambiente.")
+    if not installed and not ambiguous and not env["python_supported"]:
         reasons.append("PyTorch stable atual exige Python 3.11 ou superior.")
-    if not installed and not env["platform_supported"]:
+    if not installed and not ambiguous and not env["platform_supported"]:
         reasons.append("Wheel CPU automático não habilitado; selecione uma distribuição oficial compatível.")
     return {
         "automatic_install": False,
@@ -192,6 +201,7 @@ def build_torch_plan(*, module_probe=None, version_probe=None, system=None,
             "installed": installed,
             "version": version,
             "module_available": module_present,
+            "ambiguous_install": ambiguous,
             "variant": "unknown_not_imported" if installed else "missing",
         },
         "blocked": bool(reasons),
@@ -211,40 +221,111 @@ def _pip_supports_report(run):
     return result.returncode == 0 and "--dry-run" in help_text and "--report" in help_text
 
 
-def _summarize_report(report):
+def _wheel_size(url):
+    """Return Content-Length when the trusted wheel host exposes it."""
+    request = Request(
+        url,
+        method="HEAD",
+        headers={"User-Agent": "NixLMs-Framework-Installer/1"},
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            value = response.headers.get("Content-Length")
+    except (OSError, ValueError):
+        return None
+    return int(value) if value and value.isdigit() else None
+
+
+def _summarize_report(report, size_probe=None):
+    if not isinstance(report, dict) or not isinstance(report.get("install"), list):
+        raise ValueError("Estrutura de relatório pip não reconhecida.")
+    if len(report["install"]) > MAX_PLAN_PACKAGES:
+        raise ValueError("Plano excede o limite de pacotes resolvidos.")
+
+    size_probe = size_probe or _wheel_size
     packages = []
-    for item in report.get("install", []):
+    for item in report["install"]:
+        if not isinstance(item, dict) or item.get("is_direct") or item.get("is_yanked"):
+            raise ValueError("O resolvedor retornou pacote direto ou versão retirada.")
         meta = item.get("metadata") or {}
-        name, version = str(meta.get("name") or "").strip(), str(meta.get("version") or "").strip()
+        name = str(meta.get("name") or "").strip()
+        version = str(meta.get("version") or "").strip()
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
             raise ValueError("Nome de pacote inválido no relatório pip.")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.!+_-]*", version):
             raise ValueError("Versão inválida no relatório pip.")
-        packages.append({"name": name, "version": version, "direct": bool(item.get("requested"))})
+
+        download = item.get("download_info") or {}
+        raw_url = str(download.get("url") or "").strip()
+        try:
+            parsed = urlsplit(raw_url)
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("URL de artefato inválida no relatório pip.") from exc
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in ALLOWED_WHEEL_HOSTS
+            or parsed.username is not None
+            or parsed.password is not None
+            or port not in (None, 443)
+            or parsed.query
+            or not parsed.path.lower().endswith(".whl")
+        ):
+            raise ValueError("Artefato não é wheel HTTPS de uma origem oficial permitida.")
+
+        archive = download.get("archive_info") or {}
+        hashes = archive.get("hashes") or {}
+        digest = hashes.get("sha256")
+        legacy_hash = archive.get("hash")
+        if not digest and isinstance(legacy_hash, str) and legacy_hash.startswith("sha256="):
+            digest = legacy_hash.split("=", 1)[1]
+        if not isinstance(digest, str) or not re.fullmatch(r"[A-Fa-f0-9]{64}", digest):
+            raise ValueError("Wheel sem hash SHA-256 verificável; instalação bloqueada.")
+
+        artifact_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        install_url = urlunsplit((
+            parsed.scheme, parsed.netloc, parsed.path, "", "sha256=" + digest.lower()
+        ))
+        size = size_probe(artifact_url)
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            size = None
+        packages.append({
+            "name": name,
+            "version": version,
+            "direct": bool(item.get("requested")),
+            "source": parsed.hostname.lower(),
+            "artifact_url": artifact_url,
+            "install_url": install_url,
+            "sha256": digest.lower(),
+            "download_size_bytes": size,
+            "download_size_status": "available" if size is not None else "unavailable",
+        })
+
     return sorted(packages, key=lambda p: _norm(p["name"]))
 
 
-def _resolve(arguments, run):
+def _resolve(arguments, run, size_probe=None):
     with tempfile.TemporaryDirectory(prefix="nixlms-framework-plan-") as temp:
         report_path = Path(temp) / "pip-report.json"
         command = [
             sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-            "--no-upgrade", "--dry-run", "--report", str(report_path), *arguments,
+            "--no-cache-dir", "--no-upgrade", "--only-binary=:all:",
+            "--dry-run", "--report", str(report_path), *arguments,
         ]
         try:
             result = run(command, capture_output=True, text=True, timeout=600)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise RuntimeError("Falha ao resolver o plano pip.") from exc
+            raise RuntimeError("Falha ao resolver o plano pip somente com wheels.") from exc
         if result.returncode != 0 or not report_path.is_file():
-            raise RuntimeError("pip não produziu relatório de resolução.")
+            raise RuntimeError(
+                "pip não resolveu wheels compatíveis ou não produziu relatório; "
+                "nenhuma compilação de source será tentada."
+            )
         try:
             report = json.loads(report_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError("Relatório pip inválido.") from exc
-        if not isinstance(report, dict) or not isinstance(report.get("install", []), list):
-            raise RuntimeError("Estrutura de relatório pip não reconhecida.")
-        return _summarize_report(report)
-
+        return _summarize_report(report, size_probe=size_probe)
 
 def _freeze(run):
     try:
@@ -272,14 +353,38 @@ def _freeze_diff(before, after):
     }
 
 
-def run_install(mode, plan, *, requirements_file=REQUIREMENTS, run=subprocess.run,
-                input_fn=None, version_probe=None, module_probe=None, venv=None):
+def run_install(
+    mode,
+    plan,
+    *,
+    requirements_file=REQUIREMENTS,
+    run=subprocess.run,
+    input_fn=None,
+    version_probe=None,
+    module_probe=None,
+    venv=None,
+    confirm=True,
+    require_venv=True,
+    display_fn=None,
+    size_probe=None,
+):
     if mode not in {"frameworks", "torch_cpu"}:
         return {"status": "blocked", "reason": "Modo inválido."}
     version_probe = version_probe or _version
     module_probe = module_probe or _module_available
+    display_fn = display_fn or print
     if venv is None:
         venv = bool(plan.get("virtual_environment"))
+
+    if plan.get("blocked"):
+        return {
+            "status": "blocked",
+            "reason": "; ".join(plan.get("blocked_reasons", [])),
+        }
+    if require_venv and not venv:
+        return {"status": "blocked", "reason": "Ative um ambiente virtual antes de instalar."}
+    if not plan.get("python_supported", True) or not plan.get("platform_supported", True):
+        return {"status": "blocked", "reason": "Python/SO/arquitetura sem compatibilidade confirmada."}
 
     if mode == "frameworks":
         if not plan.get("missing_direct_requirements"):
@@ -290,21 +395,22 @@ def run_install(mode, plan, *, requirements_file=REQUIREMENTS, run=subprocess.ru
     else:
         if plan.get("torch", {}).get("installed"):
             return {"status": "nothing_to_do", "planned_packages": []}
+        if plan.get("torch", {}).get("ambiguous_install"):
+            return {"status": "blocked", "reason": "Estado de PyTorch inconsistente; preserve o ambiente para revisão."}
         arguments = ["torch", "--index-url", TORCH_CPU_INDEX]
 
-    if not venv:
-        return {"status": "blocked", "reason": "Ative um ambiente virtual antes de instalar."}
-    if plan.get("blocked"):
-        return {"status": "blocked", "reason": "; ".join(plan.get("blocked_reasons", []))}
-    if not plan.get("install_allowed"):
+    if require_venv and not plan.get("install_allowed"):
         return {"status": "blocked", "reason": "Plano não autoriza instalação nesta plataforma."}
     if not _pip_supports_report(run):
-        return {"status": "blocked", "reason": "pip 22.2+ com --dry-run e --report é necessário; atualize manualmente no venv."}
+        return {
+            "status": "blocked",
+            "reason": "pip 22.2+ com --dry-run e --report é necessário; atualize manualmente no venv.",
+        }
 
     try:
-        planned = _resolve(arguments, run)
-    except RuntimeError as exc:
-        return {"status": "failed", "reason": str(exc)}
+        planned = _resolve(arguments, run, size_probe=size_probe)
+    except (RuntimeError, ValueError) as exc:
+        return {"status": "blocked", "reason": str(exc)}
     if not planned:
         return {"status": "nothing_to_do", "planned_packages": []}
 
@@ -315,78 +421,104 @@ def run_install(mode, plan, *, requirements_file=REQUIREMENTS, run=subprocess.ru
         module_present = bool(module_probe(module))
         if current is not None or module_present:
             conflicts.append({
-                "name": item["name"], "installed_version": current,
-                "module_available_without_metadata": module_present and current is None,
+                "name": item["name"],
+                "installed_version": current,
+                "metadata_without_module": current is not None and not module_present,
+                "module_without_metadata": module_present and current is None,
                 "planned_version": item["version"],
             })
     if conflicts:
         return {
             "status": "blocked",
-            "reason": "O resolvedor propôs alterar distribuições já instaladas.",
+            "reason": "O resolvedor propôs alterar pacotes presentes ou inconsistentes.",
             "conflicts": conflicts,
         }
 
+    resolved_plan = {
+        "mode": mode,
+        "binary_only": True,
+        "models_or_datasets_downloaded": False,
+        "packages": planned,
+    }
+    display_fn(json.dumps(resolved_plan, ensure_ascii=False, indent=2))
+    if not confirm:
+        return {"status": "planned", **resolved_plan}
+
     input_fn = input_fn or input
     try:
-        answer = input_fn("Digite INSTALAR para autorizar exatamente os pacotes listados: ").strip()
+        answer = input_fn("Digite INSTALAR para autorizar exatamente os wheels, origens e hashes acima: ").strip()
     except EOFError:
         answer = ""
     if answer != "INSTALAR":
-        return {"status": "cancelled", "planned_packages": planned,
-                "models_or_datasets_downloaded": False}
+        return {
+            "status": "cancelled",
+            "planned_packages": planned,
+            "models_or_datasets_downloaded": False,
+        }
 
     before = _freeze(run)
-    specs = [p["name"] + "==" + p["version"] for p in planned]
+    specs = [item["install_url"] for item in planned]
     command = [
         sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-        "--no-upgrade", "--no-deps",
+        "--no-index", "--only-binary=:all:", "--no-upgrade", "--no-deps", *specs,
     ]
-    if mode == "torch_cpu":
-        command.extend(["--index-url", TORCH_CPU_INDEX])
-    command.extend(specs)
     try:
         result = run(command, capture_output=True, text=True, timeout=1800)
     except (OSError, subprocess.TimeoutExpired):
-        return {"status": "failed", "reason": "Instalação falhou ou excedeu 30 minutos.",
-                "planned_packages": planned, "before_after_report_available": before is not None}
+        return {
+            "status": "failed",
+            "reason": "Instalação falhou ou excedeu 30 minutos.",
+            "planned_packages": planned,
+            "before_after_report_available": before is not None,
+        }
     after = _freeze(run)
     if result.returncode != 0:
         return {
-            "status": "failed", "reason": "pip retornou erro; revise o ambiente antes de tentar novamente.",
-            "returncode": result.returncode, "planned_packages": planned,
+            "status": "failed",
+            "reason": "pip retornou erro; revise o ambiente antes de tentar novamente.",
+            "returncode": result.returncode,
+            "planned_packages": planned,
             "changed_packages": _freeze_diff(before, after),
             "models_or_datasets_downloaded": False,
         }
     return {
-        "status": "success", "planned_packages": planned,
+        "status": "success",
+        "planned_packages": planned,
         "changed_packages": _freeze_diff(before, after),
         "freeze_report_complete": before is not None and after is not None,
-        "models_or_datasets_downloaded": False, "automatic_install": False,
+        "models_or_datasets_downloaded": False,
+        "automatic_install": False,
+        "binary_only": True,
     }
-
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Instalação opcional e explícita da Framework Library.")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--plan", action="store_true", help="Plano offline, sem instalação.")
-    group.add_argument("--install", action="store_true", help="Resolve, exibe relatório e pede confirmação.")
-    group.add_argument("--install-torch-cpu", action="store_true", help="Instala somente PyTorch CPU.")
+    group.add_argument(
+        "--plan", action="store_true",
+        help="Resolve dependências transitivas e wheels sem instalar; pode consultar o índice.",
+    )
+    group.add_argument("--install", action="store_true", help="Resolve, exibe o plano completo e pede confirmação.")
+    group.add_argument("--install-torch-cpu", action="store_true", help="Planeja e instala somente PyTorch CPU.")
     args = parser.parse_args(argv)
     try:
         mode = "torch_cpu" if args.install_torch_cpu else "frameworks"
         plan = build_torch_plan() if mode == "torch_cpu" else build_install_plan()
         print(json.dumps(plan, ensure_ascii=False, indent=2))
         if not args.install and not args.install_torch_cpu:
-            print("Somente consulta; nenhuma instalação ou resolução de rede foi executada.")
-            return 0
-        result = run_install(mode, plan)
+            result = run_install(mode, plan, confirm=False, require_venv=False)
+        else:
+            result = run_install(mode, plan, confirm=True, require_venv=True)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        if result["status"] in {"success", "nothing_to_do"}:
+        if result["status"] in {"success", "nothing_to_do", "planned"}:
             return 0
         return 2 if result["status"] == "blocked" else 1
     except (OSError, ValueError) as exc:
-        print(json.dumps({"status": "error", "error": type(exc).__name__, "detail": str(exc)},
-                         ensure_ascii=False))
+        print(json.dumps({
+            "status": "error",
+            "error": type(exc).__name__,
+            "detail": str(exc),
+        }, ensure_ascii=False))
         return 2
 
 

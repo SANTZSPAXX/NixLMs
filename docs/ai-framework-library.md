@@ -39,6 +39,7 @@ O inventário usa apenas a biblioteca padrão e não importa frameworks pesados:
 python -m nixlms_core.framework_registry
 python -m nixlms_core.framework_registry --all
 python -m nixlms_core.framework_registry --json
+python -m nixlms_core.framework_registry --sizes
 ```
 
 A detecção consulta metadados da distribuição e disponibilidade do módulo
@@ -47,41 +48,53 @@ ambos os sinais. Se apenas um estiver presente, o inventário informa
 "metadata_only" ou "module_only" e não afirma que o pacote está utilizável.
 
 O inventário não prova que um modelo específico está instalado, treinado,
-carregado ou integrado, nem executa benchmark de desempenho.
+carregado ou integrado, nem executa benchmark de desempenho. A opção
+`--sizes` é opt-in para não adicionar varredura de arquivos ao caminho padrão.
 
-### Compatibilidade, origem e footprint
+### Proveniência, compatibilidade e footprint
 
-A compatibilidade depende da versão exata, do SO, da versão de Python e da
-arquitetura. O catálogo atual ainda não mantém uma matriz completa de licenças,
-origens, hashes, tamanhos instalados ou consumo de RAM/CPU. Esses campos não
-devem ser inferidos do nome do pacote nem do estado de instalação.
+O manifesto, revisado em 19/11/2026, associa cada distribuição a páginas
+oficiais do projeto, repositório de origem, índice de distribuição,
+documentação de compatibilidade e estado da licença upstream. Frameworks
+customizados sem entrada no catálogo permanecem observáveis, mas sem licença
+ou compatibilidade presumidas. O SPDX só é preenchido quando o metadado do repositório
+upstream o declara; `NOASSERTION` ou licença não confirmada ficam explícitos,
+sem inferência. A licença do projeto principal não cobre automaticamente
+dependências, modelos, checkpoints ou datasets.
 
-Evidências oficiais consultadas nesta auditoria:
+O inventário informa o Python, implementação, SO e arquitetura do ambiente
+atual. Ele não certifica uma matriz multiplataforma: a compatibilidade de uma
+instalação deve ser resolvida no ambiente-alvo, por versão de Python, SO e
+arquitetura, usando o fluxo explícito de instalação wheel-only. Sem wheel
+compatível, o instalador deve falhar fechado; ARM64 continua sujeito a validação
+específica e não é tratado como compatível por inferência.
 
-- PyTorch: o instalador padrão atual exige Python 3.11+; a página de plataformas
-  adicionais separa builds de ARM64 de Linux/Windows comuns.
-- ONNX Runtime CPU: a documentação do pacote Python lista Windows x64 e Linux
-  x64/ARM64 para o artefato CPU.
-- FAISS: o projeto upstream declara Conda como forma suportada e lista CPU para
-  Linux x86-64/aarch64 e Windows x86-64. O uso de `pip install faiss-cpu` no
-  requirements atual não tem, nesta auditoria, a mesma garantia upstream; não
-  deve ser tratado como caminho universal ou ARM64.
-- TensorFlow CPU: a documentação informa que os builds Linux ARM64 são
-  mantidos/testados por AWS e os builds Windows CPU por Intel, ambos terceiros.
-  Continua sendo alternativa, não requisito do núcleo.
+O inventário padrão não percorre arquivos instalados. A opção `--sizes`
+calcula, sem importar frameworks, a soma dos arquivos declarados pela
+distribuição dentro de `purelib/platlib`. A medição inclui metadados da
+distribuição, não inclui pesos/cache de modelos e não soma dependências
+transitivas como se fossem parte do pacote. Use-a em um ambiente virtual limpo
+para comparar o footprint por SO/Python/arquitetura.
 
-Antes de oferecer instalação, o plano deve mostrar versões resolvidas, origem
-do artefato, hash quando disponível e tamanho de download. O tamanho instalado
-e RAM de pico precisam ser medidos em um ambiente virtual limpo por SO/arquitetura.
-A instalação deve falhar de forma explícita quando não houver wheel compatível,
-em vez de iniciar compilação pesada implicitamente.
+RAM de pico e tempo de CPU permanecem explicitamente como `not_measured`;
+não são estimados pelo tamanho do wheel ou pela presença do pacote. A
+Model Library, a Training Dataset Library e a integração no runtime aparecem
+como `not_inspected`/`not_verified`: pacote instalado não significa modelo
+baixado, treinado, carregado ou integrado.
 
-Fontes oficiais:
+Fontes oficiais consultadas:
 - PyTorch: https://pytorch.org/get-started/locally/
-- PyTorch additional platforms: https://docs.pytorch.org/get-started/additional-platforms/
-- ONNX Runtime: https://onnxruntime.ai/docs/get-started/with-python
+- NumPy: https://numpy.org/install/
+- SciPy: https://scipy.org/install/
+- scikit-learn: https://scikit-learn.org/stable/install.html
+- Transformers: https://huggingface.co/docs/transformers/installation
+- Sentence Transformers: https://www.sbert.net/docs/installation.html
 - FAISS: https://github.com/facebookresearch/faiss/blob/main/INSTALL.md
+- ONNX Runtime: https://onnxruntime.ai/docs/reference/compatibility
+- Safetensors: https://huggingface.co/docs/safetensors/index
+- Tokenizers: https://huggingface.co/docs/tokenizers/installation
 - TensorFlow: https://www.tensorflow.org/install/pip
+- llama-cpp-python: https://llama-cpp-python.readthedocs.io/en/latest/
 
 ## Instalação opcional no Windows
 

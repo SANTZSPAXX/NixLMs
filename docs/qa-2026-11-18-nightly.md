@@ -17,7 +17,7 @@ O inventário de frameworks confundia metadados de distribuição e disponibilid
 
 Esta branch adiciona `nixlms_core/framework_status.py`, classifica quatro estados (`installed`, `metadata_only`, `module_only`, `absent`), alinha o inventário do servidor e exibe `INCONSISTENTE` no painel. `installed` só é verdadeiro quando metadados e módulo estão presentes.
 
-Testes de regressão adicionados para os dois estados parciais e para o contrato da API web. A execução local não foi possível: o clone isolado falhou por DNS (`Could not resolve host: github.com`). A CI da PR #75 foi concluída: run #44424702564 (quatro matrizes, 317 testes por ambiente e dois benchmarks) e CodeQL #44424702610; todos os jobs success. Os logs individuais confirmam `Ran 317 tests` e `OK` nos quatro ambientes; CodeQL analisou 69/69 arquivos Python e 2/2 workflows.
+Testes de regressão adicionados para os dois estados parciais e para o contrato da API web. A execução local não foi possível: o clone isolado falhou por DNS (`Could not resolve host: github.com`). A CI da PR #75 foi concluída: run #44425417401 (quatro matrizes, 317 testes por ambiente e dois benchmarks) e CodeQL #44425417658; todos os jobs success. Os logs individuais confirmam `Ran 317 tests` e `OK` nos quatro ambientes; CodeQL analisou 69/69 arquivos Python e 2/2 workflows.
 
 ## PR #48 — Framework Library
 

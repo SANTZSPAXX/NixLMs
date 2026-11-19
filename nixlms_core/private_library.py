@@ -4,6 +4,7 @@ Os ficheiros são copiados para SQLite local em blocos pesquisáveis. Nada é
 baixado, executado ou promovido automaticamente para pesos neurais.
 """
 import hashlib
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -118,18 +119,44 @@ class PrivateKnowledgeLibrary:
             start = max(start + 1, end - CHUNK_OVERLAP)
         return result
 
+    @staticmethod
+    def _iter_supported_files(source):
+        """Itera arquivos compatíveis sem materializar a árvore inteira em RAM."""
+        if source.is_symlink():
+            return
+        if source.is_file():
+            if source.suffix.lower() in SUPPORTED_EXTENSIONS:
+                yield source
+            return
+
+        # os.walk mantém apenas a listagem do diretório corrente. A ordenação
+        # por nível preserva uma ordem determinística sem sorted(rglob(...)).
+        for root, directories, filenames in os.walk(
+            source, topdown=True, followlinks=False
+        ):
+            directory = Path(root)
+            directories[:] = sorted(
+                name for name in directories
+                if not (directory / name).is_symlink()
+            )
+            for name in sorted(filenames):
+                path = directory / name
+                if path.is_symlink() or path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+                    continue
+                yield path
+
     def import_path(self, source_path):
         source = Path(source_path).expanduser()
         if not source.exists():
             raise FileNotFoundError(str(source))
-        candidates = [source] if source.is_file() else sorted(source.rglob("*"))
+        candidates = self._iter_supported_files(source)
         imported, skipped, errors = [], [], []
         processed = 0
         for path in candidates:
             if processed >= MAX_FILES_PER_IMPORT:
                 skipped.append({"path": str(path), "reason": "file_limit_reached"})
                 break
-            if path.is_symlink() or not path.is_file() or path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            if path.is_symlink() or not path.is_file():
                 continue
             processed += 1
             try:

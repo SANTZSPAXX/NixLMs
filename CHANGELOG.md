@@ -1,3 +1,9 @@
+## QA 2026-11-19 — importação limitada da biblioteca privada
+
+- A importação de diretórios agora percorre arquivos compatíveis em fluxo, sem materializar toda a árvore com `sorted(rglob(...))`.
+- A travessia é determinística por diretório, não segue diretórios simbólicos e interrompe a leitura após 100 arquivos compatíveis.
+- Adiciona teste de regressão para garantir que a travessia não avance para diretórios posteriores após atingir o limite.
+
 ## Integração Hugging Face gratuita e local
 
 - Adiciona descoberta anônima de modelos, datasets e Spaces públicos sem token.

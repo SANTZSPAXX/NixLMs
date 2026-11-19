@@ -74,7 +74,8 @@ Cada modo de instalação:
   compatível, falha sem tentar compilar source;
 - exige URL HTTPS de origem permitida, artefato .whl e SHA-256 por pacote;
 - exibe origem, URL do artefato, hash e tamanho de download quando o host informa
-  Content-Length; tamanho instalado e RAM/CPU permanecem não medidos;
+  Content-Length; consultas HEAD têm orçamento agregado de 15 segundos; tamanho
+  instalado e RAM/CPU permanecem não medidos;
 - o comando --plan exibe o conjunto transitivo sem instalar; pode consultar índice
   e fazer HEAD para obter tamanho, mas não altera o ambiente;
 - o comando --install apresenta o plano completo antes de exigir a digitação

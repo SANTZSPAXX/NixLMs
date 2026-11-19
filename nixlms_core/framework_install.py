@@ -477,7 +477,8 @@ def run_install(
     specs = [item["install_url"] for item in planned]
     command = [
         sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-        "--no-index", "--only-binary=:all:", "--no-upgrade", "--no-deps", *specs,
+        "--no-index", "--only-binary=:all:", "--no-upgrade", "--no-deps",
+        "--require-hashes", *specs,
     ]
     try:
         result = run(command, capture_output=True, text=True, timeout=1800)

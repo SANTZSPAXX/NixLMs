@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -19,6 +20,7 @@ REQUIREMENTS = ROOT / "requirements-ml-cpu.txt"
 TORCH_CPU_INDEX = "https://download.pytorch.org/whl/cpu"
 ALLOWED_WHEEL_HOSTS = {"files.pythonhosted.org", "download.pytorch.org"}
 MAX_PLAN_PACKAGES = 256
+MAX_SIZE_PROBE_SECONDS = 15
 MIN_PYTHON = (3, 11)
 SUPPORTED_SYSTEMS = {"Windows", "Linux"}
 SUPPORTED_MACHINES = {"x86_64", "amd64"}
@@ -233,6 +235,7 @@ def _wheel_size(url):
             value = response.headers.get("Content-Length")
     except (OSError, ValueError):
         return None
+    value = value.strip() if isinstance(value, str) else value
     return int(value) if value and value.isdigit() else None
 
 
@@ -243,6 +246,7 @@ def _summarize_report(report, size_probe=None):
         raise ValueError("Plano excede o limite de pacotes resolvidos.")
 
     size_probe = size_probe or _wheel_size
+    size_deadline = time.monotonic() + MAX_SIZE_PROBE_SECONDS
     packages = []
     for item in report["install"]:
         if not isinstance(item, dict) or item.get("is_direct") or item.get("is_yanked"):
@@ -286,7 +290,12 @@ def _summarize_report(report, size_probe=None):
         install_url = urlunsplit((
             parsed.scheme, parsed.netloc, parsed.path, "", "sha256=" + digest.lower()
         ))
-        size = size_probe(artifact_url)
+        size = None
+        if time.monotonic() < size_deadline:
+            try:
+                size = size_probe(artifact_url)
+            except (OSError, ValueError):
+                size = None
         if not isinstance(size, int) or isinstance(size, bool) or size < 0:
             size = None
         packages.append({
@@ -506,7 +515,10 @@ def main(argv=None):
         plan = build_torch_plan() if mode == "torch_cpu" else build_install_plan()
         print(json.dumps(plan, ensure_ascii=False, indent=2))
         if not args.install and not args.install_torch_cpu:
-            result = run_install(mode, plan, confirm=False, require_venv=False)
+            result = run_install(
+                mode, plan, confirm=False, require_venv=False,
+                display_fn=lambda value: None,
+            )
         else:
             result = run_install(mode, plan, confirm=True, require_venv=True)
         print(json.dumps(result, ensure_ascii=False, indent=2))

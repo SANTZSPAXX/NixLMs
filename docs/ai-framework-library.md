@@ -53,9 +53,11 @@ carregado ou integrado, nem executa benchmark de desempenho. A opção
 
 ### Proveniência, compatibilidade e footprint
 
-O manifesto associa cada distribuição a páginas oficiais do projeto, repositório
-de origem, índice de distribuição, documentação de compatibilidade e estado da
-licença upstream. O SPDX só é preenchido quando o metadado do repositório
+O manifesto, revisado em 19/11/2026, associa cada distribuição a páginas
+oficiais do projeto, repositório de origem, índice de distribuição,
+documentação de compatibilidade e estado da licença upstream. Frameworks
+customizados sem entrada no catálogo permanecem observáveis, mas sem licença
+ou compatibilidade presumidas. O SPDX só é preenchido quando o metadado do repositório
 upstream o declara; `NOASSERTION` ou licença não confirmada ficam explícitos,
 sem inferência. A licença do projeto principal não cobre automaticamente
 dependências, modelos, checkpoints ou datasets.

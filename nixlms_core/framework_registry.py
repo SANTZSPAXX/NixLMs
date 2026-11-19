@@ -302,6 +302,17 @@ LICENSE_AUDIT_NOTE = (
     "A licença indicada é do projeto principal. Dependências, modelos, checkpoints "
     "e datasets podem ter termos independentes."
 )
+FRAMEWORK_METADATA_REVIEWED_AT = "2026-11-19"
+DEFAULT_FRAMEWORK_METADATA = {
+    "project_url": None,
+    "source_url": None,
+    "distribution_source_url": None,
+    "license_spdx": None,
+    "license_status": "not_registered",
+    "license_source_url": None,
+    "license_note": "Framework customizado sem metadados upstream cadastrados.",
+    "compatibility_url": None,
+}
 
 
 
@@ -391,13 +402,16 @@ def inspect_frameworks(
         else:
             size_status = "not_installed"
 
-        metadata = FRAMEWORK_METADATA[item.package]
+        metadata = FRAMEWORK_METADATA.get(
+            item.package, DEFAULT_FRAMEWORK_METADATA
+        )
         report.append({
             **asdict(item),
             **metadata,
             **state,
             "version": version,
             "license_audit_note": LICENSE_AUDIT_NOTE,
+            "metadata_reviewed_at": FRAMEWORK_METADATA_REVIEWED_AT,
             "current_environment": dict(environment),
             "compatibility_status": "not_resolved_by_inventory",
             "compatibility_method": (

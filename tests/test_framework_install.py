@@ -421,7 +421,7 @@ class FrameworkInstallTests(unittest.TestCase):
 
 
     def test_pillow_distribution_uses_the_real_pil_module(self):
-        self.requirements.write_text("Pillow>=10\\n", encoding="utf-8")
+        self.requirements.write_text("Pillow>=10\n", encoding="utf-8")
         plan = self.plan(
             modules={"torch", "PIL"},
             versions={"pillow": "10.0.0"},
@@ -431,7 +431,7 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertEqual(plan["missing_direct_requirements"], [])
 
     def test_resolver_blocks_overwriting_installed_pillow(self):
-        self.requirements.write_text("Pillow>=10\\n", encoding="utf-8")
+        self.requirements.write_text("Pillow>=10\n", encoding="utf-8")
         plan = self.plan(
             modules={"torch", "PIL"},
             versions={"pillow": "10.0.0"},

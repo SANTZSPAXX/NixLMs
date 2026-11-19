@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from nixlms_core.private_library import PrivateKnowledgeLibrary
 
@@ -39,6 +40,32 @@ class PrivateKnowledgeLibraryTests(unittest.TestCase):
         binary.write_bytes(b"not text")
         result = self.library.import_path(binary)
         self.assertEqual(result["imported"], [])
+
+    def test_directory_import_stops_scanning_after_file_limit(self):
+        source = self.root / "many"
+        first = source / "a"
+        second = source / "z"
+        first.mkdir(parents=True)
+        second.mkdir()
+        for index in range(101):
+            (first / f"{index:03}.txt").write_text(
+                f"document {index}", encoding="utf-8"
+            )
+
+        scanned = []
+
+        def fake_walk(root, *, topdown=True, followlinks=False):
+            scanned.append(Path(first))
+            yield str(first), [], sorted(path.name for path in first.iterdir())
+            scanned.append(Path(second))
+            yield str(second), [], ["unvisited.txt"]
+
+        with patch("nixlms_core.private_library.os.walk", side_effect=fake_walk):
+            result = self.library.import_path(source)
+
+        self.assertEqual(len(result["imported"]), 100)
+        self.assertEqual(scanned, [first])
+        self.assertEqual(result["skipped"][-1]["reason"], "file_limit_reached")
 
     def test_learning_candidates_require_explicit_approval(self):
         candidate = self.library.add_candidate("O que é SQLite?", "Um banco de dados embutido.", "notes.md")

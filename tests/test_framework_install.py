@@ -128,7 +128,7 @@ class FrameworkInstallTests(unittest.TestCase):
 
     def test_report_is_pinned_and_existing_packages_are_not_upgraded(self):
         plan = self.plan()
-        calls, freeze_count = [], {"value": 0}
+        calls, freeze_count, displayed = [], {"value": 0}, []
         def fake_run(command, **kwargs):
             calls.append(command)
             if "--help" in command:
@@ -149,13 +149,16 @@ class FrameworkInstallTests(unittest.TestCase):
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         result = installer.run_install(
             "frameworks", plan, requirements_file=self.requirements,
-            run=fake_run, input_fn=lambda prompt: "INSTALAR",
+            run=fake_run,
+            input_fn=lambda prompt: (self.assertTrue(displayed), "INSTALAR")[1],
             version_probe=lambda name: "2.5.0" if name == "torch" else None,
             module_probe=lambda name: False,
             size_probe=lambda url: 12345,
-            display_fn=lambda value: None,
+            display_fn=displayed.append,
         )
         self.assertEqual(result["status"], "success")
+        self.assertEqual(len(displayed), 1)
+        self.assertIn('"sha256"', displayed[0])
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
         self.assertEqual(len(actual), 1)
         self.assertIn("--no-upgrade", actual[0])

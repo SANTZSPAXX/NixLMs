@@ -161,7 +161,8 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertIn('"sha256"', displayed[0])
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
         self.assertEqual(len(actual), 1)
-        self.assertIn("--no-upgrade", actual[0])
+        self.assertNotIn("--no-upgrade", actual[0])
+        self.assertNotIn("--upgrade", actual[0])
         self.assertIn("--no-deps", actual[0])
         self.assertIn("--no-index", actual[0])
         self.assertIn("--only-binary=:all:", actual[0])
@@ -230,6 +231,8 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertIn("--no-deps", actual[0])
         self.assertIn("--require-hashes", actual[0])
         self.assertIn("--only-binary=:all:", dry_run)
+        self.assertNotIn("--no-upgrade", dry_run)
+        self.assertNotIn("--no-upgrade", actual[0])
         self.assertIn("--only-binary=:all:", actual[0])
 
     def test_direct_url_requirement_is_rejected(self):
@@ -239,6 +242,35 @@ class FrameworkInstallTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.plan()
+
+    def test_resolver_blocks_changing_an_installed_distribution(self):
+        plan = self.plan()
+        calls = []
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if "--help" in command:
+                return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
+            if "--dry-run" in command:
+                report_path = Path(command[command.index("--report") + 1])
+                report_path.write_text(json.dumps({
+                    "version": "1",
+                    "install": [self.report_item("numpy", "2.0.0", requested=True)],
+                }), encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        result = installer.run_install(
+            "frameworks", plan, requirements_file=self.requirements,
+            run=fake_run, input_fn=lambda prompt: self.fail("não deve pedir confirmação"),
+            version_probe=lambda name: "1.0.0" if name == "numpy" else ("2.5.0" if name == "torch" else None),
+            module_probe=lambda name: name == "numpy",
+            size_probe=lambda url: None,
+            display_fn=lambda value: self.fail("não deve exibir plano aprovável"),
+        )
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["conflicts"][0]["installed_version"], "1.0.0")
+        self.assertFalse(any(
+            "install" in command and "--dry-run" not in command and "--help" not in command
+            for command in calls
+        ))
 
     def test_resolver_cannot_overwrite_module_without_distribution_metadata(self):
         plan, calls = self.plan(), []

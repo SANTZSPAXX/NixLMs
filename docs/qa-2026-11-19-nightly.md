@@ -7,7 +7,7 @@
 - PR #48 está merged; a Framework Library está presente como catálogo e requisitos opcionais, não como prova de pacotes instalados.
 - A consulta encontrou 16 PRs abertas após a criação da #80 e a issue #76 aberta. A listagem de branches retornou paginação adicional; não se afirma uma contagem total.
 
-Comparação dos heads atuais com `main`: #69 está 6 commits à frente/3 atrás; #72 5/3; #74 8/1; #75 15/1; #77 33/3; #78 36/3; #79 23/1. Essas branches estão divergentes/empilhadas e não devem ser mescladas diretamente sem atualização de base e nova CI. A branch #80 está 4 commits à frente e 0 atrás, com base exata no HEAD de `main` observado.
+Comparação dos heads atuais com `main`: #69 está 6 commits à frente/3 atrás; #72 5/3; #74 8/1; #75 15/1; #77 33/3; #78 36/3; #79 23/1. Essas branches estão divergentes/empilhadas e não devem ser mescladas diretamente sem atualização de base e nova CI. A branch #80 está 5 commits à frente e 0 atrás, com base exata no HEAD de `main` observado.
 - Nenhum pacote ML foi instalado; nenhum modelo, checkpoint ou dataset foi baixado.
 - Nenhum serviço Supabase, Render ou Ollama foi iniciado; nenhum microfone foi acessado.
 - Nenhum segredo, permissão, dado privado, release ou deploy foi alterado.
@@ -68,6 +68,13 @@ Ainda não há um catálogo central que prove a integração funcional dos quatr
 [#79](https://github.com/SANTZSPAXX/NixLMs/pull/79) adiciona metadados upstream e medição opt-in dos arquivos declarados por distribuição. O caminho padrão não percorre arquivos e não importa frameworks. RAM/CPU e integração runtime permanecem explicitamente não medidos/não verificados.
 
 Revisão publicada: links para `main`/`master` são mutáveis; recomenda-se registrar tag/versão ou commit upstream consultado por distribuição. O HEAD #79 não tem execução CodeQL associada porque a PR está empilhada sobre #75.
+
+### Compatibilidade e origem — documentação oficial consultada em 19/11/2026
+
+- [PyTorch — Get Started Locally](https://pytorch.org/get-started/locally/): a página atual informa Python 3.11+ para Stable e permite selecionar Linux/Windows e CPU. Isso não comprova wheel para toda combinação ARM64/Python.
+- [ONNX Runtime — Python](https://onnxruntime.ai/docs/get-started/with-python.html): o pacote CPU documenta Windows x64 e Linux x64/ARM64; é um candidato mais direto para avaliação CPU/ARM64, ainda sujeito a teste no alvo.
+- [FAISS — Installing Faiss](https://github.com/facebookresearch/faiss/wiki/Installing-Faiss) e [INSTALL.md](https://github.com/facebookresearch/faiss/blob/main/INSTALL.md): upstream declara Conda como caminho suportado; CPU é publicado para Linux x86-64/aarch64 e Windows x86-64. O pacote PyPI `faiss-cpu` não deve ser descrito como distribuição upstream oficialmente suportada. Achado registrado também na revisão da #77.
+- [TensorFlow — pip install](https://www.tensorflow.org/install/pip): os builds CPU Linux ARM64 são mantidos/testados por terceiro AWS; os builds CPU nativos Windows x86/x64 são mantidos por Intel. Permanecem alternativas separadas, com proveniência de terceiro explícita.
 
 Limites comuns da stack:
 - instalação automática prevista apenas para Windows/Linux x86-64 e Python 3.11+;

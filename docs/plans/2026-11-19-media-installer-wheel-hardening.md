@@ -1,7 +1,7 @@
 # NixLMs — ciclo vespertino de 2026-11-19
 ## Hardening do instalador multimodal opcional
 
-**Status:** implementação em branch própria; CI pendente no momento da criação deste documento.  
+**Status:** implementação em branch própria; CI GitHub Actions concluída com sucesso.  
 **Base funcional:** PR #77, commit `e037d4bf3835a5fccd509b1157b11aa72ccc9b90`.  
 **Cadeia:** `main → PR #69 → PR #70 → PR #77 → esta PR`.
 
@@ -48,7 +48,7 @@ python -m unittest discover -s tests -p "test_media_install.py"
 python -m unittest discover -s tests
 ```
 
-Nenhum teste local foi executado nesta execução: o clone do repositório falhou por erro de resolução DNS de `github.com`. Os resultados da GitHub Actions serão registrados após a execução real do workflow desta branch.
+Nenhum teste local foi executado nesta execução: o clone do repositório falhou por erro de resolução DNS de `github.com`. A GitHub Actions executou o workflow #44598128266 com 6/6 jobs aprovados: 345 testes em cada matriz (Ubuntu Python 3.10, 3.11, 3.12 e Windows Python 3.12), além dos dois jobs de benchmark sintético. Os testes de instalação usam mocks e nenhum framework ML foi instalado. CodeQL não foi disparado nesta PR empilhada porque o workflow de CodeQL só roda em pull requests cujo destino é `main`; deverá ser avaliado quando a cadeia for retargetada para `main`.
 
 ## 5. Referências oficiais
 

@@ -5,7 +5,9 @@
 - Repositório canônico: https://github.com/SANTZSPAXX/NixLMs
 - `main` observado: `e146e82b216eed56e950882af344e25901a32b87`.
 - PR #48 está merged; a Framework Library está presente como catálogo e requisitos opcionais, não como prova de pacotes instalados.
-- A consulta encontrou 15 PRs abertas e a issue #76 aberta. A listagem de branches retornou paginação adicional; não se afirma uma contagem total.
+- A consulta encontrou 16 PRs abertas após a criação da #80 e a issue #76 aberta. A listagem de branches retornou paginação adicional; não se afirma uma contagem total.
+
+Comparação dos heads atuais com `main`: #69 está 6 commits à frente/3 atrás; #72 5/3; #74 8/1; #75 15/1; #77 33/3; #78 36/3; #79 23/1. Essas branches estão divergentes/empilhadas e não devem ser mescladas diretamente sem atualização de base e nova CI. A branch #80 está 4 commits à frente e 0 atrás, com base exata no HEAD de `main` observado.
 - Nenhum pacote ML foi instalado; nenhum modelo, checkpoint ou dataset foi baixado.
 - Nenhum serviço Supabase, Render ou Ollama foi iniciado; nenhum microfone foi acessado.
 - Nenhum segredo, permissão, dado privado, release ou deploy foi alterado.
@@ -103,6 +105,7 @@ Todos os resultados abaixo são execuções GitHub Actions, não testes locais.
 | #77 | [#44596099458](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44596099458) | 6/6 jobs success; 346 testes em cada matriz unitária consultada; dois benchmarks success. Sem CodeQL associado ao head. |
 | #78 | [#44598518929](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44598518929) | 6/6 jobs success; 345 testes em cada matriz unitária consultada; dois benchmarks success. Sem CodeQL associado ao head. |
 | #79 | [#44601843944](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44601843944) | 6/6 jobs success; 325 testes em Ubuntu 3.10/3.11/3.12 e Windows 3.12; dois benchmarks success. Sem CodeQL associado ao head. |
+| #80 | [Testes #44632624937](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44632624937), [CodeQL #44632624975](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44632624975) | 6/6 jobs success; 314 testes em cada matriz, incluindo a regressão de travessia limitada; dois benchmarks success; CodeQL success com avisos de extração não bloqueantes. |
 
 Os logs consultados mostram as etapas de checkout, validação JS quando aplicável, `python -m unittest discover -s tests -v`, benchmarks e CodeQL. Os testes de instaladores usam mocks e não baixam frameworks.
 
@@ -129,6 +132,6 @@ Os logs consultados mostram as etapas de checkout, validação JS quando aplicá
 
 - Implementado nesta branch: travessia em fluxo e teste de regressão para limite de importação de documentos.
 - Testes locais: não executados; clone bloqueado por DNS.
-- CI desta branch: aguardando criação/execução da PR.
+- CI da branch: #44632624937 e CodeQL #44632624975 aprovados no HEAD de código; a atualização deste relatório dispara nova execução de CI, que deve ser consultada antes de qualquer integração.
 - Merge/release/deploy: nenhum.
 - main, branches e PRs preexistentes: preservados.

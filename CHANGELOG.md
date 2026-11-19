@@ -3,6 +3,7 @@
 - Adiciona URLs oficiais de projeto, origem, distribuição e compatibilidade para cada framework catalogado.
 - Registra SPDX somente quando declarado pelo upstream; NOASSERTION e licenças não verificadas permanecem explícitos.
 - Reporta Python, implementação, SO e arquitetura atuais sem alegar matriz multiplataforma.
+- Mantém fallback explícito para frameworks customizados sem metadados cadastrados.
 - Adiciona `--sizes` opt-in para somar arquivos da distribuição em purelib/platlib sem importar frameworks.
 - Mantém RAM/CPU como não medidos e separa estado de pacote de modelos, datasets e integração no runtime.
 - Não instala, atualiza, compila ou baixa pacotes, modelos ou datasets.

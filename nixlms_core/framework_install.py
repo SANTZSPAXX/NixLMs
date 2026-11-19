@@ -223,7 +223,7 @@ def _pip_supports_report(run):
     return result.returncode == 0 and "--dry-run" in help_text and "--report" in help_text
 
 
-def _wheel_size(url):
+def _wheel_size(url, timeout=5):
     """Return Content-Length when the trusted wheel host exposes it."""
     request = Request(
         url,
@@ -231,7 +231,7 @@ def _wheel_size(url):
         headers={"User-Agent": "NixLMs-Framework-Installer/1"},
     )
     try:
-        with urlopen(request, timeout=5) as response:
+        with urlopen(request, timeout=timeout) as response:
             value = response.headers.get("Content-Length")
     except (OSError, ValueError):
         return None
@@ -291,9 +291,13 @@ def _summarize_report(report, size_probe=None):
             parsed.scheme, parsed.netloc, parsed.path, "", "sha256=" + digest.lower()
         ))
         size = None
-        if time.monotonic() < size_deadline:
+        remaining_size_budget = size_deadline - time.monotonic()
+        if remaining_size_budget > 0:
             try:
-                size = size_probe(artifact_url)
+                if size_probe is _wheel_size:
+                    size = size_probe(artifact_url, timeout=min(5, remaining_size_budget))
+                else:
+                    size = size_probe(artifact_url)
             except (OSError, ValueError):
                 size = None
         if not isinstance(size, int) or isinstance(size, bool) or size < 0:

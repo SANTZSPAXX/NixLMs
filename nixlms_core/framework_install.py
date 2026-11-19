@@ -174,7 +174,13 @@ def build_install_plan(requirements_file=REQUIREMENTS, *, root=ROOT,
         "ambiguous_packages": ambiguous,
         "blocked": blocked,
         "blocked_reasons": reasons,
-        "install_allowed": bool(missing) and not blocked and env["virtual_environment"],
+        "install_allowed": (
+            not blocked
+            and torch_installed
+            and env["python_supported"]
+            and env["platform_supported"]
+            and env["virtual_environment"]
+        ),
         "transitive_dependencies": "resolved by --plan/--install using pip dry-run report and binary wheels",
     }
 
@@ -400,8 +406,6 @@ def run_install(
         return {"status": "blocked", "reason": "Python/SO/arquitetura sem compatibilidade confirmada."}
 
     if mode == "frameworks":
-        if not plan.get("missing_direct_requirements"):
-            return {"status": "nothing_to_do", "planned_packages": []}
         if not plan.get("torch", {}).get("installed"):
             return {"status": "blocked", "reason": "PyTorch precisa estar presente antes do stack."}
         arguments = ["-r", str(Path(requirements_file).resolve())]

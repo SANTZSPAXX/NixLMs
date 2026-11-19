@@ -287,6 +287,41 @@ class FrameworkInstallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             installer._summarize_report(report, size_probe=lambda url: None)
 
+    def test_plan_checks_transitives_when_direct_packages_are_present(self):
+        plan = self.plan(
+            modules={"torch", "numpy", "sklearn", "sentence_transformers"},
+            versions={
+                "torch": "2.5.0",
+                "numpy": "2.0.0",
+                "scikit-learn": "1.5.0",
+                "sentence-transformers": "3.0.0",
+            },
+        )
+        self.assertEqual(plan["missing_direct_requirements"], [])
+        calls = []
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if "--help" in command:
+                return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
+            if "--dry-run" in command:
+                report_path = Path(command[command.index("--report") + 1])
+                report_path.write_text(json.dumps({
+                    "version": "1",
+                    "install": [self.report_item("scipy", "1.14.0", requested=False)],
+                }), encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        result = installer.run_install(
+            "frameworks", plan, requirements_file=self.requirements,
+            run=fake_run, confirm=False, require_venv=False,
+            version_probe=lambda name: plan["torch"]["version"] if name == "torch" else None,
+            module_probe=lambda name: False,
+            size_probe=lambda url: None,
+            display_fn=lambda value: None,
+        )
+        self.assertEqual(result["status"], "planned")
+        self.assertEqual(result["packages"][0]["name"], "scipy")
+        self.assertTrue(any("--dry-run" in command for command in calls))
+
     def test_plan_resolves_transitives_without_mutating_environment(self):
         plan = self.plan(venv=False)
         calls, displayed = [], []

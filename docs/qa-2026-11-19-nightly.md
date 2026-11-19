@@ -7,7 +7,7 @@
 - PR #48 está merged; a Framework Library está presente como catálogo e requisitos opcionais, não como prova de pacotes instalados.
 - A consulta encontrou 16 PRs abertas após a criação da #80 e a issue #76 aberta. A listagem de branches retornou paginação adicional; não se afirma uma contagem total.
 
-Comparação dos heads atuais com `main`: #69 está 6 commits à frente/3 atrás; #72 5/3; #74 8/1; #75 15/1; #77 33/3; #78 36/3; #79 23/1. Essas branches estão divergentes/empilhadas e não devem ser mescladas diretamente sem atualização de base e nova CI. A branch #80 está 5 commits à frente e 0 atrás, com base exata no HEAD de `main` observado.
+Comparação dos heads atuais com `main`: #69 está 6 commits à frente/3 atrás; #72 5/3; #74 8/1; #75 15/1; #77 33/3; #78 36/3; #79 23/1. Essas branches estão divergentes/empilhadas e não devem ser mescladas diretamente sem atualização de base e nova CI. A branch #80 está 7 commits à frente e 0 atrás, com base exata no HEAD de `main` observado.
 - Nenhum pacote ML foi instalado; nenhum modelo, checkpoint ou dataset foi baixado.
 - Nenhum serviço Supabase, Render ou Ollama foi iniciado; nenhum microfone foi acessado.
 - Nenhum segredo, permissão, dado privado, release ou deploy foi alterado.
@@ -63,6 +63,18 @@ A arquitetura mantém os quatro acervos como conceitos e módulos distintos:
 
 Ainda não há um catálogo central que prove a integração funcional dos quatro acervos. Presença de pacote não significa modelo instalado, carregado, treinado ou conectado ao runtime.
 
+### Inventário atual e perfil recomendado
+
+Em `main`, o CLI `nixlms_core/framework_registry.py` considera `installed = metadata_available OR module_available`, enquanto `nixlms_web/server.py::inspect_frameworks()` usa módulo como sinal primário e só consulta versão quando o módulo existe. Isso pode produzir estados inconsistentes e diferenças entre CLI e API. A PR #75 introduz classificação simétrica (`installed`, `metadata_only`, `module_only`, `absent`) e testes; continua aberta/draft e 1 commit atrás de `main`.
+
+Os dez itens do grupo `ml-cpu` ainda têm `default_recommendation=True`; o CLI os mostra por padrão. Isso não é apropriado como perfil inicial para i5/8 GB sem medições. A revisão #79 recomenda separar um perfil mínimo leve de perfis pesados e não marcar PyTorch/Transformers/Sentence Transformers/FAISS como recomendação inicial.
+
+Exceções de proveniência/compatibilidade:
+- FAISS upstream declara Conda como caminho suportado; o `faiss-cpu` do PyPI não é uma distribuição upstream suportada. O allowlist de host PyPI não certifica que o build é oficial.
+- TensorFlow CPU usa distribuições diferentes: no Linux ARM64, a documentação aponta `tensorflow-cpu-aws` de terceiro; `tensorflow-cpu` no Windows/Linux x86-64 tem wheels grandes (aprox. 351 MB Windows e 274 MB Linux na versão 2.21.0 consultada). O manifesto não deve usar `tensorflow-cpu` como alias universal para ARM64.
+- ONNX Runtime CPU documenta Windows x64 e Linux x64/ARM64; candidato para avaliação, não ainda validado no runtime NixLMs.
+- PyTorch stable exige Python recente; o suporte CPU Linux aarch64 existe em releases atuais, mas o instalador automático desta cadeia permanece x86-64-only por decisão conservadora até validação específica.
+
 ### PR #79 — proveniência e footprint
 
 [#79](https://github.com/SANTZSPAXX/NixLMs/pull/79) adiciona metadados upstream e medição opt-in dos arquivos declarados por distribuição. O caminho padrão não percorre arquivos e não importa frameworks. RAM/CPU e integração runtime permanecem explicitamente não medidos/não verificados.
@@ -112,7 +124,7 @@ Todos os resultados abaixo são execuções GitHub Actions, não testes locais.
 | #77 | [#44596099458](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44596099458) | 6/6 jobs success; 346 testes em cada matriz unitária consultada; dois benchmarks success. Sem CodeQL associado ao head. |
 | #78 | [#44598518929](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44598518929) | 6/6 jobs success; 345 testes em cada matriz unitária consultada; dois benchmarks success. Sem CodeQL associado ao head. |
 | #79 | [#44601843944](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44601843944) | 6/6 jobs success; 325 testes em Ubuntu 3.10/3.11/3.12 e Windows 3.12; dois benchmarks success. Sem CodeQL associado ao head. |
-| #80 | [Testes #44632624937](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44632624937), [CodeQL #44632624975](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44632624975) | 6/6 jobs success; 314 testes em cada matriz, incluindo a regressão de travessia limitada; dois benchmarks success; CodeQL success com avisos de extração não bloqueantes. |
+| #80 | [Testes #44633023115](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44633023115), [CodeQL #44633023148](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44633023148) | 6/6 jobs success; 314 testes em cada matriz, incluindo a regressão de travessia limitada; dois benchmarks success; CodeQL success com avisos de extração não bloqueantes. |
 
 Os logs consultados mostram as etapas de checkout, validação JS quando aplicável, `python -m unittest discover -s tests -v`, benchmarks e CodeQL. Os testes de instaladores usam mocks e não baixam frameworks.
 
@@ -139,6 +151,6 @@ Os logs consultados mostram as etapas de checkout, validação JS quando aplicá
 
 - Implementado nesta branch: travessia em fluxo e teste de regressão para limite de importação de documentos.
 - Testes locais: não executados; clone bloqueado por DNS.
-- CI da branch: #44632624937 e CodeQL #44632624975 aprovados no HEAD de código; a atualização deste relatório dispara nova execução de CI, que deve ser consultada antes de qualquer integração.
+- CI da branch: #44633023115 e CodeQL #44633023148 aprovados no HEAD atual; a PR permanece draft e não foi integrada.
 - Merge/release/deploy: nenhum.
 - main, branches e PRs preexistentes: preservados.

@@ -1,3 +1,10 @@
+## Perfil multimodal — wheels verificáveis e consentimento informado
+
+- Reutiliza o resolvedor seguro da Framework Library para apresentar dependências transitivas antes da confirmação.
+- Restringe resolução e instalação a wheels HTTPS de origens permitidas, com SHA-256 verificado pelo pip; source builds são bloqueados.
+- Exige PyTorch já instalado pela etapa separada da Framework Library; o perfil multimodal não instala PyTorch implicitamente.
+- Bloqueia alterações de pacotes já presentes e registra o plano/resultado sem baixar modelos ou datasets.
+
 ## Framework Library — wheels verificáveis e consentimento informado
 
 - Faz o comando de planejamento resolver dependências transitivas com pip dry-run/report, sem instalar ou alterar o ambiente.

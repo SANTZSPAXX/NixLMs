@@ -29,6 +29,7 @@ MODULE_MAP = {
     "sentence-transformers": "sentence_transformers",
     "faiss-cpu": "faiss",
     "huggingface-hub": "huggingface_hub",
+    "pillow": "PIL",
 }
 
 

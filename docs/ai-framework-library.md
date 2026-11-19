@@ -115,10 +115,31 @@ atualiza nem compila pacotes. Em ambiente virtual, use:
 - \`python -m nixlms_core.media_install --plan\`
 - \`python -m nixlms_core.media_install --install\`
 
-O instalador multimodal também exige confirmação explícita e não baixa
-modelos/datasets. A política de wheels, origem e hash desta mudança cobre a
-Framework Library; a resolução transitiva e a verificação de artefatos do perfil
-multimodal permanecem pendentes de uma PR própria.
+O perfil multimodal reutiliza o mesmo resolvedor seguro da Framework Library:
+o plano consulta pip com `--dry-run --report`, restringe a resolução a wheels
+binárias e exibe todas as dependências transitivas, versões, origem HTTPS
+permitida, SHA-256 e tamanho de download quando disponível. O plano pode
+consultar índices oficiais, mas não instala pacotes nem altera o ambiente.
+
+PyTorch CPU é pré-requisito separado. Se estiver ausente em Windows/Linux
+x86-64 com Python compatível, instale-o primeiro pelo fluxo explícito
+`python -m nixlms_core.framework_install --install-torch-cpu`. O instalador
+multimodal nunca instala PyTorch implicitamente e bloqueia a instalação quando
+metadados e módulo não concordam.
+
+Depois de PyTorch já estar presente, `--install` exige ambiente virtual,
+apresenta novamente o plano completo e solicita a digitação exata de
+`INSTALAR`. A instalação usa somente URLs e hashes aprovados, sem índice,
+sem resolução adicional de dependências e sem source builds. Se o resolvedor
+propor alterar qualquer pacote já presente, a operação é bloqueada. Modelos e
+datasets continuam em acervos separados e nunca são baixados por este comando.
+
+A instalação automatizada deste perfil permanece limitada a Windows/Linux
+x86-64 e Python 3.11+. Linux ARM64 fica em modo de inventário; a seleção manual
+de PyTorch não libera automaticamente a instalação dos demais pacotes. Tamanho
+instalado e consumo de RAM/CPU não foram medidos. Uma falha durante pip ainda
+pode deixar instalação parcial no ambiente virtual; nesse caso, revise o
+relatório e prefira recriar o venv descartável em vez de limpar o ambiente global.
 
 ### ARM64 e outras plataformas
 

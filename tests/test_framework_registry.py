@@ -156,5 +156,25 @@ class FrameworkRegistryTests(unittest.TestCase):
         inspect.assert_called_once_with(include_sizes=True)
 
 
+
+    def test_custom_framework_without_manifest_remains_observable(self):
+        from nixlms_core.framework_registry import Framework
+
+        custom = Framework(
+            "Custom", "custom-package", "custom_module", "custom",
+            "Framework externo", "custom", False,
+        )
+        with patch("nixlms_core.framework_registry._installed_distribution", return_value=None), \
+             patch("nixlms_core.framework_registry.importlib.util.find_spec", return_value=None):
+            item = inspect_frameworks((custom,))[0]
+        self.assertEqual(item["license_status"], "not_registered")
+        self.assertIsNone(item["project_url"])
+        self.assertEqual(item["installation_state"], "absent")
+
+    def test_manifest_review_date_is_exposed(self):
+        item = inspect_frameworks((FRAMEWORKS[0],))[0]
+        self.assertEqual(item["metadata_reviewed_at"], "2026-11-19")
+
+
 if __name__ == "__main__":
     unittest.main()

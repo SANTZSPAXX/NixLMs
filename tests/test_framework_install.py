@@ -135,7 +135,7 @@ class FrameworkInstallTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
-                report.write_text(json.dumps({"install": [
+                report.write_text(json.dumps({"version": "1", "install": [
                     self.report_item("numpy", "2.0.0", requested=True),
                     self.report_item("scipy", "1.14.0", requested=False),
                 ]}), encoding="utf-8")
@@ -181,7 +181,7 @@ class FrameworkInstallTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
-                report.write_text(json.dumps({"install": [
+                report.write_text(json.dumps({"version": "1", "install": [
                     self.report_item("numpy", "2.0.0", requested=True)
                 ]}), encoding="utf-8")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -207,7 +207,7 @@ class FrameworkInstallTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
-                report.write_text(json.dumps({"install": [
+                report.write_text(json.dumps({"version": "1", "install": [
                     self.report_item(
                         "torch", "2.7.0", requested=True,
                         url="https://download.pytorch.org/whl/cpu/torch-2.7.0-cp312-cp312-win_amd64.whl",
@@ -280,7 +280,7 @@ class FrameworkInstallTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
-                report.write_text(json.dumps({"install": [
+                report.write_text(json.dumps({"version": "1", "install": [
                     self.report_item("numpy", "2.0.0", requested=True)
                 ]}), encoding="utf-8")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -299,7 +299,7 @@ class FrameworkInstallTests(unittest.TestCase):
         ))
 
     def test_report_rejects_source_archive(self):
-        report = {"install": [self.report_item(
+        report = {"version": "1", "install": [self.report_item(
             "numpy", "2.0.0",
             url="https://files.pythonhosted.org/packages/numpy-2.0.0.tar.gz",
         )]}
@@ -307,17 +307,25 @@ class FrameworkInstallTests(unittest.TestCase):
             installer._summarize_report(report, size_probe=lambda url: None)
 
     def test_report_rejects_untrusted_origin(self):
-        report = {"install": [self.report_item(
+        report = {"version": "1", "install": [self.report_item(
             "numpy", "2.0.0",
             url="https://example.invalid/numpy-2.0.0-py3-none-any.whl",
         )]}
         with self.assertRaises(ValueError):
             installer._summarize_report(report, size_probe=lambda url: None)
 
+    def test_report_requires_stable_version_one(self):
+        report = {
+            "version": "0",
+            "install": [self.report_item("numpy", "2.0.0")],
+        }
+        with self.assertRaises(ValueError):
+            installer._summarize_report(report, size_probe=lambda url: None)
+
     def test_report_requires_sha256(self):
         item = self.report_item("numpy", "2.0.0")
         item["download_info"]["archive_info"]["hashes"] = {}
-        report = {"install": [item]}
+        report = {"version": "1", "install": [item]}
         with self.assertRaises(ValueError):
             installer._summarize_report(report, size_probe=lambda url: None)
 

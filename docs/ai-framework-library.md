@@ -52,8 +52,8 @@ integração funcional.
 
 ## Instalação opcional e explícita
 
-Use um ambiente virtual dedicado. O modo de planejamento é offline e não altera
-o ambiente:
+Use um ambiente virtual dedicado para instalar. O planejamento resolve o conjunto
+transitivo e os artefatos, pode consultar os índices oficiais e não altera o ambiente:
 
 - \`python -m venv .venv-ml\`
 - Windows: \`.\\.venv-ml\\Scripts\\Activate.ps1\`
@@ -67,19 +67,34 @@ uma resolução implícita de uma distribuição PyTorch não selecionada:
 - Depois, \`python -m nixlms_core.framework_install --install\`
 
 Cada modo de instalação:
-- exige Python 3.11+ e ambiente virtual ativo;
+- exige Python 3.11+ e ambiente virtual ativo para instalar;
 - limita a instalação automática a Windows/Linux x86-64;
-- resolve dependências com \`pip install --dry-run --report\` e mostra nomes/versões;
-- exige digitação exata de \`INSTALAR\` depois do relatório;
-- instala somente as versões listadas no relatório, usando \`--no-deps --no-upgrade\`;
-- bloqueia quando o resolvedor propõe alterar uma distribuição já instalada;
-- registra a diferença de \`pip freeze\` antes/depois;
+- resolve dependências diretas e transitivas com pip 23.0+ dry-run/report (schema v1);
+- aplica somente wheels binárias na resolução e na instalação; se não houver wheel
+  compatível, falha sem tentar compilar source;
+- exige URL HTTPS de origem permitida, artefato .whl e SHA-256 por pacote;
+- exibe origem, URL do artefato, hash e tamanho de download quando o host informa
+  Content-Length; consultas HEAD têm limite agregado efetivo de 15 segundos; tamanho
+  instalado e RAM/CPU permanecem não medidos;
+- o comando --plan exibe o conjunto transitivo sem instalar; pode consultar índice
+  e fazer HEAD para obter tamanho, mas não altera o ambiente;
+- o comando --install apresenta o plano completo antes de exigir a digitação
+  exata de INSTALAR;
+- instala somente URLs e hashes aprovados, usando no-index, no-deps e require-hashes; não usa uma opção inexistente de pip para impedir upgrades, e bloqueia qualquer plano que proponha alterar um pacote já instalado,
+  sem resolver novamente nomes/versões no índice;
+- bloqueia estados ambíguos quando metadados e módulo não estão presentes juntos;
+- registra a diferença de pip freeze antes/depois;
 - não atualiza pip, não baixa modelos/datasets e não é chamado pelo runtime.
 
-O relatório do pip é uma previsão de resolução, não um lockfile. A instalação
-usa as versões exatas exibidas no relatório. Se a instalação falhar no meio,
-pode haver pacotes parciais; revise o relatório e o ambiente antes de tentar
-novamente.
+
+O relatório do pip é uma previsão de resolução, não um lockfile nem uma garantia
+de compatibilidade em hardware não testado. O instalador conserva a URL e o
+SHA-256 de cada wheel e passa o hash no URL direto durante a instalação. Esse hash
+vem do relatório remoto do índice: verifica que o arquivo recebido corresponde
+ao artefato planejado, mas não é uma assinatura independente nem prova contra o
+comprometimento do próprio índice. O tamanho de download depende da resposta HEAD
+do host e pode ficar indisponível. Se a instalação falhar no meio, pode haver
+pacotes parciais; revise o relatório e o ambiente antes de tentar novamente.
 
 ### Windows PowerShell
 
@@ -101,14 +116,17 @@ atualiza nem compila pacotes. Em ambiente virtual, use:
 - \`python -m nixlms_core.media_install --install\`
 
 O instalador multimodal também exige confirmação explícita e não baixa
-modelos/datasets.
+modelos/datasets. A política de wheels, origem e hash desta mudança cobre a
+Framework Library; a resolução transitiva e a verificação de artefatos do perfil
+multimodal permanecem pendentes de uma PR própria.
 
 ### ARM64 e outras plataformas
 
 Linux ARM64 e plataformas não verificadas ficam em modo de inventário/planejamento.
-O instalador não escolhe wheels por tentativa nem compila pacotes. O operador
-deve consultar a documentação oficial de cada projeto e selecionar wheels
-compatíveis manualmente. Não declaramos a stack completa validada em ARM64.
+O instalador automático não escolhe wheels por tentativa nem compila pacotes; a
+resolução falha fechada quando não encontra wheel, origem ou hash verificáveis.
+O operador deve consultar a documentação oficial de cada projeto e selecionar
+wheels compatíveis manualmente. Não declaramos a stack completa validada em ARM64.
 
 ## Regras de operação e segurança
 
@@ -127,7 +145,9 @@ compatíveis manualmente. Não declaramos a stack completa validada em ARM64.
 
 - PyTorch e seleção de plataforma/CPU: https://pytorch.org/get-started/locally/
 - pip install report e dry-run: https://pip.pypa.io/en/stable/reference/installation-report/
+- pip installation report (schema v1): https://pip.pypa.io/en/stable/reference/installation-report/
 - pip install options: https://pip.pypa.io/en/stable/cli/pip_install/
+- pip hash-checking mode: https://pip.pypa.io/en/stable/topics/secure-installs/
 - Python virtual environments: https://docs.python.org/3/library/venv.html
 - Transformers: https://huggingface.co/docs/transformers/installation
 - Sentence Transformers: https://www.sbert.net/docs/installation.html

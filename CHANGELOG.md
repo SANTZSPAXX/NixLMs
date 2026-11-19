@@ -1,3 +1,12 @@
+## Framework Library — wheels verificáveis e consentimento informado
+
+- Faz o comando de planejamento resolver dependências transitivas com pip dry-run/report, sem instalar ou alterar o ambiente.
+- Aplica somente wheels binárias; ausência de wheel compatível bloqueia sem fallback para compilação de source.
+- Exige origem HTTPS permitida, arquivo .whl e SHA-256 por artefato; apresenta tamanho de download quando Content-Length está disponível.
+- Exige relatório pip schema v1 (pip 23.0+), exibe o conjunto completo antes da confirmação e instala somente URLs/hash aprovados com hash-checking mode, sem nova resolução por índice; bloqueia propostas que alterem pacotes já presentes.
+- Torna simétrica a detecção de pacote: metadados e módulo precisam existir juntos; estados parciais bloqueiam alterações.
+- Mantém o inventário sem imports ML pesados, sem dependências obrigatórias e sem downloads de modelos/datasets.
+
 ## Instalação segura da Framework Library
 
 - Substitui o instalador PowerShell que atualizava pip automaticamente por CLI Python explícita.

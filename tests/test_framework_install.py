@@ -165,6 +165,7 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertIn("--no-deps", actual[0])
         self.assertIn("--no-index", actual[0])
         self.assertIn("--only-binary=:all:", actual[0])
+        self.assertIn("--require-hashes", actual[0])
         self.assertTrue(any("#sha256=" in item for item in actual[0]))
         self.assertTrue(any("files.pythonhosted.org" in item for item in actual[0]))
         self.assertNotIn("--upgrade", actual[0])
@@ -227,6 +228,7 @@ class FrameworkInstallTests(unittest.TestCase):
             "download.pytorch.org" in item and "#sha256=" in item for item in actual[0]
         ))
         self.assertIn("--no-deps", actual[0])
+        self.assertIn("--require-hashes", actual[0])
         self.assertIn("--only-binary=:all:", dry_run)
         self.assertIn("--only-binary=:all:", actual[0])
 

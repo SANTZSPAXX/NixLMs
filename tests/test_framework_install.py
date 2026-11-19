@@ -419,5 +419,60 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertNotIn("pip install --upgrade pip", source)
 
 
+
+    def test_pillow_distribution_uses_the_real_pil_module(self):
+        self.requirements.write_text("Pillow>=10\n", encoding="utf-8")
+        plan = self.plan(
+            modules={"torch", "PIL"},
+            versions={"pillow": "10.0.0"},
+        )
+        self.assertEqual(plan["packages"][0]["module"], "PIL")
+        self.assertTrue(plan["packages"][0]["installed"])
+        self.assertEqual(plan["missing_direct_requirements"], [])
+
+    def test_resolver_blocks_overwriting_installed_pillow(self):
+        self.requirements.write_text("Pillow>=10\n", encoding="utf-8")
+        plan = self.plan(
+            modules={"torch", "PIL"},
+            versions={"pillow": "10.0.0"},
+        )
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if "--help" in command:
+                return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
+            if "--dry-run" in command:
+                report_path = Path(command[command.index("--report") + 1])
+                report_path.write_text(json.dumps({
+                    "version": "1",
+                    "install": [self.report_item("Pillow", "11.0.0")],
+                }), encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        result = installer.run_install(
+            "frameworks",
+            plan,
+            requirements_file=self.requirements,
+            run=fake_run,
+            input_fn=lambda prompt: self.fail("não deve solicitar confirmação"),
+            version_probe=lambda name: (
+                "2.5.0" if name == "torch"
+                else "10.0.0" if name.lower() == "pillow"
+                else None
+            ),
+            module_probe=lambda name: name in {"torch", "PIL"},
+            size_probe=lambda url: None,
+            display_fn=lambda value: self.fail("não deve exibir plano instalável"),
+        )
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["conflicts"][0]["installed_version"], "10.0.0")
+        self.assertTrue(any("--dry-run" in command for command in calls))
+        self.assertFalse(any(
+            "install" in command and "--dry-run" not in command and "--help" not in command
+            for command in calls
+        ))
+
+
 if __name__ == "__main__":
     unittest.main()

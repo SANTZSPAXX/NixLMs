@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from nixlms_core import framework_install as installer
 
@@ -19,13 +20,33 @@ class FrameworkInstallTests(unittest.TestCase):
             "numpy>=1.0\nscikit-learn>=1.0\nsentence-transformers>=3.0\n",
             encoding="utf-8",
         )
+        self.size_patch = patch.object(installer, "_wheel_size", return_value=None)
+        self.size_patch.start()
 
     def tearDown(self):
+        self.size_patch.stop()
         self.temp.cleanup()
+
+    @staticmethod
+    def report_item(name, version, requested=True, url=None, digest=None):
+        digest = digest or ("a" * 64)
+        url = url or (
+            "https://files.pythonhosted.org/packages/test/"
+            + name.lower().replace("_", "-") + "-" + version + "-py3-none-any.whl"
+        )
+        hashes = {"sha256": digest} if digest else {}
+        return {
+            "metadata": {"name": name, "version": version},
+            "requested": requested,
+            "is_direct": False,
+            "is_yanked": False,
+            "download_info": {"url": url, "archive_info": {"hashes": hashes}},
+        }
 
     def plan(self, torch_version="2.5.0", modules=None, versions=None,
              system="Windows", machine="AMD64", python=(3, 12), venv=True):
-        modules, versions = modules or set(), versions or {}
+        modules = {"torch"} if modules is None else modules
+        versions = versions or {}
         return installer.build_install_plan(
             self.requirements, root=self.root,
             module_probe=lambda name: name in modules,
@@ -41,14 +62,31 @@ class FrameworkInstallTests(unittest.TestCase):
         self.assertTrue(plan["install_allowed"])
 
     def test_stack_blocked_without_torch_to_prevent_implicit_install(self):
-        plan = self.plan(torch_version=None)
+        plan = self.plan(torch_version=None, modules=set())
         self.assertTrue(plan["blocked"])
         self.assertFalse(plan["install_allowed"])
 
     def test_module_without_distribution_metadata_is_ambiguous(self):
-        plan = self.plan(modules={"sklearn"}, versions={"torch": "2.5.0"})
+        plan = self.plan(modules={"torch", "sklearn"}, versions={"torch": "2.5.0"})
         self.assertIn("scikit-learn", plan["ambiguous_packages"])
         self.assertTrue(plan["blocked"])
+
+    def test_distribution_metadata_without_module_is_ambiguous(self):
+        plan = self.plan(
+            modules={"torch"},
+            versions={"torch": "2.5.0", "numpy": "2.0.0"},
+        )
+        self.assertIn("numpy", plan["ambiguous_packages"])
+        self.assertTrue(plan["blocked"])
+
+    def test_torch_metadata_without_module_is_ambiguous(self):
+        plan = installer.build_torch_plan(
+            module_probe=lambda name: False,
+            version_probe=lambda name: "2.5.0",
+            system="Windows", machine="AMD64", python=(3, 12), venv=True,
+        )
+        self.assertTrue(plan["blocked"])
+        self.assertTrue(plan["torch"]["ambiguous_install"])
 
     def test_arm64_torch_install_is_blocked(self):
         plan = installer.build_torch_plan(
@@ -98,8 +136,8 @@ class FrameworkInstallTests(unittest.TestCase):
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
                 report.write_text(json.dumps({"install": [
-                    {"metadata": {"name": "numpy", "version": "2.0.0"}, "requested": True},
-                    {"metadata": {"name": "scipy", "version": "1.14.0"}, "requested": False},
+                    self.report_item("numpy", "2.0.0", requested=True),
+                    self.report_item("scipy", "1.14.0", requested=False),
                 ]}), encoding="utf-8")
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
             if command[-1] == "freeze":
@@ -114,14 +152,20 @@ class FrameworkInstallTests(unittest.TestCase):
             run=fake_run, input_fn=lambda prompt: "INSTALAR",
             version_probe=lambda name: "2.5.0" if name == "torch" else None,
             module_probe=lambda name: False,
+            size_probe=lambda url: 12345,
+            display_fn=lambda value: None,
         )
         self.assertEqual(result["status"], "success")
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
         self.assertEqual(len(actual), 1)
         self.assertIn("--no-upgrade", actual[0])
         self.assertIn("--no-deps", actual[0])
-        self.assertIn("numpy==2.0.0", actual[0])
+        self.assertIn("--no-index", actual[0])
+        self.assertIn("--only-binary=:all:", actual[0])
+        self.assertTrue(any("#sha256=" in item for item in actual[0]))
+        self.assertTrue(any("files.pythonhosted.org" in item for item in actual[0]))
         self.assertNotIn("--upgrade", actual[0])
+        self.assertEqual(result["planned_packages"][0]["download_size_bytes"], 12345)
         self.assertIn("numpy", result["changed_packages"])
 
     def test_cancelled_install_never_runs_mutating_pip(self):
@@ -133,13 +177,15 @@ class FrameworkInstallTests(unittest.TestCase):
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
                 report.write_text(json.dumps({"install": [
-                    {"metadata": {"name": "numpy", "version": "2.0.0"}, "requested": True}
+                    self.report_item("numpy", "2.0.0", requested=True)
                 ]}), encoding="utf-8")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         result = installer.run_install(
             "frameworks", plan, requirements_file=self.requirements,
             run=fake_run, input_fn=lambda prompt: "não",
             version_probe=lambda name: "2.5.0" if name == "torch" else None,
+            module_probe=lambda name: False,
+            display_fn=lambda value: None,
         )
         self.assertEqual(result["status"], "cancelled")
         self.assertFalse(any("install" in c and "--dry-run" not in c and "--help" not in c for c in calls))
@@ -157,7 +203,10 @@ class FrameworkInstallTests(unittest.TestCase):
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
                 report.write_text(json.dumps({"install": [
-                    {"metadata": {"name": "torch", "version": "2.7.0"}, "requested": True}
+                    self.report_item(
+                        "torch", "2.7.0", requested=True,
+                        url="https://download.pytorch.org/whl/cpu/torch-2.7.0-cp312-cp312-win_amd64.whl",
+                    )
                 ]}), encoding="utf-8")
             if command[-1] == "freeze":
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -169,9 +218,14 @@ class FrameworkInstallTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "success")
         actual = [c for c in calls if "install" in c and "--dry-run" not in c and "--help" not in c]
-        self.assertIn(installer.TORCH_CPU_INDEX, actual[0])
-        self.assertIn("torch==2.7.0", actual[0])
+        dry_run = next(command for command in calls if "--dry-run" in command)
+        self.assertIn(installer.TORCH_CPU_INDEX, dry_run)
+        self.assertTrue(any(
+            "download.pytorch.org" in item and "#sha256=" in item for item in actual[0]
+        ))
         self.assertIn("--no-deps", actual[0])
+        self.assertIn("--only-binary=:all:", dry_run)
+        self.assertIn("--only-binary=:all:", actual[0])
 
     def test_direct_url_requirement_is_rejected(self):
         self.requirements.write_text(
@@ -190,7 +244,7 @@ class FrameworkInstallTests(unittest.TestCase):
             if "--dry-run" in command:
                 report = Path(command[command.index("--report") + 1])
                 report.write_text(json.dumps({"install": [
-                    {"metadata": {"name": "numpy", "version": "2.0.0"}, "requested": True}
+                    self.report_item("numpy", "2.0.0", requested=True)
                 ]}), encoding="utf-8")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         result = installer.run_install(
@@ -198,9 +252,65 @@ class FrameworkInstallTests(unittest.TestCase):
             run=fake_run, input_fn=lambda prompt: self.fail("não deve pedir confirmação"),
             version_probe=lambda name: "2.5.0" if name == "torch" else None,
             module_probe=lambda name: name == "numpy",
+            display_fn=lambda value: None,
         )
         self.assertEqual(result["status"], "blocked")
-        self.assertTrue(result["conflicts"][0]["module_available_without_metadata"])
+        self.assertTrue(result["conflicts"][0]["module_without_metadata"])
+        self.assertFalse(any(
+            "install" in command and "--dry-run" not in command and "--help" not in command
+            for command in calls
+        ))
+
+    def test_report_rejects_source_archive(self):
+        report = {"install": [self.report_item(
+            "numpy", "2.0.0",
+            url="https://files.pythonhosted.org/packages/numpy-2.0.0.tar.gz",
+        )]}
+        with self.assertRaises(ValueError):
+            installer._summarize_report(report, size_probe=lambda url: None)
+
+    def test_report_rejects_untrusted_origin(self):
+        report = {"install": [self.report_item(
+            "numpy", "2.0.0",
+            url="https://example.invalid/numpy-2.0.0-py3-none-any.whl",
+        )]}
+        with self.assertRaises(ValueError):
+            installer._summarize_report(report, size_probe=lambda url: None)
+
+    def test_report_requires_sha256(self):
+        item = self.report_item("numpy", "2.0.0")
+        item["download_info"]["archive_info"]["hashes"] = {}
+        report = {"install": [item]}
+        with self.assertRaises(ValueError):
+            installer._summarize_report(report, size_probe=lambda url: None)
+
+    def test_plan_resolves_transitives_without_mutating_environment(self):
+        plan = self.plan(venv=False)
+        calls, displayed = [], []
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            if "--help" in command:
+                return SimpleNamespace(returncode=0, stdout="--dry-run --report", stderr="")
+            if "--dry-run" in command:
+                report_path = Path(command[command.index("--report") + 1])
+                report_path.write_text(json.dumps({
+                    "version": "1",
+                    "install": [self.report_item("numpy", "2.0.0", requested=True)],
+                }), encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        result = installer.run_install(
+            "frameworks", plan, requirements_file=self.requirements,
+            run=fake_run, confirm=False, require_venv=False,
+            version_probe=lambda name: "2.5.0" if name == "torch" else None,
+            module_probe=lambda name: False,
+            size_probe=lambda url: 4096,
+            display_fn=displayed.append,
+        )
+        self.assertEqual(result["status"], "planned")
+        self.assertEqual(len(displayed), 1)
+        self.assertIn('"sha256"', displayed[0])
+        self.assertIn('"source"', displayed[0])
+        self.assertEqual(result["packages"][0]["download_size_bytes"], 4096)
         self.assertFalse(any(
             "install" in command and "--dry-run" not in command and "--help" not in command
             for command in calls

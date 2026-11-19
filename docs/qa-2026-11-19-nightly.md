@@ -117,6 +117,8 @@ Todos os resultados abaixo são execuções GitHub Actions, não testes locais.
 | PR | Execução | Resultado observado |
 |---|---|---|
 | #48 | [#44322381961](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44322381961) | Jobs de matriz e benchmarks concluídos com sucesso; nenhum pacote ML instalado. |
+| #60 | [Testes #44349569259](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44349569259), [CodeQL #44349569252](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44349569252) | 6/6 jobs success; 327 testes no log Windows; CodeQL success. |
+| #63 | [#44355049320](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44355049320) | 6/6 jobs success; 318 testes no log Windows; sem CodeQL associado ao head. |
 | #69 | [Testes #44375657242](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44375657242), [CodeQL #44375657168](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44375657168) | 6/6 jobs de testes success, 323 testes no log Windows; CodeQL success. |
 | #72 | [Testes #44417488132](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44417488132), [CodeQL #44417488269](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44417488269) | 6/6 jobs success, 314 testes no log Windows; CodeQL success. |
 | #75 | [Testes #44425674104](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44425674104), [CodeQL #44425674115](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44425674115) | 6/6 jobs success, 317 testes por matriz; CodeQL success. |
@@ -127,6 +129,13 @@ Todos os resultados abaixo são execuções GitHub Actions, não testes locais.
 | #80 | [Testes #44633023115](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44633023115), [CodeQL #44633023148](https://github.com/SANTZSPAXX/NixLMs/actions/runs/44633023148) | 6/6 jobs success; 314 testes em cada matriz, incluindo a regressão de travessia limitada; dois benchmarks success; CodeQL success com avisos de extração não bloqueantes. |
 
 Os logs consultados mostram as etapas de checkout, validação JS quando aplicável, `python -m unittest discover -s tests -v`, benchmarks e CodeQL. Os testes de instaladores usam mocks e não baixam frameworks.
+
+## PRs de autonomia, cloud e persistência ainda abertas
+
+- [#60 — autonomia/orquestração](https://github.com/SANTZSPAXX/NixLMs/pull/60): adiciona API de `register_task` com callback/verificador e agenda `autonomy_cycle` a cada 300 s por padrão (`NIXLMS_AUTONOMY_ENABLED=1`). Não encontrei tarefas registradas pelo código de produção; o registro aparece em docs/testes. Etapas com tarefa desconhecida podem seguir o caminho manual e ficar `in_progress` sem execução. Callbacks são síncronos, sem timeout/cancelamento. O script PowerShell de autostart usa `Register-ScheduledTask -Force`, podendo substituir tarefa homônima existente. Revisão registrada na PR. CI #44349569259: 6/6 jobs success, 327 testes no log Windows; CodeQL #44349569252 success. Draft, base divergente.
+- [#63 — Supabase/pgvector](https://github.com/SANTZSPAXX/NixLMs/pull/63): backfill referencia `library` antes da atribuição; snapshots por extensão podem incluir `private_library.sqlite3`, bancos de autonomia e `api_keys.sqlite3`; restore usa `os.replace` sobre estado local sem backup/conflito; `stop()` chama sync remoto; `psycopg[binary]` foi adicionado ao `requirements.txt` principal. CI #44355049320: 6/6 jobs success, 318 testes no log Windows; não há CodeQL associado ao head. Nenhuma conexão Supabase foi feita. Draft e empilhada.
+- [#72 — exportação privada](https://github.com/SANTZSPAXX/NixLMs/pull/72): `open('x')` impede sobrescrita, mas uma falha de I/O no meio pode deixar arquivo parcial que bloqueia nova tentativa. Revisão registrada. Draft, 3 commits atrás de main.
+- [#74 — sandbox de aprendizagem](https://github.com/SANTZSPAXX/NixLMs/pull/74): reduz cópia de acervos privados e remove split test do candidato, mas a promoção dos três arquivos de modelo continua sequencial; não há lock global de treino/promoção nem recuperação automática após crash entre replaces. Duas chamadas concorrentes podem passar pela checagem de fingerprint antes de promover. Revisão registrada. Draft, 1 commit atrás de main.
 
 ## Outros riscos e pendências
 

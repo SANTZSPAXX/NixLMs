@@ -144,6 +144,7 @@ wheels compatíveis manualmente. Não declaramos a stack completa validada em AR
 - PyTorch e seleção de plataforma/CPU: https://pytorch.org/get-started/locally/
 - pip install report e dry-run: https://pip.pypa.io/en/stable/reference/installation-report/
 - pip install options: https://pip.pypa.io/en/stable/cli/pip_install/
+- pip hash-checking mode: https://pip.pypa.io/en/stable/topics/secure-installs/
 - Python virtual environments: https://docs.python.org/3/library/venv.html
 - Transformers: https://huggingface.co/docs/transformers/installation
 - Sentence Transformers: https://www.sbert.net/docs/installation.html
